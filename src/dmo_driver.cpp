@@ -44,7 +44,6 @@ struct Settings {
     std::wstring rate_control = L"qp";
     int qp = 20;
     int bitrate_kbps = 20000;
-    bool follow_avi_path = true;
     std::wstring command_template;
 };
 
@@ -132,7 +131,6 @@ Settings load_settings() {
         else if (key == L"rate_control" && (value == L"crf" || value == L"qp" || value == L"vbr")) settings.rate_control = value;
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
         else if (key == L"bitrate_kbps") { try { settings.bitrate_kbps = std::clamp(std::stoi(value), 100, 1000000); } catch (...) {} }
-        else if (key == L"follow_avi_path") settings.follow_avi_path = value != L"0" && value != L"false";
         else if (key == L"command_template") settings.command_template = value;
     }
     if (settings.codec == L"avc") settings.bit_depth = 8;
@@ -172,8 +170,7 @@ void save_settings(const Settings& settings) {
          << L"preset=" << settings.preset << L"\n"
          << L"rate_control=" << settings.rate_control << L"\n"
          << L"qp=" << settings.qp << L"\n"
-         << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n"
-         << L"follow_avi_path=" << (settings.follow_avi_path ? 1 : 0) << L"\n";
+         << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n";
     if (!settings.video_args.empty()) file << L"video_args=" << settings.video_args << L"\n";
 }
 
@@ -366,7 +363,7 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
     const auto pixel_format = output_pixel_format(settings);
     std::wstring command = L"\"" + settings.ffmpeg +
-        L"\" -hide_banner -loglevel error -f lavfi -i color=c=black:s=128x128:r=1 -frames:v 1 "
+        L"\" -hide_banner -loglevel error -f lavfi -i color=c=black:s=1920x1080:r=1 -frames:v 1 "
         L"-vf format=" + pixel_format + L" " + arguments +
         L" -pix_fmt " + pixel_format + L" -f null -";
 
@@ -425,7 +422,7 @@ std::wstring capability_key(const Settings& settings) {
     const auto ffmpeg_path = resolve_executable(settings.ffmpeg);
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
-    return ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+    return L"v2-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth);
 }
 
@@ -784,13 +781,11 @@ private:
         stride_ = ((width_ * bits_ + 31) / 32) * 4;
         settings_ = load_settings();
         if (video->AvgTimePerFrame > 0) settings_.fps = static_cast<int>((10000000LL + video->AvgTimePerFrame / 2) / video->AvgTimePerFrame);
-        if (settings_.follow_avi_path) {
-            auto avi = current_output_avi();
-            if (!avi.empty()) {
-                avi_output_ = avi;
-                avi.replace_extension(L".mkv");
-                settings_.output = avi.wstring();
-            }
+        auto avi = current_output_avi();
+        if (!avi.empty()) {
+            avi_output_ = avi;
+            avi.replace_extension(L".mkv");
+            settings_.output = avi.wstring();
         }
         const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
         if (ffmpeg_path.empty()) return false;
@@ -906,9 +901,11 @@ private:
 };
 
 enum ControlId : int {
-    ID_BACKEND = 1001, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND,
+    ID_BACKEND = 1001, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_COMMAND,
     ID_REFRESH, ID_STATUS
 };
+constexpr int ID_COMMAND_PREFIX = 1101;
+constexpr int ID_COMMAND_SUFFIX = 1102;
 
 class SettingsPropertyPage final : public IPropertyPage {
 public:
@@ -963,7 +960,7 @@ public:
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        info->size = {520, 490};
+        info->size = {520, 420};
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -988,7 +985,6 @@ public:
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
-        candidate.follow_avi_path = Button_GetCheck(GetDlgItem(window_, ID_FOLLOW)) == BST_CHECKED;
         candidate.video_args = edit_text(ID_COMMAND);
         std::wstring test_error;
         if (!test_encoder(candidate, test_error)) {
@@ -1031,21 +1027,18 @@ private:
         label(window_, L"Quality / QP", 15, 177); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 172, 90);
         label(window_, L"Bitrate (kbps)", 240, 177); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 172, 75);
         SetWindowTextW(qp, std::to_wstring(settings_.qp).c_str()); SetWindowTextW(bitrate, std::to_wstring(settings_.bitrate_kbps).c_str());
-        HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                    15, 212, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
-        Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
         CreateWindowW(L"BUTTON", L"Retest", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                      410, 212, 95, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_REFRESH)), GetModuleHandleW(nullptr), nullptr);
+                      410, 205, 95, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_REFRESH)), GetModuleHandleW(nullptr), nullptr);
         CreateWindowW(L"STATIC", L"Encoder status: testing...", WS_CHILD | WS_VISIBLE,
-                      15, 240, 490, 22, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_STATUS)), GetModuleHandleW(nullptr), nullptr);
+                      15, 210, 385, 22, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_STATUS)), GetModuleHandleW(nullptr), nullptr);
         CreateWindowW(L"STATIC", L"Complete FFmpeg command (middle section is editable)",
-                      WS_CHILD | WS_VISIBLE, 15, 265, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
+                      WS_CHILD | WS_VISIBLE, 15, 238, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
         CreateWindowW(L"STATIC", command_prefix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 287, 490, 55, window_, reinterpret_cast<HMENU>(1010), GetModuleHandleW(nullptr), nullptr);
-        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 345, 490);
+                      WS_CHILD | WS_VISIBLE, 15, 260, 490, 50, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_COMMAND_PREFIX)), GetModuleHandleW(nullptr), nullptr);
+        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 313, 490);
         SetWindowTextW(command, (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
         CreateWindowW(L"STATIC", command_suffix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 375, 490, 55, window_, reinterpret_cast<HMENU>(1011), GetModuleHandleW(nullptr), nullptr);
+                      WS_CHILD | WS_VISIBLE, 15, 343, 490, 45, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_COMMAND_SUFFIX)), GetModuleHandleW(nullptr), nullptr);
         EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
         rebuild_backend_options();
         update_controls();
@@ -1138,14 +1131,14 @@ private:
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
     }
     void update_command_display() {
-        SetWindowTextW(GetDlgItem(window_, 1010), command_prefix(settings_).c_str());
-        SetWindowTextW(GetDlgItem(window_, 1011), command_suffix(settings_).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
     }
     void changed(int id) {
         dirty_ = true;
         if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
         update_controls();
-        if (id != ID_COMMAND && id != ID_FOLLOW) {
+        if (id != ID_COMMAND) {
             sync_structured_settings();
             updating_command_ = true;
             SetWindowTextW(GetDlgItem(window_, ID_COMMAND), encoding_arguments(settings_).c_str());

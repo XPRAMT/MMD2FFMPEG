@@ -34,7 +34,6 @@ preset=7
 rate_control=qp
 qp=20
 bitrate_kbps=20000
-follow_avi_path=1
 video_args=-c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
@@ -45,6 +44,8 @@ if ($configText -match ('(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$')) 
     $configText = [regex]::Replace($configText, '(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$', 'ffmpeg=ffmpeg.exe')
     [System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
 }
+$configText = [regex]::Replace($configText, '(?m)^follow_avi_path=.*\r?\n?', '')
+[System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
 $driversKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Drivers32'
 New-Item -Path $driversKey -Force | Out-Null
 New-ItemProperty -Path $driversKey -Name 'vidc.m2ff' -Value $installedDll -PropertyType String -Force | Out-Null
