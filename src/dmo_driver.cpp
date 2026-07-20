@@ -1,11 +1,15 @@
 #include <windows.h>
+#include <windowsx.h>
 #include <dshow.h>
 #include <dmo.h>
+#include <ocidl.h>
+#include <winternl.h>
 
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <cwctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -17,6 +21,9 @@ namespace {
 // {C42D995C-3D1B-4E44-A96B-767B6C2A4646}
 constexpr GUID CLSID_MMD2FFMPEG =
     {0xc42d995c, 0x3d1b, 0x4e44, {0xa9, 0x6b, 0x76, 0x7b, 0x6c, 0x2a, 0x46, 0x46}};
+// {65A23874-AE1C-4B10-9F1A-5BC0A8D44B38}
+constexpr GUID CLSID_MMD2FFMPEG_SETTINGS =
+    {0x65a23874, 0xae1c, 0x4b10, {0x9f, 0x1a, 0x5b, 0xc0, 0xa8, 0xd4, 0x4b, 0x38}};
 constexpr GUID MEDIASUBTYPE_M2FF =
     {0x4646324d, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 std::atomic<long> g_objects{0};
@@ -27,6 +34,30 @@ struct Settings {
     std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
     std::wstring video_args = L"-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -movflags +faststart";
     int fps = 30;
+    std::wstring codec = L"hevc";
+    int bit_depth = 10;
+    int preset = 7;
+    std::wstring rate_control = L"qp";
+    int qp = 20;
+    int bitrate_kbps = 20000;
+    bool follow_avi_path = true;
+};
+
+struct SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX_LOCAL {
+    PVOID object;
+    ULONG_PTR process_id;
+    ULONG_PTR handle_value;
+    ULONG granted_access;
+    USHORT creator_back_trace_index;
+    USHORT object_type_index;
+    ULONG handle_attributes;
+    ULONG reserved;
+};
+
+struct SYSTEM_HANDLE_INFORMATION_EX_LOCAL {
+    ULONG_PTR handle_count;
+    ULONG_PTR reserved;
+    SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX_LOCAL handles[1];
 };
 
 std::filesystem::path config_path() {
@@ -61,8 +92,103 @@ Settings load_settings() {
         else if (key == L"fps") {
             try { settings.fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {}
         }
+        else if (key == L"codec" && (value == L"avc" || value == L"hevc" || value == L"av1")) settings.codec = value;
+        else if (key == L"bit_depth") { try { settings.bit_depth = std::stoi(value) == 8 ? 8 : 10; } catch (...) {} }
+        else if (key == L"preset") { try { settings.preset = std::clamp(std::stoi(value), 1, 7); } catch (...) {} }
+        else if (key == L"rate_control" && (value == L"qp" || value == L"vbr")) settings.rate_control = value;
+        else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
+        else if (key == L"bitrate_kbps") { try { settings.bitrate_kbps = std::clamp(std::stoi(value), 100, 1000000); } catch (...) {} }
+        else if (key == L"follow_avi_path") settings.follow_avi_path = value != L"0" && value != L"false";
     }
+    if (settings.codec == L"avc") settings.bit_depth = 8;
     return settings;
+}
+
+void save_settings(const Settings& settings) {
+    const auto path = config_path();
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    std::wofstream file(path, std::ios::trunc);
+    if (!file) return;
+    file << L"ffmpeg=" << settings.ffmpeg << L"\n"
+         << L"output=" << settings.output << L"\n"
+         << L"fps=" << settings.fps << L"\n"
+         << L"codec=" << settings.codec << L"\n"
+         << L"bit_depth=" << settings.bit_depth << L"\n"
+         << L"preset=" << settings.preset << L"\n"
+         << L"rate_control=" << settings.rate_control << L"\n"
+         << L"qp=" << settings.qp << L"\n"
+         << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n"
+         << L"follow_avi_path=" << (settings.follow_avi_path ? 1 : 0) << L"\n";
+}
+
+std::wstring lower(std::wstring value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](wchar_t ch) { return static_cast<wchar_t>(towlower(ch)); });
+    return value;
+}
+
+std::filesystem::path current_output_avi() {
+    using NtQuerySystemInformationFn = NTSTATUS(NTAPI*)(SYSTEM_INFORMATION_CLASS, PVOID, ULONG, PULONG);
+    const auto query = reinterpret_cast<NtQuerySystemInformationFn>(
+        GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQuerySystemInformation"));
+    if (!query) return {};
+    constexpr auto extended_handles = static_cast<SYSTEM_INFORMATION_CLASS>(64);
+    std::vector<BYTE> storage(1 << 20);
+    ULONG required = 0;
+    NTSTATUS status = query(extended_handles, storage.data(), static_cast<ULONG>(storage.size()), &required);
+    while (status == static_cast<NTSTATUS>(0xC0000004L) && storage.size() < (1ull << 28)) {
+        storage.resize(std::max<std::size_t>(required + 65536, storage.size() * 2));
+        status = query(extended_handles, storage.data(), static_cast<ULONG>(storage.size()), &required);
+    }
+    if (status < 0) return {};
+    const auto* information = reinterpret_cast<const SYSTEM_HANDLE_INFORMATION_EX_LOCAL*>(storage.data());
+    const ULONG_PTR process_id = GetCurrentProcessId();
+    std::filesystem::path newest;
+    ULARGE_INTEGER newest_time{};
+    std::vector<wchar_t> path_buffer(32768);
+    for (ULONG_PTR index = 0; index < information->handle_count; ++index) {
+        const auto& entry = information->handles[index];
+        if (entry.process_id != process_id) continue;
+        const HANDLE handle = reinterpret_cast<HANDLE>(entry.handle_value);
+        if (GetFileType(handle) != FILE_TYPE_DISK) continue;
+        const DWORD length = GetFinalPathNameByHandleW(handle, path_buffer.data(),
+                                                       static_cast<DWORD>(path_buffer.size()),
+                                                       FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+        if (!length || length >= path_buffer.size()) continue;
+        std::wstring path(path_buffer.data(), length);
+        if (path.rfind(L"\\\\?\\", 0) == 0) path.erase(0, 4);
+        if (lower(std::filesystem::path(path).extension().wstring()) != L".avi") continue;
+        FILETIME creation{}, access{}, write{};
+        if (!GetFileTime(handle, &creation, &access, &write)) continue;
+        ULARGE_INTEGER candidate{};
+        candidate.LowPart = creation.dwLowDateTime;
+        candidate.HighPart = creation.dwHighDateTime;
+        if (candidate.QuadPart >= newest_time.QuadPart) {
+            newest_time = candidate;
+            newest = path;
+        }
+    }
+    return newest;
+}
+
+std::wstring video_arguments(const Settings& settings) {
+    const bool ten_bit = settings.bit_depth == 10 && settings.codec != L"avc";
+    const wchar_t* encoder = settings.codec == L"avc" ? L"h264_nvenc" :
+                             settings.codec == L"av1" ? L"av1_nvenc" : L"hevc_nvenc";
+    std::wostringstream args;
+    args << L"-vf format=" << (ten_bit ? L"p010le" : L"nv12")
+         << L" -c:v " << encoder;
+    if (settings.codec == L"hevc" && ten_bit) args << L" -profile:v main10";
+    else if (settings.codec == L"avc") args << L" -profile:v high";
+    args << L" -preset p" << settings.preset << L" -tune hq ";
+    if (settings.rate_control == L"vbr") {
+        args << L"-rc vbr -b:v " << settings.bitrate_kbps << L"k";
+    } else {
+        args << L"-rc constqp -qp " << settings.qp;
+    }
+    args << L" -pix_fmt " << (ten_bit ? L"p010le" : L"nv12");
+    return args.str();
 }
 
 std::wstring quote(const std::wstring& value) { return L"\"" + value + L"\""; }
@@ -157,7 +283,7 @@ bool supported_output(const DMO_MEDIA_TYPE& type) {
            bitmap.biSizeImage >= compressed_buffer_size(bitmap.biWidth, bitmap.biHeight);
 }
 
-class Encoder final : public IMediaObject {
+class Encoder final : public IMediaObject, public ISpecifyPropertyPages, public IAMVfwCompressDialogs {
 public:
     class InnerUnknown final : public IUnknown {
     public:
@@ -172,7 +298,7 @@ public:
     };
 
     explicit Encoder(IUnknown* outer) : inner_unknown_(this), outer_(outer ? outer : &inner_unknown_) { ++g_objects; }
-    ~Encoder() { stop_ffmpeg(); free_type(input_type_); free_type(output_type_); --g_objects; }
+    virtual ~Encoder() { stop_ffmpeg(); free_type(input_type_); free_type(output_type_); --g_objects; }
 
     IUnknown* inner_unknown() { return &inner_unknown_; }
 
@@ -192,6 +318,16 @@ public:
         }
         if (iid == IID_IMediaObject) {
             *object = static_cast<IMediaObject*>(this);
+            outer_->AddRef();
+            return S_OK;
+        }
+        if (iid == IID_ISpecifyPropertyPages) {
+            *object = static_cast<ISpecifyPropertyPages*>(this);
+            outer_->AddRef();
+            return S_OK;
+        }
+        if (iid == IID_IAMVfwCompressDialogs) {
+            *object = static_cast<IAMVfwCompressDialogs*>(this);
             outer_->AddRef();
             return S_OK;
         }
@@ -353,6 +489,30 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE Lock(LONG) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetPages(CAUUID* pages) override {
+        if (!pages) return E_POINTER;
+        pages->cElems = 1;
+        pages->pElems = static_cast<GUID*>(CoTaskMemAlloc(sizeof(GUID)));
+        if (!pages->pElems) { pages->cElems = 0; return E_OUTOFMEMORY; }
+        pages->pElems[0] = CLSID_MMD2FFMPEG_SETTINGS;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE ShowDialog(int dialog, HWND parent) override {
+        if (dialog == VfwCompressDialog_QueryConfig) return S_OK;
+        if (dialog == VfwCompressDialog_QueryAbout) return S_OK;
+        if (dialog == VfwCompressDialog_About) {
+            MessageBoxW(parent, L"FFmpeg frame bridge for MikuMikuDance", L"MMD2FFMPEG", MB_OK | MB_ICONINFORMATION);
+            return S_OK;
+        }
+        if (dialog != VfwCompressDialog_Config) return E_INVALIDARG;
+        IUnknown* object = static_cast<IMediaObject*>(this);
+        GUID page = CLSID_MMD2FFMPEG_SETTINGS;
+        return OleCreatePropertyFrame(parent, 0, 0, L"MMD2FFMPEG NVENC Settings",
+                                      1, &object, 1, &page, GetUserDefaultLCID(), 0, nullptr);
+    }
+    HRESULT STDMETHODCALLTYPE GetState(LPVOID, int*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE SetState(LPVOID, int) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE SendDriverMessage(int, long, long) override { return E_NOTIMPL; }
 
 private:
     bool start_ffmpeg() {
@@ -364,6 +524,13 @@ private:
         stride_ = ((width_ * bits_ + 31) / 32) * 4;
         settings_ = load_settings();
         if (video->AvgTimePerFrame > 0) settings_.fps = static_cast<int>((10000000LL + video->AvgTimePerFrame / 2) / video->AvgTimePerFrame);
+        if (settings_.follow_avi_path) {
+            auto avi = current_output_avi();
+            if (!avi.empty()) {
+                avi.replace_extension(L".mkv");
+                settings_.output = avi.wstring();
+            }
+        }
         if (!std::filesystem::exists(settings_.ffmpeg)) return false;
         std::error_code error;
         std::filesystem::create_directories(std::filesystem::path(settings_.output).parent_path(), error);
@@ -374,7 +541,7 @@ private:
         std::wostringstream stream;
         stream << quote(settings_.ffmpeg) << L" -hide_banner -loglevel warning -y -f rawvideo -pixel_format "
                << (bits_ == 24 ? L"bgr24" : L"bgra") << L" -video_size " << width_ << L"x" << height_
-               << L" -framerate " << settings_.fps << L" -i pipe:0 " << settings_.video_args << L" "
+               << L" -framerate " << settings_.fps << L" -i pipe:0 " << video_arguments(settings_) << L" "
                << quote(settings_.output);
         auto command = stream.str();
         std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
@@ -426,8 +593,162 @@ private:
     std::vector<BYTE> flipped_;
 };
 
+enum ControlId : int {
+    ID_CODEC = 1001, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW
+};
+
+class SettingsPropertyPage final : public IPropertyPage {
+public:
+    SettingsPropertyPage() { ++g_objects; }
+    ~SettingsPropertyPage() { Deactivate(); if (site_) site_->Release(); --g_objects; }
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) override {
+        if (!object) return E_POINTER;
+        *object = nullptr;
+        if (iid == IID_IUnknown || iid == IID_IPropertyPage) *object = static_cast<IPropertyPage*>(this);
+        else return E_NOINTERFACE;
+        AddRef(); return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++references_; }
+    ULONG STDMETHODCALLTYPE Release() override {
+        const ULONG value = --references_; if (!value) delete this; return value;
+    }
+    HRESULT STDMETHODCALLTYPE SetPageSite(IPropertyPageSite* site) override {
+        if (site_) site_->Release();
+        site_ = site;
+        if (site_) site_->AddRef();
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Activate(HWND parent, LPCRECT rect, BOOL) override {
+        if (window_) return E_UNEXPECTED;
+        WNDCLASSW window_class{};
+        window_class.lpfnWndProc = window_proc;
+        window_class.hInstance = GetModuleHandleW(nullptr);
+        window_class.lpszClassName = L"MMD2FFMPEGSettingsPage";
+        window_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+        RegisterClassW(&window_class);
+        settings_ = load_settings();
+        window_ = CreateWindowExW(0, window_class.lpszClassName, L"", WS_CHILD | WS_VISIBLE,
+                                  rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top,
+                                  parent, nullptr, window_class.hInstance, this);
+        return window_ ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    }
+    HRESULT STDMETHODCALLTYPE Deactivate() override {
+        if (window_) { DestroyWindow(window_); window_ = nullptr; }
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetPageInfo(PROPPAGEINFO* info) override {
+        if (!info) return E_POINTER;
+        ZeroMemory(info, sizeof(*info)); info->cb = sizeof(*info);
+        const wchar_t* title = L"MMD2FFMPEG NVENC Settings";
+        const auto bytes = (wcslen(title) + 1) * sizeof(wchar_t);
+        info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
+        if (!info->pszTitle) return E_OUTOFMEMORY;
+        CopyMemory(info->pszTitle, title, bytes);
+        info->size = {430, 245};
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE Show(UINT command) override {
+        if (!window_) return E_UNEXPECTED;
+        ShowWindow(window_, command); return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Move(LPCRECT rect) override {
+        if (!window_ || !rect) return E_POINTER;
+        MoveWindow(window_, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, TRUE);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE IsPageDirty() override { return dirty_ ? S_OK : S_FALSE; }
+    HRESULT STDMETHODCALLTYPE Apply() override {
+        if (!window_) return E_UNEXPECTED;
+        settings_.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" :
+                          combo_text(ID_CODEC) == L"AV1" ? L"av1" : L"hevc";
+        settings_.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && settings_.codec != L"avc" ? 10 : 8;
+        settings_.preset = combo_index(ID_PRESET) + 1;
+        settings_.rate_control = combo_index(ID_RATE) == 0 ? L"qp" : L"vbr";
+        settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
+        settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
+        settings_.follow_avi_path = Button_GetCheck(GetDlgItem(window_, ID_FOLLOW)) == BST_CHECKED;
+        save_settings(settings_); dirty_ = false;
+        if (site_) site_->OnStatusChange(PROPPAGESTATUS_CLEAN);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Help(LPCOLESTR) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE TranslateAccelerator(MSG* message) override {
+        return window_ && IsDialogMessageW(window_, message) ? S_OK : S_FALSE;
+    }
+
+private:
+    static HWND label(HWND parent, const wchar_t* text, int x, int y) {
+        return CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE, x, y, 120, 22,
+                             parent, nullptr, GetModuleHandleW(nullptr), nullptr);
+    }
+    HWND control(const wchar_t* type, DWORD style, int id, int x, int y, int width = 190) {
+        return CreateWindowExW(WS_EX_CLIENTEDGE, type, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | style,
+                               x, y, width, 120, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
+                               GetModuleHandleW(nullptr), nullptr);
+    }
+    void add_combo(int id, int x, int y, std::initializer_list<const wchar_t*> values, int selected) {
+        HWND combo = control(L"COMBOBOX", CBS_DROPDOWNLIST | WS_VSCROLL, id, x, y);
+        for (const auto* value : values) ComboBox_AddString(combo, value);
+        ComboBox_SetCurSel(combo, selected);
+    }
+    void create_controls() {
+        HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+        label(window_, L"Codec", 15, 17); add_combo(ID_CODEC, 135, 12, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
+        label(window_, L"Bit depth", 15, 49); add_combo(ID_DEPTH, 135, 44, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
+        label(window_, L"NVENC preset", 15, 81); add_combo(ID_PRESET, 135, 76, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
+        label(window_, L"Rate control", 15, 113); add_combo(ID_RATE, 135, 108, {L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"vbr" ? 1 : 0);
+        label(window_, L"QP (0-51)", 15, 145); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 140, 90);
+        label(window_, L"Bitrate (kbps)", 240, 145); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 140, 75);
+        SetWindowTextW(qp, std::to_wstring(settings_.qp).c_str()); SetWindowTextW(bitrate, std::to_wstring(settings_.bitrate_kbps).c_str());
+        HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                    15, 180, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
+        Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
+        EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
+        update_controls();
+    }
+    void update_controls() {
+        const bool avc = combo_index(ID_CODEC) == 0;
+        if (avc) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
+        EnableWindow(GetDlgItem(window_, ID_DEPTH), !avc);
+        const bool qp = combo_index(ID_RATE) == 0;
+        EnableWindow(GetDlgItem(window_, ID_QP), qp);
+        EnableWindow(GetDlgItem(window_, ID_BITRATE), !qp);
+    }
+    int combo_index(int id) const { return static_cast<int>(ComboBox_GetCurSel(GetDlgItem(window_, id))); }
+    std::wstring combo_text(int id) const {
+        wchar_t text[64]{}; GetWindowTextW(GetDlgItem(window_, id), text, static_cast<int>(std::size(text))); return text;
+    }
+    int edit_number(int id, int fallback) const {
+        wchar_t text[32]{}; GetWindowTextW(GetDlgItem(window_, id), text, static_cast<int>(std::size(text)));
+        try { return std::stoi(text); } catch (...) { return fallback; }
+    }
+    void changed() {
+        dirty_ = true; update_controls();
+        if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
+    }
+    static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+        auto* self = reinterpret_cast<SettingsPropertyPage*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+        if (message == WM_NCCREATE) {
+            self = static_cast<SettingsPropertyPage*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
+            SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self)); self->window_ = window;
+        } else if (message == WM_CREATE && self) self->create_controls();
+        else if (message == WM_COMMAND && self && (HIWORD(wparam) == CBN_SELCHANGE || HIWORD(wparam) == EN_CHANGE || HIWORD(wparam) == BN_CLICKED)) self->changed();
+        return DefWindowProcW(window, message, wparam, lparam);
+    }
+
+    std::atomic<ULONG> references_{1};
+    IPropertyPageSite* site_ = nullptr;
+    HWND window_ = nullptr;
+    Settings settings_{};
+    bool dirty_ = false;
+};
+
 class Factory final : public IClassFactory {
 public:
+    explicit Factory(bool settings_page) : settings_page_(settings_page) {}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) override {
         if (!object) return E_POINTER;
         *object = nullptr;
@@ -438,6 +759,13 @@ public:
     ULONG STDMETHODCALLTYPE AddRef() override { return ++references_; }
     ULONG STDMETHODCALLTYPE Release() override { const ULONG value = --references_; if (!value) delete this; return value; }
     HRESULT STDMETHODCALLTYPE CreateInstance(IUnknown* outer, REFIID iid, void** object) override {
+        if (settings_page_) {
+            if (outer) return CLASS_E_NOAGGREGATION;
+            if (!object) return E_POINTER;
+            auto* page = new (std::nothrow) SettingsPropertyPage();
+            if (!page) return E_OUTOFMEMORY;
+            const HRESULT result = page->QueryInterface(iid, object); page->Release(); return result;
+        }
         if (outer && iid != IID_IUnknown) return CLASS_E_NOAGGREGATION;
         if (!object) return E_POINTER;
         *object = nullptr;
@@ -454,13 +782,14 @@ public:
     HRESULT STDMETHODCALLTYPE LockServer(BOOL lock) override { lock ? ++g_locks : --g_locks; return S_OK; }
 private:
     std::atomic<ULONG> references_{1};
+    bool settings_page_ = false;
 };
 
 } // namespace
 
 extern "C" HRESULT __stdcall DllGetClassObject(REFCLSID clsid, REFIID iid, void** object) {
-    if (clsid != CLSID_MMD2FFMPEG) return CLASS_E_CLASSNOTAVAILABLE;
-    auto* factory = new (std::nothrow) Factory();
+    if (clsid != CLSID_MMD2FFMPEG && clsid != CLSID_MMD2FFMPEG_SETTINGS) return CLASS_E_CLASSNOTAVAILABLE;
+    auto* factory = new (std::nothrow) Factory(clsid == CLSID_MMD2FFMPEG_SETTINGS);
     if (!factory) return E_OUTOFMEMORY;
     const HRESULT result = factory->QueryInterface(iid, object);
     factory->Release(); return result;

@@ -2,6 +2,7 @@
 #include <dshow.h>
 #include <dmo.h>
 #include <dmodshow.h>
+#include <ocidl.h>
 
 #include <iomanip>
 #include <iostream>
@@ -90,6 +91,32 @@ bool probe(const wchar_t* name, REFCLSID clsid) {
         std::wcerr << name << L": CoCreateInstance failed 0x" << std::hex << result << std::dec << L"\n";
         return false;
     }
+    ISpecifyPropertyPages* pages = nullptr;
+    const HRESULT pages_qi = object->QueryInterface(IID_ISpecifyPropertyPages,
+                                                     reinterpret_cast<void**>(&pages));
+    std::wcout << L"  ISpecifyPropertyPages QI=0x" << std::hex << pages_qi << std::dec;
+    if (pages) {
+        CAUUID page_ids{};
+        const HRESULT get_pages = pages->GetPages(&page_ids);
+        std::wcout << L" GetPages=0x" << std::hex << get_pages << std::dec
+                   << L" count=" << page_ids.cElems;
+        for (ULONG i = 0; i < page_ids.cElems; ++i) {
+            std::wcout << L" page[" << i << L"]=" << guid_text(page_ids.pElems[i]);
+        }
+        CoTaskMemFree(page_ids.pElems);
+        pages->Release();
+    }
+    std::wcout << L"\n";
+    IAMVfwCompressDialogs* direct_dialogs = nullptr;
+    const HRESULT direct_dialogs_qi = object->QueryInterface(IID_IAMVfwCompressDialogs,
+                                                              reinterpret_cast<void**>(&direct_dialogs));
+    std::wcout << L"  IAMVfwCompressDialogs QI=0x" << std::hex << direct_dialogs_qi << std::dec;
+    if (direct_dialogs) {
+        std::wcout << L" QueryConfig=0x" << std::hex
+                   << direct_dialogs->ShowDialog(VfwCompressDialog_QueryConfig, nullptr) << std::dec;
+        direct_dialogs->Release();
+    }
+    std::wcout << L"\n";
     DWORD input_flags = 0, output_flags = 0;
     object->GetInputStreamInfo(0, &input_flags);
     object->GetOutputStreamInfo(0, &output_flags);
@@ -135,6 +162,33 @@ void probe_wrapper(const wchar_t* name, REFCLSID clsid) {
     std::wcout << L"[" << name << L" wrapper] Init=0x" << std::hex << result << std::dec << L"\n";
     if (wrapper) wrapper->Release();
     if (FAILED(result)) { filter->Release(); return; }
+
+    ISpecifyPropertyPages* filter_pages = nullptr;
+    const HRESULT filter_pages_qi = filter->QueryInterface(IID_ISpecifyPropertyPages,
+                                                            reinterpret_cast<void**>(&filter_pages));
+    std::wcout << L"  filter ISpecifyPropertyPages QI=0x" << std::hex << filter_pages_qi << std::dec;
+    if (filter_pages) {
+        CAUUID page_ids{};
+        const HRESULT get_pages = filter_pages->GetPages(&page_ids);
+        std::wcout << L" GetPages=0x" << std::hex << get_pages << std::dec
+                   << L" count=" << page_ids.cElems;
+        for (ULONG i = 0; i < page_ids.cElems; ++i) {
+            std::wcout << L" page[" << i << L"]=" << guid_text(page_ids.pElems[i]);
+        }
+        CoTaskMemFree(page_ids.pElems);
+        filter_pages->Release();
+    }
+    std::wcout << L"\n";
+    IAMVfwCompressDialogs* dialogs = nullptr;
+    const HRESULT dialogs_qi = filter->QueryInterface(IID_IAMVfwCompressDialogs,
+                                                       reinterpret_cast<void**>(&dialogs));
+    std::wcout << L"  filter IAMVfwCompressDialogs QI=0x" << std::hex << dialogs_qi << std::dec;
+    if (dialogs) {
+        std::wcout << L" QueryConfig=0x" << std::hex
+                   << dialogs->ShowDialog(VfwCompressDialog_QueryConfig, nullptr) << std::dec;
+        dialogs->Release();
+    }
+    std::wcout << L"\n";
 
     IEnumPins* pins = nullptr;
     if (SUCCEEDED(filter->EnumPins(&pins))) {

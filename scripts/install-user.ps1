@@ -21,7 +21,13 @@ if (-not (Test-Path -LiteralPath $config)) {
 ffmpeg=C:\Program Files\Hybrid\64bit\ffmpeg.exe
 output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mkv
 fps=30
-video_args=-vf format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le
+codec=hevc
+bit_depth=10
+preset=7
+rate_control=qp
+qp=20
+bitrate_kbps=20000
+follow_avi_path=1
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
 }
@@ -36,6 +42,13 @@ New-Item -Path $serverKey -Force | Out-Null
 Set-Item -Path $classKey -Value 'MMD2FFMPEG DMO Encoder'
 Set-Item -Path $serverKey -Value $installedDmoDll
 New-ItemProperty -Path $serverKey -Name 'ThreadingModel' -Value 'Both' -PropertyType String -Force | Out-Null
+$settingsClassId = '{65A23874-AE1C-4B10-9F1A-5BC0A8D44B38}'
+$settingsClassKey = "HKCU:\Software\Classes\CLSID\$settingsClassId"
+$settingsServerKey = Join-Path $settingsClassKey 'InprocServer32'
+New-Item -Path $settingsServerKey -Force | Out-Null
+Set-Item -Path $settingsClassKey -Value 'MMD2FFMPEG NVENC Settings'
+Set-Item -Path $settingsServerKey -Value $installedDmoDll
+New-ItemProperty -Path $settingsServerKey -Name 'ThreadingModel' -Value 'Both' -PropertyType String -Force | Out-Null
 
 $oldMediaObjectKey = "HKCU:\Software\Classes\DirectShow\MediaObjects\$classIdBraced"
 if (Test-Path -LiteralPath $oldMediaObjectKey) { Remove-Item -LiteralPath $oldMediaObjectKey -Recurse -Force }
