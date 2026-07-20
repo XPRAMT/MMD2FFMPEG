@@ -25,7 +25,15 @@ int wmain() {
     input.biSizeImage = width * height * 3;
 
     BITMAPINFOHEADER output{};
-    if (ICCompressGetFormat(codec, &input, &output) != ICERR_OK ||
+    ICCOMPRESSFRAMES frames_info{};
+    frames_info.dwFlags = ICCOMPRESSFRAMES_PADDING;
+    frames_info.lpbiOutput = &output;
+    frames_info.lpbiInput = &input;
+    frames_info.dwRate = 60;
+    frames_info.dwScale = 1;
+    if (ICSendMessage(codec, ICM_COMPRESS_FRAMES_INFO,
+                      reinterpret_cast<DWORD_PTR>(&frames_info), sizeof(frames_info)) != ICERR_OK ||
+        ICCompressGetFormat(codec, &input, &output) != ICERR_OK ||
         ICCompressBegin(codec, &input, &output) != ICERR_OK) {
         std::wcerr << L"Codec rejected the test format.\n";
         ICClose(codec);
