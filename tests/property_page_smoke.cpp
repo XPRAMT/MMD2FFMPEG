@@ -73,7 +73,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     RECT client{};
     GetClientRect(page_window, &client);
     const int ids[] = {ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
-                       ID_STATUS, ID_REFRESH, ID_COMMAND_PREFIX, ID_COMMAND, ID_COMMAND_SUFFIX,
+                       ID_STATUS, ID_REFRESH, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND, ID_COMMAND_SUFFIX,
                        ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC,
                        ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE,
                        ID_COMMAND_HEADING};
@@ -119,6 +119,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     const LRESULT original_language = SendMessageW(language_control, CB_GETCURSEL, 0, 0);
     const wchar_t* language_labels[]{L"語言", L"語言", L"语言", L"言語", L"Language"};
     const wchar_t* button_labels[]{L"測試編碼", L"測試編碼", L"测试编码", L"エンコーダーをテスト", L"Test encoder"};
+    const wchar_t* open_log_labels[]{L"開啟 log 資料夾", L"開啟 log 資料夾", L"打开日志文件夹", L"ログフォルダーを開く", L"Open log folder"};
     const wchar_t* not_tested_labels[]{L"編碼器狀態：尚未測試", L"編碼器狀態：尚未測試", L"编码器状态：尚未测试",
                                        L"エンコーダー状態：未テスト", L"Encoder status: not tested"};
     if (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH))) {
@@ -141,6 +142,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         }
         if (window_text(GetDlgItem(page_window, ID_LABEL_LANGUAGE)) != language_labels[text_index] ||
             window_text(GetDlgItem(page_window, ID_REFRESH)) != button_labels[text_index] ||
+            window_text(GetDlgItem(page_window, ID_OPEN_LOG)) != open_log_labels[text_index] ||
             window_text(status_control) != not_tested_labels[text_index]) {
             std::wcerr << L"Language switch failed for index " << language << L".\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 9;

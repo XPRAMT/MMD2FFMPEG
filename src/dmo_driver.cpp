@@ -3,6 +3,7 @@
 #include <dshow.h>
 #include <dmo.h>
 #include <ocidl.h>
+#include <shellapi.h>
 #include <winternl.h>
 
 #include <algorithm>
@@ -77,6 +78,9 @@ struct UiStrings {
     const wchar_t* test_failed;
     const wchar_t* test_required;
     const wchar_t* test_button;
+    const wchar_t* open_log_button;
+    const wchar_t* open_log_failed_message;
+    const wchar_t* log_title;
     const wchar_t* required_message;
     const wchar_t* required_title;
 };
@@ -119,21 +123,26 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"完整 FFmpeg 指令（中間區段可編輯）",
         L"編碼器狀態：尚未測試", L"編碼器狀態：測試中…", L"編碼器狀態：測試通過",
         L"編碼器狀態：設定已變更，請重新測試", L"編碼器狀態：測試失敗 - ",
-        L"通過測試後才能儲存或套用。", L"測試編碼", L"請先測試目前的編碼指令。\n\n通過測試後才能儲存或套用設定。",
+        L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟 log 資料夾",
+        L"無法開啟編碼 log 資料夾。", L"MMD2FFMPEG log",
+        L"請先測試目前的編碼指令。\n\n通過測試後才能儲存或套用設定。",
         L"需要測試 MMD2FFMPEG 編碼器"};
     static constexpr UiStrings simplified{
         L"MMD2FFMPEG 编码器设置", L"语言", L"编码器", L"编码格式", L"位深度", L"编码预设",
         L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"完整 FFmpeg 命令（中间部分可编辑）",
         L"编码器状态：尚未测试", L"编码器状态：测试中…", L"编码器状态：测试通过",
         L"编码器状态：设置已更改，请重新测试", L"编码器状态：测试失败 - ",
-        L"测试通过后才能保存或应用。", L"测试编码", L"请先测试当前的编码命令。\n\n测试通过后才能保存或应用设置。",
+        L"测试通过后才能保存或应用。", L"测试编码", L"打开日志文件夹",
+        L"无法打开编码日志文件夹。", L"MMD2FFMPEG 日志",
+        L"请先测试当前的编码命令。\n\n测试通过后才能保存或应用设置。",
         L"需要测试 MMD2FFMPEG 编码器"};
     static constexpr UiStrings japanese{
         L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
         L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"完全な FFmpeg コマンド（中央部分は編集可能）",
         L"エンコーダー状態：未テスト", L"エンコーダー状態：テスト中…", L"エンコーダー状態：テスト合格",
         L"エンコーダー状態：設定が変更されました。再テストしてください", L"エンコーダー状態：テスト失敗 - ",
-        L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト",
+        L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログフォルダーを開く",
+        L"エンコードログのフォルダーを開けません。", L"MMD2FFMPEG ログ",
         L"現在のエンコーダーコマンドを先にテストしてください。\n\nテストに合格するまで設定を保存または適用できません。",
         L"MMD2FFMPEG エンコーダーのテストが必要です"};
     static constexpr UiStrings english{
@@ -141,7 +150,8 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Complete FFmpeg command (middle section is editable)",
         L"Encoder status: not tested", L"Encoder status: testing...", L"Encoder status: test passed",
         L"Encoder status: settings changed; test again", L"Encoder status: test failed - ",
-        L"Test must pass before saving or applying.", L"Test encoder",
+        L"Test must pass before saving or applying.", L"Test encoder", L"Open log folder",
+        L"Could not open the encoding log folder.", L"MMD2FFMPEG Log",
         L"Test the current encoder command first.\n\nSettings can only be saved or applied after the test passes.",
         L"MMD2FFMPEG Encoder Test Required"};
     switch (language) {
@@ -209,8 +219,10 @@ std::filesystem::path config_path() {
 
 std::filesystem::path local_data_dir() { return config_path().parent_path(); }
 
+std::filesystem::path logs_directory() { return local_data_dir() / L"logs"; }
+
 std::filesystem::path make_log_path() {
-    const auto directory = local_data_dir() / L"logs";
+    const auto directory = logs_directory();
     std::error_code error;
     std::filesystem::create_directories(directory, error);
     SYSTEMTIME time{};
@@ -223,7 +235,7 @@ std::filesystem::path make_log_path() {
 }
 
 void prune_logs() {
-    const auto directory = local_data_dir() / L"logs";
+    const auto directory = logs_directory();
     std::error_code error;
     std::vector<std::filesystem::directory_entry> logs;
     for (const auto& entry : std::filesystem::directory_iterator(directory, error))
@@ -487,6 +499,56 @@ std::wstring decode_process_output(const std::vector<char>& bytes) {
     std::wstring result(static_cast<std::size_t>(length), L'\0');
     MultiByteToWideChar(code_page, 0, bytes.data(), source_length, result.data(), length);
     return trim(result);
+}
+
+std::wstring ffmpeg_version_line(const std::filesystem::path& ffmpeg_path) {
+    SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
+    HANDLE output_read = nullptr;
+    HANDLE output_write = nullptr;
+    if (!CreatePipe(&output_read, &output_write, &security, 65536)) return L"Unavailable";
+    SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0);
+    std::wstring command = L"\"" + ffmpeg_path.wstring() + L"\" -version";
+    std::vector<wchar_t> mutable_command(command.begin(), command.end());
+    mutable_command.push_back(L'\0');
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    startup.hStdOutput = output_write;
+    startup.hStdError = output_write;
+    PROCESS_INFORMATION process{};
+    const BOOL created = CreateProcessW(ffmpeg_path.c_str(), mutable_command.data(), nullptr, nullptr,
+                                        TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+    close_handle(output_write);
+    if (!created) {
+        close_handle(output_read);
+        return L"Unavailable (Windows error " + std::to_wstring(GetLastError()) + L")";
+    }
+    const DWORD wait_result = WaitForSingleObject(process.hProcess, 5000);
+    if (wait_result == WAIT_TIMEOUT) {
+        TerminateProcess(process.hProcess, 1);
+        WaitForSingleObject(process.hProcess, 1000);
+    }
+    std::vector<char> output;
+    std::array<char, 4096> buffer{};
+    DWORD read = 0;
+    while (output.size() < 16384 && ReadFile(output_read, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) && read)
+        output.insert(output.end(), buffer.data(), buffer.data() + read);
+    close_handle(output_read);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    const std::wstring version = decode_process_output(output);
+    const auto newline = version.find_first_of(L"\r\n");
+    return newline == std::wstring::npos ? version : version.substr(0, newline);
+}
+
+std::wstring format_local_time() {
+    SYSTEMTIME time{};
+    GetLocalTime(&time);
+    std::wostringstream value;
+    value << std::setfill(L'0') << time.wYear << L'-' << std::setw(2) << time.wMonth << L'-' << std::setw(2) << time.wDay
+          << L' ' << std::setw(2) << time.wHour << L':' << std::setw(2) << time.wMinute << L':' << std::setw(2) << time.wSecond;
+    return value.str();
 }
 
 struct ProbeResult { bool success; std::wstring message; std::wstring signature; };
@@ -870,6 +932,7 @@ public:
         HRESULT result = buffer->GetBufferAndLength(&bytes, &length);
         if (FAILED(result)) return result;
         if (!send_frame(bytes, length)) return E_FAIL;
+        ++input_frame_count_;
         pending_ = true; timestamp_ = timestamp; duration_ = duration;
         return S_OK;
     }
@@ -951,12 +1014,20 @@ private:
         log_file_ = CreateFileW(log_path_.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                 nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (log_file_ == INVALID_HANDLE_VALUE) log_file_ = nullptr;
+        const std::wstring ffmpeg_version = ffmpeg_version_line(ffmpeg_path);
         SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
         HANDLE read_pipe = nullptr;
         if (!CreatePipe(&read_pipe, &stdin_write_, &security, 1024 * 1024)) return false;
         SetHandleInformation(stdin_write_, HANDLE_FLAG_INHERIT, 0);
         auto command = build_ffmpeg_command(settings_, width_, height_, bits_);
-        write_log_line(log_file_, L"MMD2FFMPEG command:\r\n" + command + L"\r\n\r\nFFmpeg output:\r\n");
+        std::wostringstream header;
+        header << L"MMD2FFMPEG output diagnostics\r\n"
+               << L"Started: " << format_local_time() << L"\r\n"
+               << L"FFmpeg version: " << ffmpeg_version << L"\r\n"
+               << L"Input: " << width_ << L"x" << height_ << L", RGB" << bits_ << L"\r\n"
+               << L"Declared FPS (MMD): " << settings_.fps << L"\r\n\r\n"
+               << L"MMD2FFMPEG command:\r\n" << command << L"\r\n\r\nFFmpeg output:\r\n";
+        write_log_line(log_file_, header.str());
         std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
         STARTUPINFOW startup{}; startup.cb = sizeof(startup); startup.dwFlags = STARTF_USESTDHANDLES;
         startup.hStdInput = read_pipe;
@@ -966,7 +1037,11 @@ private:
         const BOOL created = CreateProcessW(ffmpeg_path.c_str(), mutable_command.data(), nullptr, nullptr,
                                              TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
         CloseHandle(read_pipe);
-        if (!created) { close_handle(stdin_write_); close_handle(log_file_); return false; }
+        if (!created) {
+            write_log_line(log_file_, L"\r\n[MMD2FFMPEG] FFmpeg could not be started (Windows error " +
+                                      std::to_wstring(GetLastError()) + L").\r\n");
+            close_handle(stdin_write_); close_handle(log_file_); return false;
+        }
         job_ = CreateJobObjectW(nullptr, nullptr);
         if (job_) {
             JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
@@ -974,29 +1049,60 @@ private:
             SetInformationJobObject(job_, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
             AssignProcessToJobObject(job_, process.hProcess);
         }
-        process_ = process.hProcess; process_thread_ = process.hThread; started_ = true; return true;
+        process_ = process.hProcess; process_thread_ = process.hThread;
+        input_frame_count_ = 0;
+        encoding_started_at_ = std::chrono::steady_clock::now();
+        started_ = true;
+        return true;
     }
     void stop_ffmpeg() {
         close_handle(stdin_write_);
         bool success = false;
         DWORD exit_code = 1;
+        DWORD wait_result = WAIT_FAILED;
         if (process_) {
-            const DWORD wait = WaitForSingleObject(process_, 60000);
-            if (wait == WAIT_TIMEOUT) {
+            wait_result = WaitForSingleObject(process_, 60000);
+            if (wait_result == WAIT_TIMEOUT) {
                 if (job_) TerminateJobObject(job_, 1); else TerminateProcess(process_, 1);
                 WaitForSingleObject(process_, 5000);
             }
             GetExitCodeProcess(process_, &exit_code);
-            success = wait == WAIT_OBJECT_0 && exit_code == 0;
+            success = wait_result == WAIT_OBJECT_0 && exit_code == 0;
         }
-        close_handle(process_thread_); close_handle(process_); close_handle(job_); close_handle(log_file_);
+        const auto elapsed = encoding_started_at_.time_since_epoch().count() == 0
+            ? std::chrono::milliseconds(0)
+            : std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - encoding_started_at_);
+        close_handle(process_thread_); close_handle(process_); close_handle(job_);
         std::error_code error;
+        std::uintmax_t partial_size = 0;
+        if (!partial_output_.empty() && std::filesystem::exists(partial_output_, error))
+            partial_size = std::filesystem::file_size(partial_output_, error);
+        std::uintmax_t output_size = 0;
         if (success && !partial_output_.empty() && std::filesystem::exists(partial_output_, error) &&
-            std::filesystem::file_size(partial_output_, error) > 0) {
+            partial_size > 0) {
             success = MoveFileExW(partial_output_.c_str(), final_output_.c_str(),
                                   MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
         } else success = false;
-        if (!success && !partial_output_.empty()) std::filesystem::remove(partial_output_, error);
+        if (success && std::filesystem::exists(final_output_, error)) output_size = std::filesystem::file_size(final_output_, error);
+        const double actual_fps = elapsed.count() > 0
+            ? static_cast<double>(input_frame_count_) * 1000.0 / static_cast<double>(elapsed.count()) : 0.0;
+        std::wostringstream summary;
+        summary << L"\r\n[MMD2FFMPEG] Output summary\r\n"
+                << L"Finished: " << format_local_time() << L"\r\n"
+                << L"Input frames: " << input_frame_count_ << L"\r\n"
+                << L"Actual input FPS: " << std::fixed << std::setprecision(3) << actual_fps << L"\r\n"
+                << L"Elapsed: " << elapsed.count() << L" ms\r\n"
+                << L"FFmpeg exit code: " << exit_code << L"\r\n"
+                << L"Result: " << (success ? L"success" : L"failed") << L"\r\n";
+        if (success) summary << L"Output size: " << output_size << L" bytes\r\n";
+        else summary << L"Partial output size: " << partial_size << L" bytes\r\n";
+        if (!success && !partial_output_.empty()) {
+            const bool removed = std::filesystem::remove(partial_output_, error) ||
+                                 !std::filesystem::exists(partial_output_, error);
+            summary << L"Partial output cleanup: " << (removed ? L"success" : L"failed") << L"\r\n";
+        }
+        write_log_line(log_file_, summary.str());
+        close_handle(log_file_);
         if (success && !avi_output_.empty()) {
             const auto cleanup = local_data_dir() / L"mmd2ffmpeg_cleanup.exe";
             if (std::filesystem::exists(cleanup, error)) {
@@ -1046,6 +1152,8 @@ private:
     std::filesystem::path final_output_, partial_output_, avi_output_, log_path_;
     int width_ = 0, height_ = 0, bits_ = 0; LONG stride_ = 0;
     bool bottom_up_ = false, started_ = false, pending_ = false;
+    std::uint64_t input_frame_count_ = 0;
+    std::chrono::steady_clock::time_point encoding_started_at_{};
     REFERENCE_TIME timestamp_ = 0, duration_ = 0;
     std::vector<BYTE> flipped_;
 };
@@ -1245,6 +1353,15 @@ private:
             else delete result;
         });
     }
+    void open_log_folder() {
+        const auto directory = logs_directory();
+        std::error_code error;
+        std::filesystem::create_directories(directory, error);
+        const auto& text = current_text();
+        const auto result = error ? 0 : reinterpret_cast<INT_PTR>(ShellExecuteW(window_, L"open", directory.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+        if (result <= 32)
+            MessageBoxW(window_, text.open_log_failed_message, text.log_title, MB_OK | MB_ICONERROR);
+    }
     void update_controls() {
         const bool avc = combo_index(ID_CODEC) == 0;
         if (avc) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
@@ -1374,6 +1491,7 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_HEADING), text.command_heading);
         SetWindowTextW(GetDlgItem(window_, ID_TEST_REQUIREMENT), text.test_required);
         SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
+        SetWindowTextW(GetDlgItem(window_, ID_OPEN_LOG), text.open_log_button);
         const wchar_t* status = probe_running_ ? text.testing : current_command_tested_ ? text.test_passed : text.not_tested;
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), status);
     }
@@ -1443,6 +1561,10 @@ private:
         }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {
             self->start_probe(true);
+            return TRUE;
+        }
+        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_OPEN_LOG && HIWORD(wparam) == BN_CLICKED) {
+            self->open_log_folder();
             return TRUE;
         }
         else if (message == WM_COMMAND && self && !self->updating_command_ &&

@@ -9,7 +9,7 @@ add_library(mmd2ffmpeg_dmo SHARED
 target_compile_features(mmd2ffmpeg_dmo PRIVATE cxx_std_20)
 target_compile_definitions(mmd2ffmpeg_dmo PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(mmd2ffmpeg_dmo PRIVATE /W4 /permissive- /utf-8)
-target_link_libraries(mmd2ffmpeg_dmo PRIVATE ole32 oleaut32 uuid strmiids dmoguids user32)
+target_link_libraries(mmd2ffmpeg_dmo PRIVATE ole32 oleaut32 uuid strmiids dmoguids user32 shell32)
 set_target_properties(mmd2ffmpeg_dmo PROPERTIES OUTPUT_NAME "mmd2ffmpeg_dmo")
 
 add_executable(mmd2ffmpeg_cleanup WIN32 src/cleanup.cpp)
