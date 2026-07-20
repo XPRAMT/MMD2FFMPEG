@@ -208,6 +208,24 @@ std::wstring encoding_arguments(const Settings& settings) {
     return args.str();
 }
 
+const wchar_t* output_pixel_format(const Settings& settings) {
+    return settings.bit_depth == 10 && settings.codec != L"avc" ? L"p010le" : L"nv12";
+}
+
+std::wstring command_prefix(const Settings& settings) {
+    const auto pixel_format = output_pixel_format(settings);
+    return L"\"" + settings.ffmpeg +
+           L"\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {input_pixel_format} "
+           L"-video_size {width}x{height} -framerate {fps} -i pipe:0 "
+           L"-vf scale=out_color_matrix=bt709:out_range=tv,format=" + pixel_format + L" ";
+}
+
+std::wstring command_suffix(const Settings& settings) {
+    const auto pixel_format = output_pixel_format(settings);
+    return L" -pix_fmt " + std::wstring(pixel_format) +
+           L" -colorspace bt709 -color_primaries bt709 -color_trc bt709 \"{output}\"";
+}
+
 void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
     std::size_t position = 0;
     while ((position = value.find(from, position)) != std::wstring::npos) {
@@ -217,16 +235,9 @@ void replace_all(std::wstring& value, const std::wstring& from, const std::wstri
 }
 
 std::wstring build_ffmpeg_command(const Settings& settings, int width, int height, int bits) {
-    const bool ten_bit = settings.bit_depth == 10 && settings.codec != L"avc";
-    const auto pixel_format = ten_bit ? L"p010le" : L"nv12";
     const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
-    std::wstring command = L"\"{ffmpeg}\" -hide_banner -loglevel warning -y -f rawvideo "
-                           L"-pixel_format {pixel_format} -video_size {width}x{height} "
-                           L"-framerate {fps} -i pipe:0 -vf scale=out_color_matrix=bt709:out_range=tv,format=" +
-                           std::wstring(pixel_format) + L" " + arguments + L" -pix_fmt " + pixel_format +
-                           L" -colorspace bt709 -color_primaries bt709 -color_trc bt709 \"{output}\"";
-    replace_all(command, L"{ffmpeg}", settings.ffmpeg);
-    replace_all(command, L"{pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
+    std::wstring command = command_prefix(settings) + arguments + command_suffix(settings);
+    replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
     replace_all(command, L"{width}", std::to_wstring(width));
     replace_all(command, L"{height}", std::to_wstring(height));
     replace_all(command, L"{fps}", std::to_wstring(settings.fps));
@@ -684,7 +695,7 @@ public:
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        info->size = {520, 355};
+        info->size = {520, 420};
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -745,10 +756,14 @@ private:
         HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     15, 180, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
         Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
-        CreateWindowW(L"STATIC", L"Customizable FFmpeg encoding arguments",
+        CreateWindowW(L"STATIC", L"Complete FFmpeg command (middle section is editable)",
                       WS_CHILD | WS_VISIBLE, 15, 210, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
-        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 235, 490);
+        CreateWindowW(L"STATIC", command_prefix(settings_).c_str(),
+                      WS_CHILD | WS_VISIBLE, 15, 232, 490, 55, window_, reinterpret_cast<HMENU>(1010), GetModuleHandleW(nullptr), nullptr);
+        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 290, 490);
         SetWindowTextW(command, (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
+        CreateWindowW(L"STATIC", command_suffix(settings_).c_str(),
+                      WS_CHILD | WS_VISIBLE, 15, 320, 490, 55, window_, reinterpret_cast<HMENU>(1011), GetModuleHandleW(nullptr), nullptr);
         EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
         update_controls();
     }
@@ -783,12 +798,17 @@ private:
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
     }
+    void update_command_display() {
+        SetWindowTextW(GetDlgItem(window_, 1010), command_prefix(settings_).c_str());
+        SetWindowTextW(GetDlgItem(window_, 1011), command_suffix(settings_).c_str());
+    }
     void changed(int id) {
         dirty_ = true; update_controls();
         if (id != ID_COMMAND && id != ID_FOLLOW) {
             sync_structured_settings();
             updating_command_ = true;
             SetWindowTextW(GetDlgItem(window_, ID_COMMAND), encoding_arguments(settings_).c_str());
+            update_command_display();
             updating_command_ = false;
         }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
