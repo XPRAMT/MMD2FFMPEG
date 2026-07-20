@@ -280,6 +280,81 @@ void close_handle(HANDLE& handle) {
     if (handle) { CloseHandle(handle); handle = nullptr; }
 }
 
+std::wstring decode_process_output(const std::vector<char>& bytes) {
+    if (bytes.empty()) return L"FFmpeg exited without an error message.";
+    const int source_length = static_cast<int>(bytes.size());
+    int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), source_length, nullptr, 0);
+    const UINT code_page = length > 0 ? CP_UTF8 : CP_ACP;
+    if (length <= 0) length = MultiByteToWideChar(code_page, 0, bytes.data(), source_length, nullptr, 0);
+    if (length <= 0) return L"Unable to decode FFmpeg error output.";
+    std::wstring result(static_cast<std::size_t>(length), L'\0');
+    MultiByteToWideChar(code_page, 0, bytes.data(), source_length, result.data(), length);
+    return trim(result);
+}
+
+bool test_encoder(const Settings& settings, std::wstring& error_message) {
+    if (!std::filesystem::exists(settings.ffmpeg)) {
+        error_message = L"FFmpeg was not found:\n" + settings.ffmpeg;
+        return false;
+    }
+    const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
+    const auto pixel_format = output_pixel_format(settings);
+    std::wstring command = L"\"" + settings.ffmpeg +
+        L"\" -hide_banner -loglevel error -f lavfi -i color=c=black:s=128x128:r=1 -frames:v 1 "
+        L"-vf format=" + pixel_format + L" " + arguments +
+        L" -pix_fmt " + pixel_format + L" -f null -";
+
+    SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
+    HANDLE output_read = nullptr, output_write = nullptr;
+    if (!CreatePipe(&output_read, &output_write, &security, 65536)) {
+        error_message = L"Could not create the FFmpeg test output pipe.";
+        return false;
+    }
+    SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0);
+    std::vector<wchar_t> mutable_command(command.begin(), command.end());
+    mutable_command.push_back(L'\0');
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    startup.hStdOutput = output_write;
+    startup.hStdError = output_write;
+    PROCESS_INFORMATION process{};
+    const BOOL created = CreateProcessW(settings.ffmpeg.c_str(), mutable_command.data(), nullptr, nullptr,
+                                        TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+    close_handle(output_write);
+    if (!created) {
+        close_handle(output_read);
+        error_message = L"Could not start FFmpeg (Windows error " + std::to_wstring(GetLastError()) + L").";
+        return false;
+    }
+
+    const DWORD wait_result = WaitForSingleObject(process.hProcess, 30000);
+    if (wait_result == WAIT_TIMEOUT) {
+        TerminateProcess(process.hProcess, 1);
+        WaitForSingleObject(process.hProcess, 5000);
+    }
+    std::vector<char> output;
+    std::array<char, 4096> buffer{};
+    DWORD read = 0;
+    while (output.size() < 16384 && ReadFile(output_read, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) && read)
+        output.insert(output.end(), buffer.data(), buffer.data() + read);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    close_handle(output_read);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    if (wait_result == WAIT_TIMEOUT) {
+        error_message = L"Encoder test timed out after 30 seconds.";
+        return false;
+    }
+    if (wait_result != WAIT_OBJECT_0 || exit_code != 0) {
+        error_message = decode_process_output(output);
+        return false;
+    }
+    return true;
+}
+
 void free_type(DMO_MEDIA_TYPE& type) {
     if (type.cbFormat && type.pbFormat) CoTaskMemFree(type.pbFormat);
     if (type.pUnk) type.pUnk->Release();
@@ -590,7 +665,7 @@ public:
         if (dialog != VfwCompressDialog_Config) return E_INVALIDARG;
         IUnknown* object = static_cast<IMediaObject*>(this);
         GUID page = CLSID_MMD2FFMPEG_SETTINGS;
-        return OleCreatePropertyFrame(parent, 0, 0, L"MMD2FFMPEG NVENC Settings",
+        return OleCreatePropertyFrame(parent, 0, 0, L"MMD2FFMPEG Encoder Settings",
                                       1, &object, 1, &page, GetUserDefaultLCID(), 0, nullptr);
     }
     HRESULT STDMETHODCALLTYPE GetState(LPVOID, int*) override { return E_NOTIMPL; }
@@ -740,16 +815,24 @@ public:
     HRESULT STDMETHODCALLTYPE IsPageDirty() override { return dirty_ ? S_OK : S_FALSE; }
     HRESULT STDMETHODCALLTYPE Apply() override {
         if (!window_) return E_UNEXPECTED;
-        settings_.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
-        settings_.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" :
+        Settings candidate = settings_;
+        candidate.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
+        candidate.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" :
                           combo_text(ID_CODEC) == L"AV1" ? L"av1" : L"hevc";
-        settings_.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && settings_.codec != L"avc" ? 10 : 8;
-        settings_.preset = combo_index(ID_PRESET) + 1;
-        settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
-        settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
-        settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
-        settings_.follow_avi_path = Button_GetCheck(GetDlgItem(window_, ID_FOLLOW)) == BST_CHECKED;
-        settings_.video_args = edit_text(ID_COMMAND);
+        candidate.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && candidate.codec != L"avc" ? 10 : 8;
+        candidate.preset = combo_index(ID_PRESET) + 1;
+        candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
+        candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
+        candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
+        candidate.follow_avi_path = Button_GetCheck(GetDlgItem(window_, ID_FOLLOW)) == BST_CHECKED;
+        candidate.video_args = edit_text(ID_COMMAND);
+        std::wstring test_error;
+        if (!test_encoder(candidate, test_error)) {
+            MessageBoxW(window_, (L"The encoder test failed. Settings were not saved.\n\n" + test_error).c_str(),
+                        L"MMD2FFMPEG Encoder Test", MB_OK | MB_ICONERROR);
+            return E_FAIL;
+        }
+        settings_ = std::move(candidate);
         save_settings(settings_); dirty_ = false;
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_CLEAN);
         return S_OK;
