@@ -1,10 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
 
-$driversKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Drivers32'
-if (Get-ItemProperty -Path $driversKey -Name 'vidc.M2FF' -ErrorAction SilentlyContinue) {
-    Remove-ItemProperty -Path $driversKey -Name 'vidc.M2FF'
-}
-Write-Host 'Removed the per-user MMD2FFMPEG VFW registration.'
 $classIdBraced = '{C42D995C-3D1B-4E44-A96B-767B6C2A4646}'
 $classIdBare = 'C42D995C-3D1B-4E44-A96B-767B6C2A4646'
 $classKey = "HKCU:\Software\Classes\CLSID\$classIdBraced"

@@ -65,9 +65,11 @@ int wmain(int argument_count, wchar_t** arguments) {
 
     RECT client{};
     GetClientRect(page_window, &client);
-    const int ids[] = {ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
+    const int ids[] = {ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
                        ID_STATUS, ID_REFRESH, ID_COMMAND_PREFIX, ID_COMMAND, ID_COMMAND_SUFFIX,
-                       ID_TEST_REQUIREMENT};
+                       ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC,
+                       ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE,
+                       ID_COMMAND_HEADING};
     for (const int id : ids) {
         const RECT rectangle = child_rect(page_window, id);
         if (!valid_rect(rectangle) || rectangle.left < 0 || rectangle.top < 0 ||
@@ -93,14 +95,45 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     HWND status_control = GetDlgItem(page_window, ID_STATUS);
     HWND command_control = GetDlgItem(page_window, ID_COMMAND);
-    if (window_text(status_control) != L"Encoder status: not tested" || !IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH))) {
+    HWND language_control = GetDlgItem(page_window, ID_LANGUAGE);
+    const LRESULT original_language = SendMessageW(language_control, CB_GETCURSEL, 0, 0);
+    const wchar_t* language_labels[]{L"語言", L"語言", L"语言", L"言語", L"Language"};
+    const wchar_t* button_labels[]{L"測試編碼", L"測試編碼", L"测试编码", L"エンコーダーをテスト", L"Test encoder"};
+    const wchar_t* not_tested_labels[]{L"編碼器狀態：尚未測試", L"編碼器狀態：尚未測試", L"编码器状态：尚未测试",
+                                       L"エンコーダー状態：未テスト", L"Encoder status: not tested"};
+    if (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH))) {
         std::wcerr << L"The property page started an encoder test automatically.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 7;
     }
+    for (int language = 0; language < 5; ++language) {
+        SendMessageW(language_control, CB_SETCURSEL, language, 0);
+        SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_LANGUAGE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(language_control));
+        int text_index = language;
+        if (language == 0) {
+            const LANGID ui = GetUserDefaultUILanguage();
+            if (PRIMARYLANGID(ui) == LANG_JAPANESE) text_index = 3;
+            else if (PRIMARYLANGID(ui) != LANG_CHINESE) text_index = 4;
+            else {
+                const WORD sublanguage = SUBLANGID(ui);
+                text_index = sublanguage == SUBLANG_CHINESE_TRADITIONAL || sublanguage == SUBLANG_CHINESE_HONGKONG ||
+                             sublanguage == SUBLANG_CHINESE_MACAU ? 1 : 2;
+            }
+        }
+        if (window_text(GetDlgItem(page_window, ID_LABEL_LANGUAGE)) != language_labels[text_index] ||
+            window_text(GetDlgItem(page_window, ID_REFRESH)) != button_labels[text_index] ||
+            window_text(status_control) != not_tested_labels[text_index]) {
+            std::wcerr << L"Language switch failed for index " << language << L".\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 8;
+        }
+    }
+    SendMessageW(language_control, CB_SETCURSEL, original_language, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_LANGUAGE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(language_control));
     SetWindowTextW(command_control, (window_text(command_control) + L" ").c_str());
-    if (window_text(status_control) != L"Encoder status: not tested") {
+    const std::wstring status_after_change = window_text(status_control);
+    if (status_after_change.find(L"testing") != std::wstring::npos || status_after_change.find(L"テスト中") != std::wstring::npos ||
+        status_after_change.find(L"測試中") != std::wstring::npos || status_after_change.find(L"测试中") != std::wstring::npos) {
         std::wcerr << L"Changing encoder settings started a test automatically.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 8;
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 9;
     }
     std::wcout << mode << L" property page layout OK: "
                << info.size.cx << L"x" << info.size.cy << L"\n";

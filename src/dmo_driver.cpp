@@ -53,8 +53,134 @@ struct Settings {
     std::wstring rate_control = L"qp";
     int qp = 20;
     int bitrate_kbps = 20000;
+    std::wstring language = L"system";
     std::wstring command_template;
 };
+
+enum class UiLanguage { TraditionalChinese, SimplifiedChinese, Japanese, English };
+
+struct UiStrings {
+    const wchar_t* title;
+    const wchar_t* language;
+    const wchar_t* encoder;
+    const wchar_t* codec;
+    const wchar_t* bit_depth;
+    const wchar_t* preset;
+    const wchar_t* rate_control;
+    const wchar_t* quality;
+    const wchar_t* bitrate;
+    const wchar_t* command_heading;
+    const wchar_t* not_tested;
+    const wchar_t* testing;
+    const wchar_t* test_passed;
+    const wchar_t* settings_changed;
+    const wchar_t* test_failed;
+    const wchar_t* test_required;
+    const wchar_t* test_button;
+    const wchar_t* required_message;
+    const wchar_t* required_title;
+};
+
+struct UiOptions {
+    const wchar_t* software;
+    const wchar_t* fastest;
+    const wchar_t* best_quality;
+    const wchar_t* constant_quality;
+    const wchar_t* constant_qp;
+    const wchar_t* target_bitrate;
+    const wchar_t* global_quality;
+    const wchar_t* speed;
+    const wchar_t* balanced;
+    const wchar_t* quality;
+};
+
+UiLanguage system_ui_language() {
+    const LANGID language = GetUserDefaultUILanguage();
+    if (PRIMARYLANGID(language) == LANG_JAPANESE) return UiLanguage::Japanese;
+    if (PRIMARYLANGID(language) == LANG_CHINESE) {
+        const WORD sublanguage = SUBLANGID(language);
+        return sublanguage == SUBLANG_CHINESE_TRADITIONAL || sublanguage == SUBLANG_CHINESE_HONGKONG ||
+               sublanguage == SUBLANG_CHINESE_MACAU ? UiLanguage::TraditionalChinese : UiLanguage::SimplifiedChinese;
+    }
+    return UiLanguage::English;
+}
+
+UiLanguage ui_language(const std::wstring& value) {
+    if (value == L"zh-TW") return UiLanguage::TraditionalChinese;
+    if (value == L"zh-CN") return UiLanguage::SimplifiedChinese;
+    if (value == L"ja") return UiLanguage::Japanese;
+    if (value == L"en") return UiLanguage::English;
+    return system_ui_language();
+}
+
+const UiStrings& ui_strings(UiLanguage language) {
+    static constexpr UiStrings traditional{
+        L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
+        L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"完整 FFmpeg 指令（中間區段可編輯）",
+        L"編碼器狀態：尚未測試", L"編碼器狀態：測試中…", L"編碼器狀態：測試通過",
+        L"編碼器狀態：設定已變更，請重新測試", L"編碼器狀態：測試失敗 - ",
+        L"通過測試後才能儲存或套用。", L"測試編碼", L"請先測試目前的編碼指令。\n\n通過測試後才能儲存或套用設定。",
+        L"需要測試 MMD2FFMPEG 編碼器"};
+    static constexpr UiStrings simplified{
+        L"MMD2FFMPEG 编码器设置", L"语言", L"编码器", L"编码格式", L"位深度", L"编码预设",
+        L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"完整 FFmpeg 命令（中间部分可编辑）",
+        L"编码器状态：尚未测试", L"编码器状态：测试中…", L"编码器状态：测试通过",
+        L"编码器状态：设置已更改，请重新测试", L"编码器状态：测试失败 - ",
+        L"测试通过后才能保存或应用。", L"测试编码", L"请先测试当前的编码命令。\n\n测试通过后才能保存或应用设置。",
+        L"需要测试 MMD2FFMPEG 编码器"};
+    static constexpr UiStrings japanese{
+        L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
+        L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"完全な FFmpeg コマンド（中央部分は編集可能）",
+        L"エンコーダー状態：未テスト", L"エンコーダー状態：テスト中…", L"エンコーダー状態：テスト合格",
+        L"エンコーダー状態：設定が変更されました。再テストしてください", L"エンコーダー状態：テスト失敗 - ",
+        L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト",
+        L"現在のエンコーダーコマンドを先にテストしてください。\n\nテストに合格するまで設定を保存または適用できません。",
+        L"MMD2FFMPEG エンコーダーのテストが必要です"};
+    static constexpr UiStrings english{
+        L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
+        L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Complete FFmpeg command (middle section is editable)",
+        L"Encoder status: not tested", L"Encoder status: testing...", L"Encoder status: test passed",
+        L"Encoder status: settings changed; test again", L"Encoder status: test failed - ",
+        L"Test must pass before saving or applying.", L"Test encoder",
+        L"Test the current encoder command first.\n\nSettings can only be saved or applied after the test passes.",
+        L"MMD2FFMPEG Encoder Test Required"};
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return traditional;
+    case UiLanguage::SimplifiedChinese: return simplified;
+    case UiLanguage::Japanese: return japanese;
+    default: return english;
+    }
+}
+
+const UiOptions& ui_options(UiLanguage language) {
+    static constexpr UiOptions traditional{L"軟體", L"最快", L"最佳品質", L"固定品質", L"固定 QP",
+                                              L"VBR 目標位元率", L"全域品質", L"速度", L"平衡", L"品質"};
+    static constexpr UiOptions simplified{L"软件", L"最快", L"最佳质量", L"恒定质量", L"恒定 QP",
+                                             L"VBR 目标比特率", L"全局质量", L"速度", L"平衡", L"质量"};
+    static constexpr UiOptions japanese{L"ソフトウェア", L"最速", L"最高品質", L"固定品質", L"固定 QP",
+                                          L"VBR 目標ビットレート", L"グローバル品質", L"速度", L"バランス", L"品質"};
+    static constexpr UiOptions english{L"software", L"fastest", L"best quality", L"constant quality", L"Constant QP",
+                                         L"VBR target bitrate", L"global quality", L"speed", L"balanced", L"quality"};
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return traditional;
+    case UiLanguage::SimplifiedChinese: return simplified;
+    case UiLanguage::Japanese: return japanese;
+    default: return english;
+    }
+}
+
+int language_index(const std::wstring& value) {
+    if (value == L"zh-TW") return 1;
+    if (value == L"zh-CN") return 2;
+    if (value == L"ja") return 3;
+    if (value == L"en") return 4;
+    return 0;
+}
+
+const wchar_t* language_key(int index) {
+    static constexpr const wchar_t* values[]{L"system", L"zh-TW", L"zh-CN", L"ja", L"en"};
+    return values[std::clamp(index, 0, 4)];
+}
 
 struct SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX_LOCAL {
     PVOID object;
@@ -140,6 +266,7 @@ Settings load_settings() {
         else if (key == L"rate_control" && (value == L"crf" || value == L"qp" || value == L"vbr")) settings.rate_control = value;
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
         else if (key == L"bitrate_kbps") { try { settings.bitrate_kbps = std::clamp(std::stoi(value), 100, 1000000); } catch (...) {} }
+        else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
     if (settings.codec == L"avc") settings.bit_depth = 8;
@@ -180,6 +307,7 @@ void save_settings(const Settings& settings) {
          << L"rate_control=" << settings.rate_control << L"\n"
          << L"qp=" << settings.qp << L"\n"
          << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n";
+    file << L"language=" << settings.language << L"\n";
     if (!settings.video_args.empty()) file << L"video_args=" << settings.video_args << L"\n";
 }
 
@@ -785,7 +913,8 @@ public:
         if (dialog != VfwCompressDialog_Config) return E_INVALIDARG;
         IUnknown* object = static_cast<IMediaObject*>(this);
         GUID page = CLSID_MMD2FFMPEG_SETTINGS;
-        return OleCreatePropertyFrame(parent, 0, 0, L"MMD2FFMPEG Encoder Settings",
+        const Settings dialog_settings = load_settings();
+        return OleCreatePropertyFrame(parent, 0, 0, ui_strings(ui_language(dialog_settings.language)).title,
                                       1, &object, 1, &page, GetUserDefaultLCID(), 0, nullptr);
     }
     HRESULT STDMETHODCALLTYPE GetState(LPVOID, int*) override { return E_NOTIMPL; }
@@ -963,7 +1092,8 @@ public:
     HRESULT STDMETHODCALLTYPE GetPageInfo(PROPPAGEINFO* info) override {
         if (!info) return E_POINTER;
         ZeroMemory(info, sizeof(*info)); info->cb = sizeof(*info);
-        const wchar_t* title = L"MMD2FFMPEG Encoder Settings";
+        const Settings title_settings = load_settings();
+        const wchar_t* title = ui_strings(ui_language(title_settings.language)).title;
         const auto bytes = (wcslen(title) + 1) * sizeof(wchar_t);
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
@@ -980,7 +1110,7 @@ public:
         if (dc) { GetTextMetricsW(dc, &metrics); GetTextExtentPoint32W(dc, sample, 52, &alphabet); }
         const int base_x = alphabet.cx > 0 ? std::max(1, static_cast<int>((alphabet.cx / 26 + 1) / 2)) : 7;
         const int base_y = metrics.tmHeight > 0 ? metrics.tmHeight : 15;
-        info->size = {MulDiv(260, base_x, 4), MulDiv(220, base_y, 8)};
+        info->size = {MulDiv(260, base_x, 4), MulDiv(236, base_y, 8)};
         if (dc && previous) SelectObject(dc, previous);
         if (font) DeleteObject(font);
         if (dc) ReleaseDC(nullptr, dc);
@@ -1011,10 +1141,8 @@ public:
         candidate.video_args = edit_text(ID_COMMAND);
         const auto signature = command_test_signature(candidate);
         if (!current_command_tested_ || tested_signature_ != signature) {
-            MessageBoxW(window_,
-                        L"Test the current encoder command first.\n\n"
-                        L"Settings can only be saved or applied after the test passes.",
-                        L"MMD2FFMPEG Encoder Test Required", MB_OK | MB_ICONWARNING);
+            const auto& text = current_text();
+            MessageBoxW(window_, text.required_message, text.required_title, MB_OK | MB_ICONWARNING);
             return E_FAIL;
         }
         settings_ = std::move(candidate);
@@ -1035,6 +1163,7 @@ private:
     }
     void create_controls() {
         updating_command_ = true;
+        add_combo(ID_LANGUAGE, {L"系統預設", L"繁體中文", L"簡體中文", L"日本語", L"English"}, language_index(settings_.language));
         add_combo(ID_BACKEND, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
         add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
         add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
@@ -1048,7 +1177,7 @@ private:
         rebuild_backend_options();
         update_controls();
         updating_command_ = false;
-        SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: not tested");
+        apply_language();
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1059,23 +1188,32 @@ private:
     void rebuild_backend_options() {
         const int backend = combo_index(ID_BACKEND);
         const int old_level = std::clamp(settings_.preset, 1, 7);
+        const auto& options = ui_options(ui_language(settings_.language));
+        const std::wstring fastest_13 = std::wstring(L"13 (") + options.fastest + L")";
+        const std::wstring best_4 = std::wstring(L"4 (") + options.best_quality + L")";
+        const std::wstring fastest_p1 = std::wstring(L"P1 (") + options.fastest + L")";
+        const std::wstring best_p7 = std::wstring(L"P7 (") + options.best_quality + L")";
+        const std::wstring crf = std::wstring(L"CRF (") + options.constant_quality + L")";
+        const std::wstring cq = std::wstring(L"CQ (") + options.constant_quality + L")";
+        const std::wstring icq = std::wstring(L"ICQ / ") + options.global_quality;
+        const std::wstring qvbr = std::wstring(L"QVBR ") + options.quality;
         updating_command_ = true;
         if (backend == 0) {
             if (combo_index(ID_CODEC) == 2)
-                reset_combo(ID_PRESET, {L"13 (fastest)", L"11", L"9", L"8", L"7", L"6", L"4 (best quality)"}, old_level - 1);
+                reset_combo(ID_PRESET, {fastest_13.c_str(), L"11", L"9", L"8", L"7", L"6", best_4.c_str()}, old_level - 1);
             else
                 reset_combo(ID_PRESET, {L"ultrafast", L"superfast", L"veryfast", L"faster", L"fast", L"medium", L"slow"}, old_level - 1);
-            reset_combo(ID_RATE, {L"CRF (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_RATE, {crf.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         } else if (backend == 1) {
-            reset_combo(ID_PRESET, {L"P1 (fastest)", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7 (best quality)"}, old_level - 1);
-            reset_combo(ID_RATE, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_PRESET, {fastest_p1.c_str(), L"P2", L"P3", L"P4", L"P5", L"P6", best_p7.c_str()}, old_level - 1);
+            reset_combo(ID_RATE, {cq.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         } else if (backend == 2) {
             reset_combo(ID_PRESET, {L"veryfast", L"faster", L"fast", L"medium", L"slow", L"slower", L"veryslow"}, old_level - 1);
-            reset_combo(ID_RATE, {L"ICQ / global quality", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_RATE, {icq.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         } else {
             const int amf_selected = old_level <= 2 ? 0 : old_level <= 5 ? 1 : 2;
-            reset_combo(ID_PRESET, {L"speed", L"balanced", L"quality"}, amf_selected);
-            reset_combo(ID_RATE, {L"QVBR quality", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_PRESET, {options.speed, options.balanced, options.quality}, amf_selected);
+            reset_combo(ID_RATE, {qvbr.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         }
         updating_command_ = false;
     }
@@ -1091,7 +1229,7 @@ private:
             PostMessageW(window_, WM_APP + 42, 0, reinterpret_cast<LPARAM>(result));
             return;
         }
-        SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: testing...");
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_text().testing);
         EnableWindow(GetDlgItem(window_, ID_REFRESH), FALSE);
         probe_running_ = true;
         const HWND target = window_;
@@ -1140,6 +1278,35 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
     }
+    const UiStrings& current_text() const { return ui_strings(ui_language(settings_.language)); }
+    void apply_language() {
+        const auto& text = current_text();
+        const auto& options = ui_options(ui_language(settings_.language));
+        const int backend = combo_index(ID_BACKEND);
+        reset_combo(ID_BACKEND, {(std::wstring(L"CPU (") + options.software + L")").c_str(),
+                                 L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, backend);
+        rebuild_backend_options();
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_LANGUAGE), text.language);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_BACKEND), text.encoder);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_CODEC), text.codec);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_DEPTH), text.bit_depth);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_PRESET), text.preset);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_RATE), text.rate_control);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_QP), text.quality);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_BITRATE), text.bitrate);
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_HEADING), text.command_heading);
+        SetWindowTextW(GetDlgItem(window_, ID_TEST_REQUIREMENT), text.test_required);
+        SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
+        const wchar_t* status = probe_running_ ? text.testing : current_command_tested_ ? text.test_passed : text.not_tested;
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), status);
+    }
+    void change_language() {
+        settings_.language = language_key(combo_index(ID_LANGUAGE));
+        apply_language();
+        Settings persisted = load_settings();
+        persisted.language = settings_.language;
+        save_settings(persisted);
+    }
     void changed(int id) {
         dirty_ = true;
         current_command_tested_ = false;
@@ -1153,7 +1320,7 @@ private:
             update_command_display();
             updating_command_ = false;
         }
-        SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: not tested");
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_text().not_tested);
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
     }
     static INT_PTR CALLBACK dialog_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -1174,9 +1341,10 @@ private:
             self->current_command_tested_ = result->success && result->signature == command_test_signature(current);
             self->tested_signature_ = self->current_command_tested_ ? result->signature : L"";
             std::wstring status;
-            if (self->current_command_tested_) status = L"Encoder status: test passed";
-            else if (result->signature != command_test_signature(current)) status = L"Encoder status: settings changed; test again";
-            else status = L"Encoder status: test failed - " + result->message;
+            const auto& text = self->current_text();
+            if (self->current_command_tested_) status = text.test_passed;
+            else if (result->signature != command_test_signature(current)) status = text.settings_changed;
+            else status = std::wstring(text.test_failed) + result->message;
             if (status.size() > 180) status.resize(180);
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
             EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
@@ -1185,6 +1353,11 @@ private:
         }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {
             self->start_probe(true);
+            return TRUE;
+        }
+        else if (message == WM_COMMAND && self && !self->updating_command_ &&
+                 LOWORD(wparam) == ID_LANGUAGE && HIWORD(wparam) == CBN_SELCHANGE) {
+            self->change_language();
             return TRUE;
         }
         else if (message == WM_COMMAND && self && !self->updating_command_ &&
