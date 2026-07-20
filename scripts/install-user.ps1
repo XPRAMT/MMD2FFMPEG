@@ -23,13 +23,12 @@ output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mkv
 fps=30
 codec=hevc
 bit_depth=10
-color_matrix=bt709
 preset=7
 rate_control=qp
 qp=20
 bitrate_kbps=20000
 follow_avi_path=1
-video_args=-vf scale=out_color_matrix=bt709:out_range=tv,format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le -colorspace bt709 -color_primaries bt709 -color_trc bt709
+video_args=-c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
 }
