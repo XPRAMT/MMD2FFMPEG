@@ -17,10 +17,6 @@ namespace {
 // {C42D995C-3D1B-4E44-A96B-767B6C2A4646}
 constexpr GUID CLSID_MMD2FFMPEG =
     {0xc42d995c, 0x3d1b, 0x4e44, {0xa9, 0x6b, 0x76, 0x7b, 0x6c, 0x2a, 0x46, 0x46}};
-// FOURCC M2FF in the standard DirectShow media subtype namespace.
-constexpr GUID MEDIASUBTYPE_M2FF =
-    {0x4646324d, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
-
 std::atomic<long> g_objects{0};
 std::atomic<long> g_locks{0};
 
@@ -128,11 +124,6 @@ bool supported_input(const DMO_MEDIA_TYPE& type) {
            (bitmap.biBitCount == 24 || bitmap.biBitCount == 32) && bitmap.biCompression == BI_RGB;
 }
 
-bool supported_output(const DMO_MEDIA_TYPE& type) {
-    return type.majortype == MEDIATYPE_Video && type.subtype == MEDIASUBTYPE_M2FF &&
-           type.formattype == FORMAT_VideoInfo && type.pbFormat && type.cbFormat >= sizeof(VIDEOINFOHEADER);
-}
-
 class Encoder final : public IMediaObject {
 public:
     Encoder() { ++g_objects; }
@@ -182,14 +173,9 @@ public:
         if (index != 0) return DMO_E_INVALIDSTREAMINDEX;
         if (!type) return E_POINTER;
         if (type_index != 0) return DMO_E_NO_MORE_ITEMS;
-        LONG width = 640, height = 480;
-        REFERENCE_TIME frame_time = 333333;
-        if (input_type_.pbFormat) {
-            const auto* input = reinterpret_cast<const VIDEOINFOHEADER*>(input_type_.pbFormat);
-            width = input->bmiHeader.biWidth; height = input->bmiHeader.biHeight;
-            frame_time = input->AvgTimePerFrame;
-        }
-        return make_video_type(type, MEDIASUBTYPE_M2FF, width, height, 0, 0x4646324d, 1, frame_time);
+        if (!input_type_.pbFormat) return DMO_E_TYPE_NOT_SET;
+        ZeroMemory(type, sizeof(*type));
+        return copy_type(*type, input_type_);
     }
     HRESULT STDMETHODCALLTYPE SetInputType(DWORD index, const DMO_MEDIA_TYPE* type, DWORD flags) override {
         if (index != 0) return DMO_E_INVALIDSTREAMINDEX;
@@ -203,7 +189,15 @@ public:
         if (index != 0) return DMO_E_INVALIDSTREAMINDEX;
         if (flags & DMO_SET_TYPEF_CLEAR) { free_type(output_type_); return S_OK; }
         if (!type) return E_POINTER;
-        if (!supported_output(*type)) return DMO_E_TYPE_NOT_ACCEPTED;
+        if (!input_type_.pbFormat || !supported_input(*type)) return DMO_E_TYPE_NOT_ACCEPTED;
+        const auto* input = reinterpret_cast<const VIDEOINFOHEADER*>(input_type_.pbFormat);
+        const auto* output = reinterpret_cast<const VIDEOINFOHEADER*>(type->pbFormat);
+        if (type->subtype != input_type_.subtype ||
+            output->bmiHeader.biWidth != input->bmiHeader.biWidth ||
+            output->bmiHeader.biHeight != input->bmiHeader.biHeight ||
+            output->bmiHeader.biSizeImage != input->bmiHeader.biSizeImage) {
+            return DMO_E_TYPE_NOT_ACCEPTED;
+        }
         if (flags & DMO_SET_TYPEF_TEST_ONLY) return S_OK;
         return copy_type(output_type_, *type);
     }
@@ -230,7 +224,8 @@ public:
         if (index != 0) return DMO_E_INVALIDSTREAMINDEX;
         if (!size || !alignment) return E_POINTER;
         if (!output_type_.pbFormat) return DMO_E_TYPE_NOT_SET;
-        *size = 1; *alignment = 1; return S_OK;
+        *size = reinterpret_cast<VIDEOINFOHEADER*>(output_type_.pbFormat)->bmiHeader.biSizeImage;
+        *alignment = 1; return S_OK;
     }
     HRESULT STDMETHODCALLTYPE GetInputMaxLatency(DWORD index, REFERENCE_TIME* latency) override {
         if (index != 0) return DMO_E_INVALIDSTREAMINDEX;
@@ -240,7 +235,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetInputMaxLatency(DWORD index, REFERENCE_TIME) override {
         return index == 0 ? S_OK : DMO_E_INVALIDSTREAMINDEX;
     }
-    HRESULT STDMETHODCALLTYPE Flush() override { pending_ = false; stop_ffmpeg(); return S_OK; }
+    HRESULT STDMETHODCALLTYPE Flush() override { pending_ = false; pending_frame_.clear(); stop_ffmpeg(); return S_OK; }
     HRESULT STDMETHODCALLTYPE Discontinuity(DWORD index) override {
         return index == 0 ? S_OK : DMO_E_INVALIDSTREAMINDEX;
     }
@@ -248,7 +243,9 @@ public:
         if (!input_type_.pbFormat || !output_type_.pbFormat) return DMO_E_TYPE_NOT_SET;
         return start_ffmpeg() ? S_OK : E_FAIL;
     }
-    HRESULT STDMETHODCALLTYPE FreeStreamingResources() override { stop_ffmpeg(); pending_ = false; return S_OK; }
+    HRESULT STDMETHODCALLTYPE FreeStreamingResources() override {
+        stop_ffmpeg(); pending_ = false; pending_frame_.clear(); return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE GetInputStatus(DWORD index, DWORD* flags) override {
         if (index != 0) return DMO_E_INVALIDSTREAMINDEX;
         if (!flags) return E_POINTER;
@@ -266,6 +263,7 @@ public:
         HRESULT result = buffer->GetBufferAndLength(&bytes, &length);
         if (FAILED(result)) return result;
         if (!send_frame(bytes, length)) return E_FAIL;
+        pending_frame_.assign(bytes, bytes + length);
         pending_ = true; timestamp_ = timestamp; duration_ = duration;
         return S_OK;
     }
@@ -279,15 +277,16 @@ public:
         HRESULT result = outputs[0].pBuffer->GetBufferAndLength(&bytes, &length);
         if (FAILED(result)) return result;
         DWORD maximum = 0; result = outputs[0].pBuffer->GetMaxLength(&maximum);
-        if (FAILED(result) || maximum < 1 || !bytes) return E_FAIL;
-        bytes[0] = 0;
-        result = outputs[0].pBuffer->SetLength(1);
+        if (FAILED(result) || maximum < pending_frame_.size() || !bytes) return E_FAIL;
+        CopyMemory(bytes, pending_frame_.data(), pending_frame_.size());
+        result = outputs[0].pBuffer->SetLength(static_cast<DWORD>(pending_frame_.size()));
         if (FAILED(result)) return result;
         outputs[0].dwStatus = DMO_OUTPUT_DATA_BUFFERF_SYNCPOINT | DMO_OUTPUT_DATA_BUFFERF_TIME |
                               DMO_OUTPUT_DATA_BUFFERF_TIMELENGTH;
         outputs[0].rtTimestamp = timestamp_;
         outputs[0].rtTimelength = duration_;
         pending_ = false;
+        pending_frame_.clear();
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE Lock(LONG) override { return S_OK; }
@@ -360,6 +359,7 @@ private:
     bool bottom_up_ = false, started_ = false, pending_ = false;
     REFERENCE_TIME timestamp_ = 0, duration_ = 0;
     std::vector<BYTE> flipped_;
+    std::vector<BYTE> pending_frame_;
 };
 
 class Factory final : public IClassFactory {

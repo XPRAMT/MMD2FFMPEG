@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <dshow.h>
 #include <dmo.h>
 #include <dmoreg.h>
 
@@ -7,6 +8,12 @@
 namespace {
 constexpr GUID CLSID_MMD2FFMPEG =
     {0xc42d995c, 0x3d1b, 0x4e44, {0xa9, 0x6b, 0x76, 0x7b, 0x6c, 0x2a, 0x46, 0x46}};
+
+void free_type(DMO_MEDIA_TYPE& type) {
+    if (type.cbFormat && type.pbFormat) CoTaskMemFree(type.pbFormat);
+    if (type.pUnk) type.pUnk->Release();
+    ZeroMemory(&type, sizeof(type));
+}
 }
 
 int wmain() {
@@ -41,10 +48,43 @@ int wmain() {
     }
     DWORD inputs = 0, outputs = 0;
     const HRESULT count_result = object->GetStreamCount(&inputs, &outputs);
-    object->Release(); CoUninitialize();
     if (FAILED(count_result) || inputs != 1 || outputs != 1) {
-        std::wcerr << L"Unexpected stream count.\n"; return 2;
+        std::wcerr << L"Unexpected stream count.\n";
+        object->Release(); CoUninitialize(); return 2;
     }
-    std::wcout << L"Created MMD2FFMPEG DMO with one input and one output stream.\n";
+
+    DMO_MEDIA_TYPE input{};
+    result = object->GetInputType(0, 0, &input);
+    if (FAILED(result) || input.subtype != MEDIASUBTYPE_RGB32) {
+        std::wcerr << L"Could not enumerate the RGB32 input type.\n";
+        free_type(input); object->Release(); CoUninitialize(); return 4;
+    }
+    result = object->SetInputType(0, &input, 0);
+    if (FAILED(result)) {
+        std::wcerr << L"Could not set the RGB32 input type: 0x" << std::hex << result << L"\n";
+        free_type(input); object->Release(); CoUninitialize(); return 5;
+    }
+
+    DMO_MEDIA_TYPE output{};
+    result = object->GetOutputType(0, 0, &output);
+    if (FAILED(result) || output.subtype != input.subtype || output.lSampleSize != input.lSampleSize) {
+        std::wcerr << L"Output is not a complete RGB passthrough media type.\n";
+        free_type(output); free_type(input); object->Release(); CoUninitialize(); return 6;
+    }
+    result = object->SetOutputType(0, &output, DMO_SET_TYPEF_TEST_ONLY);
+    if (FAILED(result)) {
+        std::wcerr << L"DirectShow-compatible output type was rejected: 0x" << std::hex << result << L"\n";
+        free_type(output); free_type(input); object->Release(); CoUninitialize(); return 7;
+    }
+
+    DWORD output_size = 0, alignment = 0;
+    result = object->SetOutputType(0, &output, 0);
+    if (SUCCEEDED(result)) result = object->GetOutputSizeInfo(0, &output_size, &alignment);
+    const bool output_size_valid = SUCCEEDED(result) && output_size == output.lSampleSize && alignment == 1;
+    free_type(output); free_type(input); object->Release(); CoUninitialize();
+    if (!output_size_valid) {
+        std::wcerr << L"Output buffer contract does not match the media type.\n"; return 8;
+    }
+    std::wcout << L"Created DMO and negotiated matching RGB input/output media types.\n";
     return 0;
 }
