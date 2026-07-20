@@ -980,7 +980,7 @@ public:
         if (dc) { GetTextMetricsW(dc, &metrics); GetTextExtentPoint32W(dc, sample, 52, &alphabet); }
         const int base_x = alphabet.cx > 0 ? std::max(1, static_cast<int>((alphabet.cx / 26 + 1) / 2)) : 7;
         const int base_y = metrics.tmHeight > 0 ? metrics.tmHeight : 15;
-        info->size = {MulDiv(260, base_x, 4), MulDiv(194, base_y, 8)};
+        info->size = {MulDiv(260, base_x, 4), MulDiv(220, base_y, 8)};
         if (dc && previous) SelectObject(dc, previous);
         if (font) DeleteObject(font);
         if (dc) ReleaseDC(nullptr, dc);
@@ -1011,14 +1011,11 @@ public:
         candidate.video_args = edit_text(ID_COMMAND);
         const auto signature = command_test_signature(candidate);
         if (!current_command_tested_ || tested_signature_ != signature) {
-            std::wstring test_error;
-            if (!test_encoder(candidate, test_error)) {
-                MessageBoxW(window_, (L"The encoder test failed. Settings were not saved.\n\n" + test_error).c_str(),
-                            L"MMD2FFMPEG Encoder Test", MB_OK | MB_ICONERROR);
-                return E_FAIL;
-            }
-            current_command_tested_ = true;
-            tested_signature_ = signature;
+            MessageBoxW(window_,
+                        L"Test the current encoder command first.\n\n"
+                        L"Settings can only be saved or applied after the test passes.",
+                        L"MMD2FFMPEG Encoder Test Required", MB_OK | MB_ICONWARNING);
+            return E_FAIL;
         }
         settings_ = std::move(candidate);
         save_settings(settings_); dirty_ = false;
@@ -1051,7 +1048,7 @@ private:
         rebuild_backend_options();
         update_controls();
         updating_command_ = false;
-        start_probe();
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: not tested");
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1157,9 +1154,6 @@ private:
             updating_command_ = false;
         }
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: not tested");
-        if (id == ID_BACKEND || id == ID_CODEC || id == ID_DEPTH) {
-            if (!probe_running_) start_probe();
-        }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
     }
     static INT_PTR CALLBACK dialog_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -1174,13 +1168,15 @@ private:
         else if (message == WM_APP + 42 && self) {
             auto* result = reinterpret_cast<ProbeResult*>(lparam);
             self->probe_running_ = false;
-            self->probe_available_ = result->success;
             self->sync_structured_settings();
             Settings current = self->settings_;
             current.video_args = self->edit_text(ID_COMMAND);
             self->current_command_tested_ = result->success && result->signature == command_test_signature(current);
             self->tested_signature_ = self->current_command_tested_ ? result->signature : L"";
-            std::wstring status = result->success ? L"Encoder status: Available" : L"Encoder status: Unavailable - " + result->message;
+            std::wstring status;
+            if (self->current_command_tested_) status = L"Encoder status: test passed";
+            else if (result->signature != command_test_signature(current)) status = L"Encoder status: settings changed; test again";
+            else status = L"Encoder status: test failed - " + result->message;
             if (status.size() > 180) status.resize(180);
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
             EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
@@ -1207,7 +1203,6 @@ private:
     bool updating_command_ = false;
     std::atomic<bool> alive_{true};
     bool probe_running_ = false;
-    bool probe_available_ = false;
     bool current_command_tested_ = false;
     std::wstring tested_signature_;
     std::thread probe_thread_;
