@@ -33,7 +33,7 @@ std::atomic<long> g_objects{0};
 std::atomic<long> g_locks{0};
 
 struct Settings {
-    std::wstring ffmpeg = L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe";
+    std::wstring ffmpeg = L"ffmpeg.exe";
     std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
     std::wstring video_args;
     int fps = 30;
@@ -136,6 +136,8 @@ Settings load_settings() {
         else if (key == L"command_template") settings.command_template = value;
     }
     if (settings.codec == L"avc") settings.bit_depth = 8;
+    if (_wcsicmp(settings.ffmpeg.c_str(), L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe") == 0)
+        settings.ffmpeg = L"ffmpeg.exe";
     if (settings.video_args.empty() && !settings.command_template.empty()) {
         const auto input_end = settings.command_template.find(L"-i pipe:0 ");
         const auto output_begin = settings.command_template.rfind(L" \"{output}\"");
@@ -311,6 +313,26 @@ void close_handle(HANDLE& handle) {
     if (handle) { CloseHandle(handle); handle = nullptr; }
 }
 
+std::filesystem::path resolve_executable(const std::wstring& executable) {
+    if (executable.find_first_of(L"\\/:") != std::wstring::npos) {
+        std::error_code error;
+        return std::filesystem::exists(executable, error) ? std::filesystem::path(executable) : std::filesystem::path{};
+    }
+    const DWORD path_length = GetEnvironmentVariableW(L"PATH", nullptr, 0);
+    if (!path_length) return {};
+    std::wstring search_path(path_length, L'\0');
+    GetEnvironmentVariableW(L"PATH", search_path.data(), path_length);
+    search_path.resize(wcslen(search_path.c_str()));
+    const DWORD result_length = SearchPathW(search_path.c_str(), executable.c_str(), nullptr, 0, nullptr, nullptr);
+    if (!result_length) return {};
+    std::wstring resolved(static_cast<std::size_t>(result_length) + 1, L'\0');
+    const DWORD copied = SearchPathW(search_path.c_str(), executable.c_str(), nullptr,
+                                     static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
+    if (!copied || copied >= resolved.size()) return {};
+    resolved.resize(copied);
+    return resolved;
+}
+
 void write_log_line(HANDLE file, const std::wstring& text) {
     if (!file) return;
     const int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
@@ -336,8 +358,9 @@ std::wstring decode_process_output(const std::vector<char>& bytes) {
 struct ProbeResult { bool success; std::wstring message; };
 
 bool test_encoder(const Settings& settings, std::wstring& error_message) {
-    if (!std::filesystem::exists(settings.ffmpeg)) {
-        error_message = L"FFmpeg was not found:\n" + settings.ffmpeg;
+    const auto ffmpeg_path = resolve_executable(settings.ffmpeg);
+    if (ffmpeg_path.empty()) {
+        error_message = L"FFmpeg was not found in the system PATH:\n" + settings.ffmpeg;
         return false;
     }
     const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
@@ -363,7 +386,7 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     startup.hStdOutput = output_write;
     startup.hStdError = output_write;
     PROCESS_INFORMATION process{};
-    const BOOL created = CreateProcessW(settings.ffmpeg.c_str(), mutable_command.data(), nullptr, nullptr,
+    const BOOL created = CreateProcessW(ffmpeg_path.c_str(), mutable_command.data(), nullptr, nullptr,
                                         TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
     close_handle(output_write);
     if (!created) {
@@ -399,9 +422,10 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
 }
 
 std::wstring capability_key(const Settings& settings) {
+    const auto ffmpeg_path = resolve_executable(settings.ffmpeg);
     std::error_code error;
-    const auto stamp = std::filesystem::last_write_time(settings.ffmpeg, error).time_since_epoch().count();
-    return settings.ffmpeg + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+    const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
+    return ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth);
 }
 
@@ -768,7 +792,8 @@ private:
                 settings_.output = avi.wstring();
             }
         }
-        if (!std::filesystem::exists(settings_.ffmpeg)) return false;
+        const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
+        if (ffmpeg_path.empty()) return false;
         final_output_ = settings_.output;
         partial_output_ = final_output_.parent_path() /
             (final_output_.stem().wstring() + L".mmd2ffmpeg-partial-" + std::to_wstring(GetCurrentProcessId()) + final_output_.extension().wstring());
@@ -793,7 +818,7 @@ private:
         startup.hStdOutput = log_file_ ? log_file_ : GetStdHandle(STD_OUTPUT_HANDLE);
         startup.hStdError = log_file_ ? log_file_ : GetStdHandle(STD_ERROR_HANDLE);
         PROCESS_INFORMATION process{};
-        const BOOL created = CreateProcessW(settings_.ffmpeg.c_str(), mutable_command.data(), nullptr, nullptr,
+        const BOOL created = CreateProcessW(ffmpeg_path.c_str(), mutable_command.data(), nullptr, nullptr,
                                              TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
         CloseHandle(read_pipe);
         if (!created) { close_handle(stdin_write_); close_handle(log_file_); return false; }

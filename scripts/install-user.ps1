@@ -24,7 +24,7 @@ Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
 Copy-Item -LiteralPath $cleanupExe -Destination $installedCleanupExe -Force
 if (-not (Test-Path -LiteralPath $config)) {
     $defaultConfig = @'
-ffmpeg=C:\Program Files\Hybrid\64bit\ffmpeg.exe
+ffmpeg=ffmpeg.exe
 output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mkv
 fps=30
 backend=nvenc
@@ -38,6 +38,12 @@ follow_avi_path=1
 video_args=-c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
+}
+$configText = [System.IO.File]::ReadAllText($config)
+$legacyFfmpegLine = 'ffmpeg=C:\Program Files\Hybrid\64bit\ffmpeg.exe'
+if ($configText -match ('(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$')) {
+    $configText = [regex]::Replace($configText, '(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$', 'ffmpeg=ffmpeg.exe')
+    [System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
 }
 $driversKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Drivers32'
 New-Item -Path $driversKey -Force | Out-Null
