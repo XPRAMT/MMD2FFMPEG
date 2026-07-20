@@ -8,12 +8,15 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cwctype>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -68,6 +71,34 @@ std::filesystem::path config_path() {
     return count > 0 && count < buffer.size()
         ? std::filesystem::path(buffer.data()) / L"MMD2FFMPEG" / L"config.ini"
         : std::filesystem::path(L"config.ini");
+}
+
+std::filesystem::path local_data_dir() { return config_path().parent_path(); }
+
+std::filesystem::path make_log_path() {
+    const auto directory = local_data_dir() / L"logs";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    SYSTEMTIME time{};
+    GetLocalTime(&time);
+    std::wostringstream name;
+    name << std::setfill(L'0') << time.wYear << std::setw(2) << time.wMonth << std::setw(2) << time.wDay
+         << L'-' << std::setw(2) << time.wHour << std::setw(2) << time.wMinute << std::setw(2) << time.wSecond
+         << L'-' << GetCurrentProcessId() << L".log";
+    return directory / name.str();
+}
+
+void prune_logs() {
+    const auto directory = local_data_dir() / L"logs";
+    std::error_code error;
+    std::vector<std::filesystem::directory_entry> logs;
+    for (const auto& entry : std::filesystem::directory_iterator(directory, error))
+        if (entry.is_regular_file(error) && _wcsicmp(entry.path().extension().c_str(), L".log") == 0) logs.push_back(entry);
+    std::sort(logs.begin(), logs.end(), [](const auto& left, const auto& right) {
+        std::error_code left_error, right_error;
+        return left.last_write_time(left_error) > right.last_write_time(right_error);
+    });
+    for (std::size_t index = 30; index < logs.size(); ++index) std::filesystem::remove(logs[index].path(), error);
 }
 
 std::wstring trim(std::wstring value) {
@@ -280,6 +311,16 @@ void close_handle(HANDLE& handle) {
     if (handle) { CloseHandle(handle); handle = nullptr; }
 }
 
+void write_log_line(HANDLE file, const std::wstring& text) {
+    if (!file) return;
+    const int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    if (length <= 0) return;
+    std::string utf8(static_cast<std::size_t>(length), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), length, nullptr, nullptr);
+    DWORD written = 0;
+    WriteFile(file, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
+}
+
 std::wstring decode_process_output(const std::vector<char>& bytes) {
     if (bytes.empty()) return L"FFmpeg exited without an error message.";
     const int source_length = static_cast<int>(bytes.size());
@@ -291,6 +332,8 @@ std::wstring decode_process_output(const std::vector<char>& bytes) {
     MultiByteToWideChar(code_page, 0, bytes.data(), source_length, result.data(), length);
     return trim(result);
 }
+
+struct ProbeResult { bool success; std::wstring message; };
 
 bool test_encoder(const Settings& settings, std::wstring& error_message) {
     if (!std::filesystem::exists(settings.ffmpeg)) {
@@ -353,6 +396,41 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         return false;
     }
     return true;
+}
+
+std::wstring capability_key(const Settings& settings) {
+    std::error_code error;
+    const auto stamp = std::filesystem::last_write_time(settings.ffmpeg, error).time_since_epoch().count();
+    return settings.ffmpeg + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+           settings.codec + L"|" + std::to_wstring(settings.bit_depth);
+}
+
+bool load_cached_probe(const Settings& settings, ProbeResult& result) {
+    const auto path = local_data_dir() / L"capabilities.cache";
+    std::error_code error;
+    if (!std::filesystem::exists(path, error) ||
+        std::filesystem::file_time_type::clock::now() - std::filesystem::last_write_time(path, error) > std::chrono::hours(24)) return false;
+    std::wifstream file(path);
+    const auto key = capability_key(settings) + L"=";
+    std::wstring line;
+    bool found = false;
+    while (std::getline(file, line)) {
+        if (line.rfind(key, 0) != 0) continue;
+        const auto value = line.substr(key.size());
+        result.success = value.rfind(L"1|", 0) == 0;
+        result.message = value.size() > 2 ? value.substr(2) : (result.success ? L"Available" : L"Unavailable");
+        found = true;
+    }
+    return found;
+}
+
+void save_cached_probe(const Settings& settings, const ProbeResult& result) {
+    const auto path = local_data_dir() / L"capabilities.cache";
+    std::wofstream file(path, std::ios::app);
+    std::wstring message = result.message;
+    std::replace(message.begin(), message.end(), L'\n', L' ');
+    std::replace(message.begin(), message.end(), L'\r', L' ');
+    file << capability_key(settings) << L"=" << (result.success ? L"1|" : L"0|") << message << L"\n";
 }
 
 void free_type(DMO_MEDIA_TYPE& type) {
@@ -685,33 +763,88 @@ private:
         if (settings_.follow_avi_path) {
             auto avi = current_output_avi();
             if (!avi.empty()) {
+                avi_output_ = avi;
                 avi.replace_extension(L".mkv");
                 settings_.output = avi.wstring();
             }
         }
         if (!std::filesystem::exists(settings_.ffmpeg)) return false;
+        final_output_ = settings_.output;
+        partial_output_ = final_output_.parent_path() /
+            (final_output_.stem().wstring() + L".mmd2ffmpeg-partial-" + std::to_wstring(GetCurrentProcessId()) + final_output_.extension().wstring());
         std::error_code error;
+        std::filesystem::remove(partial_output_, error);
+        settings_.output = partial_output_.wstring();
+        log_path_ = make_log_path();
+        prune_logs();
         std::filesystem::create_directories(std::filesystem::path(settings_.output).parent_path(), error);
+        log_file_ = CreateFileW(log_path_.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (log_file_ == INVALID_HANDLE_VALUE) log_file_ = nullptr;
         SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
         HANDLE read_pipe = nullptr;
         if (!CreatePipe(&read_pipe, &stdin_write_, &security, 1024 * 1024)) return false;
         SetHandleInformation(stdin_write_, HANDLE_FLAG_INHERIT, 0);
         auto command = build_ffmpeg_command(settings_, width_, height_, bits_);
+        write_log_line(log_file_, L"MMD2FFMPEG command:\r\n" + command + L"\r\n\r\nFFmpeg output:\r\n");
         std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
         STARTUPINFOW startup{}; startup.cb = sizeof(startup); startup.dwFlags = STARTF_USESTDHANDLES;
-        startup.hStdInput = read_pipe; startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-        startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+        startup.hStdInput = read_pipe;
+        startup.hStdOutput = log_file_ ? log_file_ : GetStdHandle(STD_OUTPUT_HANDLE);
+        startup.hStdError = log_file_ ? log_file_ : GetStdHandle(STD_ERROR_HANDLE);
         PROCESS_INFORMATION process{};
         const BOOL created = CreateProcessW(settings_.ffmpeg.c_str(), mutable_command.data(), nullptr, nullptr,
                                              TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
         CloseHandle(read_pipe);
-        if (!created) { close_handle(stdin_write_); return false; }
+        if (!created) { close_handle(stdin_write_); close_handle(log_file_); return false; }
+        job_ = CreateJobObjectW(nullptr, nullptr);
+        if (job_) {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            SetInformationJobObject(job_, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+            AssignProcessToJobObject(job_, process.hProcess);
+        }
         process_ = process.hProcess; process_thread_ = process.hThread; started_ = true; return true;
     }
     void stop_ffmpeg() {
         close_handle(stdin_write_);
-        if (process_) WaitForSingleObject(process_, 30000);
-        close_handle(process_thread_); close_handle(process_); started_ = false;
+        bool success = false;
+        DWORD exit_code = 1;
+        if (process_) {
+            const DWORD wait = WaitForSingleObject(process_, 60000);
+            if (wait == WAIT_TIMEOUT) {
+                if (job_) TerminateJobObject(job_, 1); else TerminateProcess(process_, 1);
+                WaitForSingleObject(process_, 5000);
+            }
+            GetExitCodeProcess(process_, &exit_code);
+            success = wait == WAIT_OBJECT_0 && exit_code == 0;
+        }
+        close_handle(process_thread_); close_handle(process_); close_handle(job_); close_handle(log_file_);
+        std::error_code error;
+        if (success && !partial_output_.empty() && std::filesystem::exists(partial_output_, error) &&
+            std::filesystem::file_size(partial_output_, error) > 0) {
+            success = MoveFileExW(partial_output_.c_str(), final_output_.c_str(),
+                                  MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
+        } else success = false;
+        if (!success && !partial_output_.empty()) std::filesystem::remove(partial_output_, error);
+        if (success && !avi_output_.empty()) {
+            const auto cleanup = local_data_dir() / L"mmd2ffmpeg_cleanup.exe";
+            if (std::filesystem::exists(cleanup, error)) {
+                std::wstring command = L"\"" + cleanup.wstring() + L"\" \"" + avi_output_.wstring() + L"\" \"" + log_path_.wstring() + L"\"";
+                std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
+                STARTUPINFOW startup{}; startup.cb = sizeof(startup); PROCESS_INFORMATION cleanup_process{};
+                if (CreateProcessW(cleanup.c_str(), mutable_command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                                   nullptr, nullptr, &startup, &cleanup_process)) {
+                    CloseHandle(cleanup_process.hThread); CloseHandle(cleanup_process.hProcess);
+                }
+            }
+        }
+        if (!success && started_) {
+            const std::wstring message = L"FFmpeg output failed (exit code " + std::to_wstring(exit_code) +
+                                         L").\nThe original MKV and AVI were preserved.\n\nLog: " + log_path_.wstring();
+            MessageBoxW(nullptr, message.c_str(), L"MMD2FFMPEG Output Error", MB_OK | MB_ICONERROR);
+        }
+        started_ = false;
     }
     bool write_all(const BYTE* bytes, DWORD length) {
         while (length) {
@@ -739,7 +872,8 @@ private:
     std::atomic<ULONG> references_{1};
     DMO_MEDIA_TYPE input_type_{}; DMO_MEDIA_TYPE output_type_{};
     Settings settings_{};
-    HANDLE process_ = nullptr, process_thread_ = nullptr, stdin_write_ = nullptr;
+    HANDLE process_ = nullptr, process_thread_ = nullptr, stdin_write_ = nullptr, job_ = nullptr, log_file_ = nullptr;
+    std::filesystem::path final_output_, partial_output_, avi_output_, log_path_;
     int width_ = 0, height_ = 0, bits_ = 0; LONG stride_ = 0;
     bool bottom_up_ = false, started_ = false, pending_ = false;
     REFERENCE_TIME timestamp_ = 0, duration_ = 0;
@@ -747,13 +881,18 @@ private:
 };
 
 enum ControlId : int {
-    ID_BACKEND = 1001, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND
+    ID_BACKEND = 1001, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND,
+    ID_REFRESH, ID_STATUS
 };
 
 class SettingsPropertyPage final : public IPropertyPage {
 public:
     SettingsPropertyPage() { ++g_objects; }
-    ~SettingsPropertyPage() { Deactivate(); if (site_) site_->Release(); --g_objects; }
+    ~SettingsPropertyPage() {
+        alive_ = false;
+        if (probe_thread_.joinable()) probe_thread_.join();
+        Deactivate(); if (site_) site_->Release(); --g_objects;
+    }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) override {
         if (!object) return E_POINTER;
@@ -799,7 +938,7 @@ public:
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        info->size = {520, 452};
+        info->size = {520, 490};
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -820,7 +959,7 @@ public:
         candidate.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" :
                           combo_text(ID_CODEC) == L"AV1" ? L"av1" : L"hevc";
         candidate.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && candidate.codec != L"avc" ? 10 : 8;
-        candidate.preset = combo_index(ID_PRESET) + 1;
+        candidate.preset = combo_index(ID_BACKEND) == 3 ? (combo_index(ID_PRESET) == 0 ? 1 : combo_index(ID_PRESET) == 1 ? 4 : 7) : combo_index(ID_PRESET) + 1;
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
@@ -862,24 +1001,84 @@ private:
         label(window_, L"Encoder", 15, 17); add_combo(ID_BACKEND, 135, 12, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
         label(window_, L"Codec", 15, 49); add_combo(ID_CODEC, 135, 44, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
         label(window_, L"Bit depth", 15, 81); add_combo(ID_DEPTH, 135, 76, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
-        label(window_, L"Compression 1-7", 15, 113); add_combo(ID_PRESET, 135, 108, {L"1 (fastest)", L"2", L"3", L"4", L"5", L"6", L"7 (best quality)"}, settings_.preset - 1);
-        label(window_, L"Rate control", 15, 145); add_combo(ID_RATE, 135, 140, {L"Constant quality", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        label(window_, L"Encoder preset", 15, 113); add_combo(ID_PRESET, 135, 108, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
+        label(window_, L"Rate control", 15, 145); add_combo(ID_RATE, 135, 140, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         label(window_, L"Quality / QP", 15, 177); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 172, 90);
         label(window_, L"Bitrate (kbps)", 240, 177); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 172, 75);
         SetWindowTextW(qp, std::to_wstring(settings_.qp).c_str()); SetWindowTextW(bitrate, std::to_wstring(settings_.bitrate_kbps).c_str());
         HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     15, 212, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
         Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
+        CreateWindowW(L"BUTTON", L"Retest", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                      410, 212, 95, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_REFRESH)), GetModuleHandleW(nullptr), nullptr);
+        CreateWindowW(L"STATIC", L"Encoder status: testing...", WS_CHILD | WS_VISIBLE,
+                      15, 240, 490, 22, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_STATUS)), GetModuleHandleW(nullptr), nullptr);
         CreateWindowW(L"STATIC", L"Complete FFmpeg command (middle section is editable)",
-                      WS_CHILD | WS_VISIBLE, 15, 242, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
+                      WS_CHILD | WS_VISIBLE, 15, 265, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
         CreateWindowW(L"STATIC", command_prefix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 264, 490, 55, window_, reinterpret_cast<HMENU>(1010), GetModuleHandleW(nullptr), nullptr);
-        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 322, 490);
+                      WS_CHILD | WS_VISIBLE, 15, 287, 490, 55, window_, reinterpret_cast<HMENU>(1010), GetModuleHandleW(nullptr), nullptr);
+        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 345, 490);
         SetWindowTextW(command, (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
         CreateWindowW(L"STATIC", command_suffix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 352, 490, 55, window_, reinterpret_cast<HMENU>(1011), GetModuleHandleW(nullptr), nullptr);
+                      WS_CHILD | WS_VISIBLE, 15, 375, 490, 55, window_, reinterpret_cast<HMENU>(1011), GetModuleHandleW(nullptr), nullptr);
         EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
+        rebuild_backend_options();
         update_controls();
+        start_probe();
+    }
+    void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
+        HWND combo = GetDlgItem(window_, id);
+        ComboBox_ResetContent(combo);
+        for (const auto* value : values) ComboBox_AddString(combo, value);
+        ComboBox_SetCurSel(combo, std::clamp(selected, 0, static_cast<int>(values.size()) - 1));
+    }
+    void rebuild_backend_options() {
+        const int backend = combo_index(ID_BACKEND);
+        const int old_level = std::clamp(settings_.preset, 1, 7);
+        updating_command_ = true;
+        if (backend == 0) {
+            if (combo_index(ID_CODEC) == 2)
+                reset_combo(ID_PRESET, {L"13 (fastest)", L"11", L"9", L"8", L"7", L"6", L"4 (best quality)"}, old_level - 1);
+            else
+                reset_combo(ID_PRESET, {L"ultrafast", L"superfast", L"veryfast", L"faster", L"fast", L"medium", L"slow"}, old_level - 1);
+            reset_combo(ID_RATE, {L"CRF (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        } else if (backend == 1) {
+            reset_combo(ID_PRESET, {L"P1 (fastest)", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7 (best quality)"}, old_level - 1);
+            reset_combo(ID_RATE, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        } else if (backend == 2) {
+            reset_combo(ID_PRESET, {L"veryfast", L"faster", L"fast", L"medium", L"slow", L"slower", L"veryslow"}, old_level - 1);
+            reset_combo(ID_RATE, {L"ICQ / global quality", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        } else {
+            const int amf_selected = old_level <= 2 ? 0 : old_level <= 5 ? 1 : 2;
+            reset_combo(ID_PRESET, {L"speed", L"balanced", L"quality"}, amf_selected);
+            reset_combo(ID_RATE, {L"QVBR quality", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        }
+        updating_command_ = false;
+    }
+    void start_probe(bool force = false) {
+        if (probe_running_) return;
+        if (probe_thread_.joinable()) probe_thread_.join();
+        sync_structured_settings();
+        Settings candidate = settings_;
+        candidate.video_args = encoding_arguments(candidate);
+        ProbeResult cached{};
+        if (!force && load_cached_probe(candidate, cached)) {
+            auto* result = new ProbeResult(std::move(cached));
+            PostMessageW(window_, WM_APP + 42, 0, reinterpret_cast<LPARAM>(result));
+            return;
+        }
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: testing...");
+        EnableWindow(GetDlgItem(window_, ID_REFRESH), FALSE);
+        probe_running_ = true;
+        const HWND target = window_;
+        probe_thread_ = std::thread([this, target, candidate]() {
+            std::wstring message;
+            const bool success = test_encoder(candidate, message);
+            auto* result = new ProbeResult{success, success ? L"Available" : message};
+            save_cached_probe(candidate, *result);
+            if (alive_ && IsWindow(target)) PostMessageW(target, WM_APP + 42, 0, reinterpret_cast<LPARAM>(result));
+            else delete result;
+        });
     }
     void update_controls() {
         const bool avc = combo_index(ID_CODEC) == 0;
@@ -908,7 +1107,7 @@ private:
         settings_.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
         settings_.codec = combo_index(ID_CODEC) == 0 ? L"avc" : combo_index(ID_CODEC) == 2 ? L"av1" : L"hevc";
         settings_.bit_depth = combo_index(ID_DEPTH) == 1 && settings_.codec != L"avc" ? 10 : 8;
-        settings_.preset = combo_index(ID_PRESET) + 1;
+        settings_.preset = combo_index(ID_BACKEND) == 3 ? (combo_index(ID_PRESET) == 0 ? 1 : combo_index(ID_PRESET) == 1 ? 4 : 7) : combo_index(ID_PRESET) + 1;
         settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
@@ -918,13 +1117,19 @@ private:
         SetWindowTextW(GetDlgItem(window_, 1011), command_suffix(settings_).c_str());
     }
     void changed(int id) {
-        dirty_ = true; update_controls();
+        dirty_ = true;
+        if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
+        update_controls();
         if (id != ID_COMMAND && id != ID_FOLLOW) {
             sync_structured_settings();
             updating_command_ = true;
             SetWindowTextW(GetDlgItem(window_, ID_COMMAND), encoding_arguments(settings_).c_str());
             update_command_display();
             updating_command_ = false;
+        }
+        if (id == ID_BACKEND || id == ID_CODEC || id == ID_DEPTH) {
+            SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: not tested");
+            if (!probe_running_) start_probe();
         }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
     }
@@ -934,6 +1139,17 @@ private:
             self = static_cast<SettingsPropertyPage*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
             SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self)); self->window_ = window;
         } else if (message == WM_CREATE && self) self->create_controls();
+        else if (message == WM_APP + 42 && self) {
+            auto* result = reinterpret_cast<ProbeResult*>(lparam);
+            self->probe_running_ = false;
+            self->probe_available_ = result->success;
+            std::wstring status = result->success ? L"Encoder status: Available" : L"Encoder status: Unavailable - " + result->message;
+            if (status.size() > 180) status.resize(180);
+            SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
+            EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
+            delete result;
+        }
+        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) self->start_probe(true);
         else if (message == WM_COMMAND && self && !self->updating_command_ &&
                  (HIWORD(wparam) == CBN_SELCHANGE || HIWORD(wparam) == EN_CHANGE || HIWORD(wparam) == BN_CLICKED))
             self->changed(LOWORD(wparam));
@@ -946,6 +1162,10 @@ private:
     Settings settings_{};
     bool dirty_ = false;
     bool updating_command_ = false;
+    std::atomic<bool> alive_{true};
+    bool probe_running_ = false;
+    bool probe_available_ = false;
+    std::thread probe_thread_;
 };
 
 class Factory final : public IClassFactory {

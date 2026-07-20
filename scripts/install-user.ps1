@@ -3,19 +3,25 @@
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dll = Join-Path $projectRoot 'build\mmd2ffmpeg.dll'
 $dmoDll = Join-Path $projectRoot 'build\mmd2ffmpeg_dmo.dll'
+$cleanupExe = Join-Path $projectRoot 'build\mmd2ffmpeg_cleanup.exe'
 if (-not (Test-Path -LiteralPath $dll)) {
     throw "Build output does not exist: $dll"
 }
 if (-not (Test-Path -LiteralPath $dmoDll)) {
     throw "DMO build output does not exist: $dmoDll"
 }
+if (-not (Test-Path -LiteralPath $cleanupExe)) {
+    throw "Cleanup helper does not exist: $cleanupExe"
+}
 $installDir = Join-Path $env:LOCALAPPDATA 'MMD2FFMPEG'
 $installedDll = Join-Path $installDir 'mmd2ffmpeg.dll'
 $installedDmoDll = Join-Path $installDir 'mmd2ffmpeg_dmo.dll'
+$installedCleanupExe = Join-Path $installDir 'mmd2ffmpeg_cleanup.exe'
 $config = Join-Path $installDir 'config.ini'
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Copy-Item -LiteralPath $dll -Destination $installedDll -Force
 Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
+Copy-Item -LiteralPath $cleanupExe -Destination $installedCleanupExe -Force
 if (-not (Test-Path -LiteralPath $config)) {
     $defaultConfig = @'
 ffmpeg=C:\Program Files\Hybrid\64bit\ffmpeg.exe
