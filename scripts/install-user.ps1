@@ -23,14 +23,23 @@ output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mkv
 fps=30
 codec=hevc
 bit_depth=10
+color_matrix=bt709
 preset=7
 rate_control=qp
 qp=20
 bitrate_kbps=20000
 follow_avi_path=1
-command_template="{ffmpeg}" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} -video_size {width}x{height} -framerate {fps} -i pipe:0 -vf format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le "{output}"
+command_template="{ffmpeg}" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} -video_size {width}x{height} -framerate {fps} -i pipe:0 -vf scale=out_color_matrix=bt709:out_range=tv,format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le -colorspace bt709 -color_primaries bt709 -color_trc bt709 "{output}"
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
+} else {
+    $legacyCommand = 'command_template="{ffmpeg}" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} -video_size {width}x{height} -framerate {fps} -i pipe:0 -vf format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le "{output}"'
+    $updatedCommand = 'command_template="{ffmpeg}" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} -video_size {width}x{height} -framerate {fps} -i pipe:0 -vf scale=out_color_matrix=bt709:out_range=tv,format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le -colorspace bt709 -color_primaries bt709 -color_trc bt709 "{output}"'
+    $configText = [System.IO.File]::ReadAllText($config)
+    if ($configText.Contains($legacyCommand)) {
+        $configText = $configText.Replace($legacyCommand, $updatedCommand)
+        [System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
+    }
 }
 $driversKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Drivers32'
 New-Item -Path $driversKey -Force | Out-Null

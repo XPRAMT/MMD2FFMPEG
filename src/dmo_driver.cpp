@@ -36,6 +36,7 @@ struct Settings {
     int fps = 30;
     std::wstring codec = L"hevc";
     int bit_depth = 10;
+    std::wstring color_matrix = L"bt709";
     int preset = 7;
     std::wstring rate_control = L"qp";
     int qp = 20;
@@ -43,6 +44,12 @@ struct Settings {
     bool follow_avi_path = true;
     std::wstring command_template;
 };
+
+constexpr wchar_t kLegacyDefaultCommandTemplate[] =
+    L"\"{ffmpeg}\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} "
+    L"-video_size {width}x{height} -framerate {fps} -i pipe:0 -vf format=p010le "
+    L"-c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 "
+    L"-pix_fmt p010le \"{output}\"";
 
 struct SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX_LOCAL {
     PVOID object;
@@ -95,6 +102,7 @@ Settings load_settings() {
         }
         else if (key == L"codec" && (value == L"avc" || value == L"hevc" || value == L"av1")) settings.codec = value;
         else if (key == L"bit_depth") { try { settings.bit_depth = std::stoi(value) == 8 ? 8 : 10; } catch (...) {} }
+        else if (key == L"color_matrix" && (value == L"bt601" || value == L"bt709" || value == L"bt2020")) settings.color_matrix = value;
         else if (key == L"preset") { try { settings.preset = std::clamp(std::stoi(value), 1, 7); } catch (...) {} }
         else if (key == L"rate_control" && (value == L"qp" || value == L"vbr")) settings.rate_control = value;
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
@@ -103,6 +111,9 @@ Settings load_settings() {
         else if (key == L"command_template") settings.command_template = value;
     }
     if (settings.codec == L"avc") settings.bit_depth = 8;
+    if (settings.command_template == kLegacyDefaultCommandTemplate) {
+        settings.command_template.clear();
+    }
     return settings;
 }
 
@@ -117,6 +128,7 @@ void save_settings(const Settings& settings) {
          << L"fps=" << settings.fps << L"\n"
          << L"codec=" << settings.codec << L"\n"
          << L"bit_depth=" << settings.bit_depth << L"\n"
+         << L"color_matrix=" << settings.color_matrix << L"\n"
          << L"preset=" << settings.preset << L"\n"
          << L"rate_control=" << settings.rate_control << L"\n"
          << L"qp=" << settings.qp << L"\n"
@@ -180,7 +192,13 @@ std::wstring video_arguments(const Settings& settings) {
     const wchar_t* encoder = settings.codec == L"avc" ? L"h264_nvenc" :
                              settings.codec == L"av1" ? L"av1_nvenc" : L"hevc_nvenc";
     std::wostringstream args;
-    args << L"-vf format=" << (ten_bit ? L"p010le" : L"nv12")
+    const wchar_t* matrix = settings.color_matrix == L"bt601" ? L"smpte170m" :
+                            settings.color_matrix == L"bt2020" ? L"bt2020nc" : L"bt709";
+    const wchar_t* primaries = settings.color_matrix == L"bt601" ? L"smpte170m" :
+                              settings.color_matrix == L"bt2020" ? L"bt2020" : L"bt709";
+    const wchar_t* transfer = settings.color_matrix == L"bt601" ? L"smpte170m" :
+                             settings.color_matrix == L"bt2020" ? L"bt2020-10" : L"bt709";
+    args << L"-vf scale=out_color_matrix=" << matrix << L":out_range=tv,format=" << (ten_bit ? L"p010le" : L"nv12")
          << L" -c:v " << encoder;
     if (settings.codec == L"hevc" && ten_bit) args << L" -profile:v main10";
     else if (settings.codec == L"avc") args << L" -profile:v high";
@@ -190,7 +208,8 @@ std::wstring video_arguments(const Settings& settings) {
     } else {
         args << L"-rc constqp -qp " << settings.qp;
     }
-    args << L" -pix_fmt " << (ten_bit ? L"p010le" : L"nv12");
+    args << L" -pix_fmt " << (ten_bit ? L"p010le" : L"nv12")
+         << L" -colorspace " << matrix << L" -color_primaries " << primaries << L" -color_trc " << transfer;
     return args.str();
 }
 
@@ -618,7 +637,7 @@ private:
 };
 
 enum ControlId : int {
-    ID_CODEC = 1001, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND
+    ID_CODEC = 1001, ID_DEPTH, ID_MATRIX, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND
 };
 
 class SettingsPropertyPage final : public IPropertyPage {
@@ -689,6 +708,7 @@ public:
         settings_.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" :
                           combo_text(ID_CODEC) == L"AV1" ? L"av1" : L"hevc";
         settings_.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && settings_.codec != L"avc" ? 10 : 8;
+        settings_.color_matrix = combo_index(ID_MATRIX) == 0 ? L"bt601" : combo_index(ID_MATRIX) == 2 ? L"bt2020" : L"bt709";
         settings_.preset = combo_index(ID_PRESET) + 1;
         settings_.rate_control = combo_index(ID_RATE) == 0 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
@@ -723,17 +743,18 @@ private:
         HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
         label(window_, L"Codec", 15, 17); add_combo(ID_CODEC, 135, 12, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
         label(window_, L"Bit depth", 15, 49); add_combo(ID_DEPTH, 135, 44, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
-        label(window_, L"NVENC preset", 15, 81); add_combo(ID_PRESET, 135, 76, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
-        label(window_, L"Rate control", 15, 113); add_combo(ID_RATE, 135, 108, {L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"vbr" ? 1 : 0);
-        label(window_, L"QP (0-51)", 15, 145); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 140, 90);
-        label(window_, L"Bitrate (kbps)", 240, 145); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 140, 75);
+        label(window_, L"Color matrix", 15, 81); add_combo(ID_MATRIX, 135, 76, {L"BT.601", L"BT.709", L"BT.2020"}, settings_.color_matrix == L"bt601" ? 0 : settings_.color_matrix == L"bt2020" ? 2 : 1);
+        label(window_, L"NVENC preset", 15, 113); add_combo(ID_PRESET, 135, 108, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
+        label(window_, L"Rate control", 15, 145); add_combo(ID_RATE, 135, 140, {L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"vbr" ? 1 : 0);
+        label(window_, L"QP (0-51)", 15, 177); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 172, 90);
+        label(window_, L"Bitrate (kbps)", 240, 177); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 172, 75);
         SetWindowTextW(qp, std::to_wstring(settings_.qp).c_str()); SetWindowTextW(bitrate, std::to_wstring(settings_.bitrate_kbps).c_str());
         HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                    15, 180, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
+                                    15, 212, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
         Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
         CreateWindowW(L"STATIC", L"FFmpeg command (placeholders: {ffmpeg}, {width}, {height}, {fps}, {pixel_format}, {output})",
-                      WS_CHILD | WS_VISIBLE, 15, 210, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
-        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 235, 490);
+                      WS_CHILD | WS_VISIBLE, 15, 242, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
+        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 267, 490);
         SetWindowTextW(command, (settings_.command_template.empty() ? generated_command_template(settings_) : settings_.command_template).c_str());
         EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
         update_controls();
@@ -764,6 +785,7 @@ private:
     void sync_structured_settings() {
         settings_.codec = combo_index(ID_CODEC) == 0 ? L"avc" : combo_index(ID_CODEC) == 2 ? L"av1" : L"hevc";
         settings_.bit_depth = combo_index(ID_DEPTH) == 1 && settings_.codec != L"avc" ? 10 : 8;
+        settings_.color_matrix = combo_index(ID_MATRIX) == 0 ? L"bt601" : combo_index(ID_MATRIX) == 2 ? L"bt2020" : L"bt709";
         settings_.preset = combo_index(ID_PRESET) + 1;
         settings_.rate_control = combo_index(ID_RATE) == 0 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
