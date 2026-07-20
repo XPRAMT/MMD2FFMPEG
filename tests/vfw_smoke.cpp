@@ -15,12 +15,14 @@ int wmain() {
 
     BITMAPINFOHEADER input{};
     input.biSize = sizeof(input);
-    input.biWidth = 64;
-    input.biHeight = 64;
+    constexpr int width = 640;
+    constexpr int height = 360;
+    input.biWidth = width;
+    input.biHeight = height;
     input.biPlanes = 1;
     input.biBitCount = 24;
     input.biCompression = BI_RGB;
-    input.biSizeImage = 64 * 64 * 3;
+    input.biSizeImage = width * height * 3;
 
     BITMAPINFOHEADER output{};
     if (ICCompressGetFormat(codec, &input, &output) != ICERR_OK ||
@@ -33,11 +35,11 @@ int wmain() {
     std::vector<std::uint8_t> frame(input.biSizeImage);
     std::uint8_t dummy = 0;
     for (DWORD index = 0; index < 30; ++index) {
-        for (int y = 0; y < 64; ++y) {
-            for (int x = 0; x < 64; ++x) {
-                const auto offset = static_cast<std::size_t>((y * 64 + x) * 3);
-                frame[offset + 0] = static_cast<std::uint8_t>(x * 4);
-                frame[offset + 1] = static_cast<std::uint8_t>(y * 4);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const auto offset = static_cast<std::size_t>((y * width + x) * 3);
+                frame[offset + 0] = static_cast<std::uint8_t>(x * 255 / width);
+                frame[offset + 1] = static_cast<std::uint8_t>(y * 255 / height);
                 frame[offset + 2] = static_cast<std::uint8_t>(index * 8);
             }
         }
@@ -56,4 +58,3 @@ int wmain() {
     std::wcout << L"Streamed 30 frames through the installed codec.\n";
     return 0;
 }
-

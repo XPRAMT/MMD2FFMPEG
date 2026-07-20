@@ -20,8 +20,8 @@ constexpr wchar_t kCodecDescription[] = L"Streams MMD video frames directly to F
 
 struct Settings {
     std::wstring ffmpeg = L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe";
-    std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mp4";
-    std::wstring video_args = L"-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -movflags +faststart";
+    std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
+    std::wstring video_args = L"-vf format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le";
     int fps = 30;
 };
 
@@ -36,6 +36,7 @@ struct CodecState {
     LONG stride = 0;
     bool bottom_up = false;
     bool started = false;
+    int stream_fps = 0;
     std::vector<std::uint8_t> flipped;
 };
 
@@ -100,6 +101,7 @@ void stop_ffmpeg(CodecState& state) {
 bool start_ffmpeg(CodecState& state, const BITMAPINFOHEADER& input) {
     stop_ffmpeg(state);
     state.settings = load_settings();
+    if (state.stream_fps > 0) state.settings.fps = state.stream_fps;
     state.width = input.biWidth;
     state.height = std::abs(input.biHeight);
     state.bit_count = input.biBitCount;
@@ -247,6 +249,16 @@ extern "C" LRESULT CALLBACK DriverProc(DWORD_PTR driver_id, HDRVR driver, UINT m
         return get_format(reinterpret_cast<const BITMAPINFOHEADER*>(first), reinterpret_cast<BITMAPINFOHEADER*>(second));
     case ICM_COMPRESS_GET_SIZE:
         return 1;
+    case ICM_COMPRESS_FRAMES_INFO: {
+        if (!state || !first) return ICERR_BADPARAM;
+        const auto* frames = reinterpret_cast<const ICCOMPRESSFRAMES*>(first);
+        if (frames->dwRate > 0 && frames->dwScale > 0) {
+            const auto rounded = (static_cast<unsigned long long>(frames->dwRate) + frames->dwScale / 2) /
+                                 frames->dwScale;
+            state->stream_fps = std::clamp(static_cast<int>(rounded), 1, 240);
+        }
+        return ICERR_OK;
+    }
     case ICM_COMPRESS_BEGIN: {
         if (!state) return ICERR_ERROR;
         const auto* input = reinterpret_cast<const BITMAPINFOHEADER*>(first);
@@ -270,4 +282,3 @@ extern "C" LRESULT CALLBACK DriverProc(DWORD_PTR driver_id, HDRVR driver, UINT m
         return DefDriverProc(driver_id, driver, message, first, second);
     }
 }
-
