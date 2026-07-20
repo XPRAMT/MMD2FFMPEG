@@ -22,7 +22,7 @@ std::atomic<long> g_locks{0};
 
 struct Settings {
     std::wstring ffmpeg = L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe";
-    std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mp4";
+    std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
     std::wstring video_args = L"-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -movflags +faststart";
     int fps = 30;
 };

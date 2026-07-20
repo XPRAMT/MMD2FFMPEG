@@ -19,9 +19,9 @@ Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
 if (-not (Test-Path -LiteralPath $config)) {
     $defaultConfig = @'
 ffmpeg=C:\Program Files\Hybrid\64bit\ffmpeg.exe
-output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mp4
+output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mkv
 fps=30
-video_args=-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -movflags +faststart
+video_args=-vf format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
 }
