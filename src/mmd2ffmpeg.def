@@ -1,0 +1,4 @@
+LIBRARY mmd2ffmpeg
+EXPORTS
+    DriverProc
+

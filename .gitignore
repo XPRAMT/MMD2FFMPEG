@@ -1,0 +1,9 @@
+build/
+out/
+*.avi
+*.mp4
+*.mkv
+*.webm
+*.log
+config.local.ini
+/README.md
