@@ -32,7 +32,7 @@ std::atomic<long> g_locks{0};
 struct Settings {
     std::wstring ffmpeg = L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe";
     std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
-    std::wstring video_args = L"-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -movflags +faststart";
+    std::wstring video_args;
     int fps = 30;
     std::wstring codec = L"hevc";
     int bit_depth = 10;
@@ -44,12 +44,6 @@ struct Settings {
     bool follow_avi_path = true;
     std::wstring command_template;
 };
-
-constexpr wchar_t kLegacyDefaultCommandTemplate[] =
-    L"\"{ffmpeg}\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} "
-    L"-video_size {width}x{height} -framerate {fps} -i pipe:0 -vf format=p010le "
-    L"-c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 "
-    L"-pix_fmt p010le \"{output}\"";
 
 struct SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX_LOCAL {
     PVOID object;
@@ -111,9 +105,17 @@ Settings load_settings() {
         else if (key == L"command_template") settings.command_template = value;
     }
     if (settings.codec == L"avc") settings.bit_depth = 8;
-    if (settings.command_template == kLegacyDefaultCommandTemplate) {
-        settings.command_template.clear();
+    if (settings.video_args.empty() && !settings.command_template.empty()) {
+        const auto input_end = settings.command_template.find(L"-i pipe:0 ");
+        const auto output_begin = settings.command_template.rfind(L" \"{output}\"");
+        if (input_end != std::wstring::npos && output_begin != std::wstring::npos) {
+            const auto arguments_begin = input_end + std::wstring(L"-i pipe:0 ").size();
+            if (arguments_begin < output_begin) {
+                settings.video_args = settings.command_template.substr(arguments_begin, output_begin - arguments_begin);
+            }
+        }
     }
+    settings.command_template.clear();
     return settings;
 }
 
@@ -134,7 +136,7 @@ void save_settings(const Settings& settings) {
          << L"qp=" << settings.qp << L"\n"
          << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n"
          << L"follow_avi_path=" << (settings.follow_avi_path ? 1 : 0) << L"\n";
-    if (!settings.command_template.empty()) file << L"command_template=" << settings.command_template << L"\n";
+    if (!settings.video_args.empty()) file << L"video_args=" << settings.video_args << L"\n";
 }
 
 std::wstring lower(std::wstring value) {
@@ -213,12 +215,6 @@ std::wstring video_arguments(const Settings& settings) {
     return args.str();
 }
 
-std::wstring generated_command_template(const Settings& settings) {
-    return L"\"{ffmpeg}\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} "
-           L"-video_size {width}x{height} -framerate {fps} -i pipe:0 " +
-           video_arguments(settings) + L" \"{output}\"";
-}
-
 void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
     std::size_t position = 0;
     while ((position = value.find(from, position)) != std::wstring::npos) {
@@ -227,9 +223,11 @@ void replace_all(std::wstring& value, const std::wstring& from, const std::wstri
     }
 }
 
-std::wstring expand_command_template(const Settings& settings, int width, int height, int bits) {
-    std::wstring command = settings.command_template.empty()
-        ? generated_command_template(settings) : settings.command_template;
+std::wstring build_ffmpeg_command(const Settings& settings, int width, int height, int bits) {
+    const auto arguments = settings.video_args.empty() ? video_arguments(settings) : settings.video_args;
+    std::wstring command = L"\"{ffmpeg}\" -hide_banner -loglevel warning -y -f rawvideo "
+                           L"-pixel_format {pixel_format} -video_size {width}x{height} "
+                           L"-framerate {fps} -i pipe:0 " + arguments + L" \"{output}\"";
     replace_all(command, L"{ffmpeg}", settings.ffmpeg);
     replace_all(command, L"{pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
     replace_all(command, L"{width}", std::to_wstring(width));
@@ -586,7 +584,7 @@ private:
         HANDLE read_pipe = nullptr;
         if (!CreatePipe(&read_pipe, &stdin_write_, &security, 1024 * 1024)) return false;
         SetHandleInformation(stdin_write_, HANDLE_FLAG_INHERIT, 0);
-        auto command = expand_command_template(settings_, width_, height_, bits_);
+        auto command = build_ffmpeg_command(settings_, width_, height_, bits_);
         std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
         STARTUPINFOW startup{}; startup.cb = sizeof(startup); startup.dwFlags = STARTF_USESTDHANDLES;
         startup.hStdInput = read_pipe; startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -714,7 +712,7 @@ public:
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
         settings_.follow_avi_path = Button_GetCheck(GetDlgItem(window_, ID_FOLLOW)) == BST_CHECKED;
-        settings_.command_template = edit_text(ID_COMMAND);
+        settings_.video_args = edit_text(ID_COMMAND);
         save_settings(settings_); dirty_ = false;
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_CLEAN);
         return S_OK;
@@ -752,10 +750,10 @@ private:
         HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     15, 212, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
         Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
-        CreateWindowW(L"STATIC", L"FFmpeg command (placeholders: {ffmpeg}, {width}, {height}, {fps}, {pixel_format}, {output})",
+        CreateWindowW(L"STATIC", L"Customizable FFmpeg encoding arguments",
                       WS_CHILD | WS_VISIBLE, 15, 242, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
         HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 267, 490);
-        SetWindowTextW(command, (settings_.command_template.empty() ? generated_command_template(settings_) : settings_.command_template).c_str());
+        SetWindowTextW(command, (settings_.video_args.empty() ? video_arguments(settings_) : settings_.video_args).c_str());
         EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
         update_controls();
     }
@@ -796,7 +794,7 @@ private:
         if (id != ID_COMMAND && id != ID_FOLLOW) {
             sync_structured_settings();
             updating_command_ = true;
-            SetWindowTextW(GetDlgItem(window_, ID_COMMAND), generated_command_template(settings_).c_str());
+            SetWindowTextW(GetDlgItem(window_, ID_COMMAND), video_arguments(settings_).c_str());
             updating_command_ = false;
         }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
