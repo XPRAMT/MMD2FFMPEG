@@ -41,6 +41,7 @@ struct Settings {
     int qp = 20;
     int bitrate_kbps = 20000;
     bool follow_avi_path = true;
+    std::wstring command_template;
 };
 
 struct SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX_LOCAL {
@@ -99,6 +100,7 @@ Settings load_settings() {
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
         else if (key == L"bitrate_kbps") { try { settings.bitrate_kbps = std::clamp(std::stoi(value), 100, 1000000); } catch (...) {} }
         else if (key == L"follow_avi_path") settings.follow_avi_path = value != L"0" && value != L"false";
+        else if (key == L"command_template") settings.command_template = value;
     }
     if (settings.codec == L"avc") settings.bit_depth = 8;
     return settings;
@@ -120,6 +122,7 @@ void save_settings(const Settings& settings) {
          << L"qp=" << settings.qp << L"\n"
          << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n"
          << L"follow_avi_path=" << (settings.follow_avi_path ? 1 : 0) << L"\n";
+    if (!settings.command_template.empty()) file << L"command_template=" << settings.command_template << L"\n";
 }
 
 std::wstring lower(std::wstring value) {
@@ -189,6 +192,32 @@ std::wstring video_arguments(const Settings& settings) {
     }
     args << L" -pix_fmt " << (ten_bit ? L"p010le" : L"nv12");
     return args.str();
+}
+
+std::wstring generated_command_template(const Settings& settings) {
+    return L"\"{ffmpeg}\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} "
+           L"-video_size {width}x{height} -framerate {fps} -i pipe:0 " +
+           video_arguments(settings) + L" \"{output}\"";
+}
+
+void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
+    std::size_t position = 0;
+    while ((position = value.find(from, position)) != std::wstring::npos) {
+        value.replace(position, from.size(), to);
+        position += to.size();
+    }
+}
+
+std::wstring expand_command_template(const Settings& settings, int width, int height, int bits) {
+    std::wstring command = settings.command_template.empty()
+        ? generated_command_template(settings) : settings.command_template;
+    replace_all(command, L"{ffmpeg}", settings.ffmpeg);
+    replace_all(command, L"{pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
+    replace_all(command, L"{width}", std::to_wstring(width));
+    replace_all(command, L"{height}", std::to_wstring(height));
+    replace_all(command, L"{fps}", std::to_wstring(settings.fps));
+    replace_all(command, L"{output}", settings.output);
+    return command;
 }
 
 std::wstring quote(const std::wstring& value) { return L"\"" + value + L"\""; }
@@ -538,12 +567,7 @@ private:
         HANDLE read_pipe = nullptr;
         if (!CreatePipe(&read_pipe, &stdin_write_, &security, 1024 * 1024)) return false;
         SetHandleInformation(stdin_write_, HANDLE_FLAG_INHERIT, 0);
-        std::wostringstream stream;
-        stream << quote(settings_.ffmpeg) << L" -hide_banner -loglevel warning -y -f rawvideo -pixel_format "
-               << (bits_ == 24 ? L"bgr24" : L"bgra") << L" -video_size " << width_ << L"x" << height_
-               << L" -framerate " << settings_.fps << L" -i pipe:0 " << video_arguments(settings_) << L" "
-               << quote(settings_.output);
-        auto command = stream.str();
+        auto command = expand_command_template(settings_, width_, height_, bits_);
         std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
         STARTUPINFOW startup{}; startup.cb = sizeof(startup); startup.dwFlags = STARTF_USESTDHANDLES;
         startup.hStdInput = read_pipe; startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -594,7 +618,7 @@ private:
 };
 
 enum ControlId : int {
-    ID_CODEC = 1001, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW
+    ID_CODEC = 1001, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND
 };
 
 class SettingsPropertyPage final : public IPropertyPage {
@@ -646,7 +670,7 @@ public:
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        info->size = {430, 245};
+        info->size = {520, 355};
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -670,6 +694,7 @@ public:
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
         settings_.follow_avi_path = Button_GetCheck(GetDlgItem(window_, ID_FOLLOW)) == BST_CHECKED;
+        settings_.command_template = edit_text(ID_COMMAND);
         save_settings(settings_); dirty_ = false;
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_CLEAN);
         return S_OK;
@@ -684,13 +709,13 @@ private:
         return CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE, x, y, 120, 22,
                              parent, nullptr, GetModuleHandleW(nullptr), nullptr);
     }
-    HWND control(const wchar_t* type, DWORD style, int id, int x, int y, int width = 190) {
+    HWND control(const wchar_t* type, DWORD style, int id, int x, int y, int width = 190, int height = 24) {
         return CreateWindowExW(WS_EX_CLIENTEDGE, type, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | style,
-                               x, y, width, 120, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
+                               x, y, width, height, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
                                GetModuleHandleW(nullptr), nullptr);
     }
     void add_combo(int id, int x, int y, std::initializer_list<const wchar_t*> values, int selected) {
-        HWND combo = control(L"COMBOBOX", CBS_DROPDOWNLIST | WS_VSCROLL, id, x, y);
+        HWND combo = control(L"COMBOBOX", CBS_DROPDOWNLIST | WS_VSCROLL, id, x, y, 190, 120);
         for (const auto* value : values) ComboBox_AddString(combo, value);
         ComboBox_SetCurSel(combo, selected);
     }
@@ -706,6 +731,10 @@ private:
         HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     15, 180, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
         Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
+        CreateWindowW(L"STATIC", L"FFmpeg command (placeholders: {ffmpeg}, {width}, {height}, {fps}, {pixel_format}, {output})",
+                      WS_CHILD | WS_VISIBLE, 15, 210, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
+        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 235, 490);
+        SetWindowTextW(command, (settings_.command_template.empty() ? generated_command_template(settings_) : settings_.command_template).c_str());
         EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
         update_controls();
     }
@@ -725,8 +754,29 @@ private:
         wchar_t text[32]{}; GetWindowTextW(GetDlgItem(window_, id), text, static_cast<int>(std::size(text)));
         try { return std::stoi(text); } catch (...) { return fallback; }
     }
-    void changed() {
+    std::wstring edit_text(int id) const {
+        const HWND edit = GetDlgItem(window_, id);
+        const int length = GetWindowTextLengthW(edit);
+        std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
+        GetWindowTextW(edit, text.data(), length + 1); text.resize(static_cast<std::size_t>(length));
+        return text;
+    }
+    void sync_structured_settings() {
+        settings_.codec = combo_index(ID_CODEC) == 0 ? L"avc" : combo_index(ID_CODEC) == 2 ? L"av1" : L"hevc";
+        settings_.bit_depth = combo_index(ID_DEPTH) == 1 && settings_.codec != L"avc" ? 10 : 8;
+        settings_.preset = combo_index(ID_PRESET) + 1;
+        settings_.rate_control = combo_index(ID_RATE) == 0 ? L"qp" : L"vbr";
+        settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
+        settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
+    }
+    void changed(int id) {
         dirty_ = true; update_controls();
+        if (id != ID_COMMAND && id != ID_FOLLOW) {
+            sync_structured_settings();
+            updating_command_ = true;
+            SetWindowTextW(GetDlgItem(window_, ID_COMMAND), generated_command_template(settings_).c_str());
+            updating_command_ = false;
+        }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
     }
     static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -735,7 +785,9 @@ private:
             self = static_cast<SettingsPropertyPage*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
             SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self)); self->window_ = window;
         } else if (message == WM_CREATE && self) self->create_controls();
-        else if (message == WM_COMMAND && self && (HIWORD(wparam) == CBN_SELCHANGE || HIWORD(wparam) == EN_CHANGE || HIWORD(wparam) == BN_CLICKED)) self->changed();
+        else if (message == WM_COMMAND && self && !self->updating_command_ &&
+                 (HIWORD(wparam) == CBN_SELCHANGE || HIWORD(wparam) == EN_CHANGE || HIWORD(wparam) == BN_CLICKED))
+            self->changed(LOWORD(wparam));
         return DefWindowProcW(window, message, wparam, lparam);
     }
 
@@ -744,6 +796,7 @@ private:
     HWND window_ = nullptr;
     Settings settings_{};
     bool dirty_ = false;
+    bool updating_command_ = false;
 };
 
 class Factory final : public IClassFactory {

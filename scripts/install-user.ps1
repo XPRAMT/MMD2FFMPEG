@@ -28,6 +28,7 @@ rate_control=qp
 qp=20
 bitrate_kbps=20000
 follow_avi_path=1
+command_template="{ffmpeg}" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {pixel_format} -video_size {width}x{height} -framerate {fps} -i pipe:0 -vf format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20 -pix_fmt p010le "{output}"
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
 }
