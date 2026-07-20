@@ -34,6 +34,7 @@ struct Settings {
     std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
     std::wstring video_args;
     int fps = 30;
+    std::wstring backend = L"nvenc";
     std::wstring codec = L"hevc";
     int bit_depth = 10;
     int preset = 7;
@@ -93,10 +94,11 @@ Settings load_settings() {
         else if (key == L"fps") {
             try { settings.fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {}
         }
+        else if (key == L"backend" && (value == L"cpu" || value == L"nvenc" || value == L"qsv" || value == L"amf")) settings.backend = value;
         else if (key == L"codec" && (value == L"avc" || value == L"hevc" || value == L"av1")) settings.codec = value;
         else if (key == L"bit_depth") { try { settings.bit_depth = std::stoi(value) == 8 ? 8 : 10; } catch (...) {} }
         else if (key == L"preset") { try { settings.preset = std::clamp(std::stoi(value), 1, 7); } catch (...) {} }
-        else if (key == L"rate_control" && (value == L"qp" || value == L"vbr")) settings.rate_control = value;
+        else if (key == L"rate_control" && (value == L"crf" || value == L"qp" || value == L"vbr")) settings.rate_control = value;
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
         else if (key == L"bitrate_kbps") { try { settings.bitrate_kbps = std::clamp(std::stoi(value), 100, 1000000); } catch (...) {} }
         else if (key == L"follow_avi_path") settings.follow_avi_path = value != L"0" && value != L"false";
@@ -131,6 +133,7 @@ void save_settings(const Settings& settings) {
     file << L"ffmpeg=" << settings.ffmpeg << L"\n"
          << L"output=" << settings.output << L"\n"
          << L"fps=" << settings.fps << L"\n"
+         << L"backend=" << settings.backend << L"\n"
          << L"codec=" << settings.codec << L"\n"
          << L"bit_depth=" << settings.bit_depth << L"\n"
          << L"preset=" << settings.preset << L"\n"
@@ -193,17 +196,43 @@ std::filesystem::path current_output_avi() {
 
 std::wstring encoding_arguments(const Settings& settings) {
     const bool ten_bit = settings.bit_depth == 10 && settings.codec != L"avc";
-    const wchar_t* encoder = settings.codec == L"avc" ? L"h264_nvenc" :
-                             settings.codec == L"av1" ? L"av1_nvenc" : L"hevc_nvenc";
+    const std::wstring codec_name = settings.codec == L"avc" ? L"h264" : settings.codec;
+    std::wstring encoder;
+    if (settings.backend == L"cpu")
+        encoder = settings.codec == L"avc" ? L"libx264" : settings.codec == L"av1" ? L"libsvtav1" : L"libx265";
+    else
+        encoder = codec_name + L"_" + settings.backend;
     std::wostringstream args;
     args << L"-c:v " << encoder;
     if (settings.codec == L"hevc" && ten_bit) args << L" -profile:v main10";
     else if (settings.codec == L"avc") args << L" -profile:v high";
-    args << L" -preset p" << settings.preset << L" -tune hq ";
-    if (settings.rate_control == L"vbr") {
-        args << L"-rc vbr -b:v " << settings.bitrate_kbps << L"k";
+
+    const int level = std::clamp(settings.preset, 1, 7);
+    if (settings.backend == L"cpu") {
+        static constexpr const wchar_t* software_presets[] = {L"ultrafast", L"superfast", L"veryfast", L"faster", L"fast", L"medium", L"slow"};
+        static constexpr int svt_presets[] = {13, 11, 9, 8, 7, 6, 4};
+        if (settings.codec == L"av1") args << L" -preset " << svt_presets[level - 1];
+        else args << L" -preset " << software_presets[level - 1];
+        if (settings.rate_control == L"crf") args << L" -crf " << settings.qp;
+        else if (settings.rate_control == L"qp") args << L" -qp " << settings.qp;
+        else args << L" -b:v " << settings.bitrate_kbps << L"k";
+    } else if (settings.backend == L"nvenc") {
+        args << L" -preset p" << level << L" -tune hq";
+        if (settings.rate_control == L"crf") args << L" -rc vbr -cq " << settings.qp << L" -b:v 0";
+        else if (settings.rate_control == L"qp") args << L" -rc constqp -qp " << settings.qp;
+        else args << L" -rc vbr -b:v " << settings.bitrate_kbps << L"k";
+    } else if (settings.backend == L"qsv") {
+        static constexpr const wchar_t* qsv_presets[] = {L"veryfast", L"faster", L"fast", L"medium", L"slow", L"slower", L"veryslow"};
+        args << L" -preset " << qsv_presets[level - 1];
+        if (settings.rate_control == L"vbr") args << L" -b:v " << settings.bitrate_kbps << L"k";
+        else args << L" -global_quality " << settings.qp;
     } else {
-        args << L"-rc constqp -qp " << settings.qp;
+        const wchar_t* quality = level <= 2 ? L"speed" : level <= 5 ? L"balanced" : L"quality";
+        args << L" -quality " << quality;
+        if (settings.rate_control == L"crf") args << L" -rc qvbr -qvbr_quality_level " << settings.qp;
+        else if (settings.rate_control == L"qp")
+            args << L" -rc cqp -qp_i " << settings.qp << L" -qp_p " << settings.qp << L" -qp_b " << settings.qp;
+        else args << L" -rc vbr_peak -b:v " << settings.bitrate_kbps << L"k";
     }
     return args.str();
 }
@@ -643,7 +672,7 @@ private:
 };
 
 enum ControlId : int {
-    ID_CODEC = 1001, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND
+    ID_BACKEND = 1001, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_FOLLOW, ID_COMMAND
 };
 
 class SettingsPropertyPage final : public IPropertyPage {
@@ -690,12 +719,12 @@ public:
     HRESULT STDMETHODCALLTYPE GetPageInfo(PROPPAGEINFO* info) override {
         if (!info) return E_POINTER;
         ZeroMemory(info, sizeof(*info)); info->cb = sizeof(*info);
-        const wchar_t* title = L"MMD2FFMPEG NVENC Settings";
+        const wchar_t* title = L"MMD2FFMPEG Encoder Settings";
         const auto bytes = (wcslen(title) + 1) * sizeof(wchar_t);
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        info->size = {520, 420};
+        info->size = {520, 452};
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -711,11 +740,12 @@ public:
     HRESULT STDMETHODCALLTYPE IsPageDirty() override { return dirty_ ? S_OK : S_FALSE; }
     HRESULT STDMETHODCALLTYPE Apply() override {
         if (!window_) return E_UNEXPECTED;
+        settings_.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
         settings_.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" :
                           combo_text(ID_CODEC) == L"AV1" ? L"av1" : L"hevc";
         settings_.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && settings_.codec != L"avc" ? 10 : 8;
         settings_.preset = combo_index(ID_PRESET) + 1;
-        settings_.rate_control = combo_index(ID_RATE) == 0 ? L"qp" : L"vbr";
+        settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
         settings_.follow_avi_path = Button_GetCheck(GetDlgItem(window_, ID_FOLLOW)) == BST_CHECKED;
@@ -746,24 +776,25 @@ private:
     }
     void create_controls() {
         HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        label(window_, L"Codec", 15, 17); add_combo(ID_CODEC, 135, 12, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
-        label(window_, L"Bit depth", 15, 49); add_combo(ID_DEPTH, 135, 44, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
-        label(window_, L"NVENC preset", 15, 81); add_combo(ID_PRESET, 135, 76, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
-        label(window_, L"Rate control", 15, 113); add_combo(ID_RATE, 135, 108, {L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"vbr" ? 1 : 0);
-        label(window_, L"QP (0-51)", 15, 145); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 140, 90);
-        label(window_, L"Bitrate (kbps)", 240, 145); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 140, 75);
+        label(window_, L"Encoder", 15, 17); add_combo(ID_BACKEND, 135, 12, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
+        label(window_, L"Codec", 15, 49); add_combo(ID_CODEC, 135, 44, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
+        label(window_, L"Bit depth", 15, 81); add_combo(ID_DEPTH, 135, 76, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
+        label(window_, L"Compression 1-7", 15, 113); add_combo(ID_PRESET, 135, 108, {L"1 (fastest)", L"2", L"3", L"4", L"5", L"6", L"7 (best quality)"}, settings_.preset - 1);
+        label(window_, L"Rate control", 15, 145); add_combo(ID_RATE, 135, 140, {L"Constant quality", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        label(window_, L"Quality / QP", 15, 177); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 172, 90);
+        label(window_, L"Bitrate (kbps)", 240, 177); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 172, 75);
         SetWindowTextW(qp, std::to_wstring(settings_.qp).c_str()); SetWindowTextW(bitrate, std::to_wstring(settings_.bitrate_kbps).c_str());
         HWND follow = CreateWindowW(L"BUTTON", L"Create same-name .mkv beside MMD's .avi", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                    15, 180, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
+                                    15, 212, 390, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_FOLLOW)), GetModuleHandleW(nullptr), nullptr);
         Button_SetCheck(follow, settings_.follow_avi_path ? BST_CHECKED : BST_UNCHECKED);
         CreateWindowW(L"STATIC", L"Complete FFmpeg command (middle section is editable)",
-                      WS_CHILD | WS_VISIBLE, 15, 210, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
+                      WS_CHILD | WS_VISIBLE, 15, 242, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
         CreateWindowW(L"STATIC", command_prefix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 232, 490, 55, window_, reinterpret_cast<HMENU>(1010), GetModuleHandleW(nullptr), nullptr);
-        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 290, 490);
+                      WS_CHILD | WS_VISIBLE, 15, 264, 490, 55, window_, reinterpret_cast<HMENU>(1010), GetModuleHandleW(nullptr), nullptr);
+        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 322, 490);
         SetWindowTextW(command, (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
         CreateWindowW(L"STATIC", command_suffix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 320, 490, 55, window_, reinterpret_cast<HMENU>(1011), GetModuleHandleW(nullptr), nullptr);
+                      WS_CHILD | WS_VISIBLE, 15, 352, 490, 55, window_, reinterpret_cast<HMENU>(1011), GetModuleHandleW(nullptr), nullptr);
         EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
         update_controls();
     }
@@ -771,9 +802,9 @@ private:
         const bool avc = combo_index(ID_CODEC) == 0;
         if (avc) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
         EnableWindow(GetDlgItem(window_, ID_DEPTH), !avc);
-        const bool qp = combo_index(ID_RATE) == 0;
-        EnableWindow(GetDlgItem(window_, ID_QP), qp);
-        EnableWindow(GetDlgItem(window_, ID_BITRATE), !qp);
+        const bool bitrate = combo_index(ID_RATE) == 2;
+        EnableWindow(GetDlgItem(window_, ID_QP), !bitrate);
+        EnableWindow(GetDlgItem(window_, ID_BITRATE), bitrate);
     }
     int combo_index(int id) const { return static_cast<int>(ComboBox_GetCurSel(GetDlgItem(window_, id))); }
     std::wstring combo_text(int id) const {
@@ -791,10 +822,11 @@ private:
         return text;
     }
     void sync_structured_settings() {
+        settings_.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
         settings_.codec = combo_index(ID_CODEC) == 0 ? L"avc" : combo_index(ID_CODEC) == 2 ? L"av1" : L"hevc";
         settings_.bit_depth = combo_index(ID_DEPTH) == 1 && settings_.codec != L"avc" ? 10 : 8;
         settings_.preset = combo_index(ID_PRESET) + 1;
-        settings_.rate_control = combo_index(ID_RATE) == 0 ? L"qp" : L"vbr";
+        settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
     }
