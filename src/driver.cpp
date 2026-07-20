@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr DWORD kHandler = mmioFOURCC('M', '2', 'F', 'F');
+constexpr DWORD kHandler = mmioFOURCC('m', '2', 'f', 'f');
 constexpr wchar_t kCodecName[] = L"MMD2FFMPEG frame bridge";
 constexpr wchar_t kCodecDescription[] = L"Streams MMD video frames directly to FFmpeg";
 

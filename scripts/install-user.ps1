@@ -27,7 +27,7 @@ video_args=-vf format=p010le -c:v hevc_nvenc -profile:v main10 -preset p7 -tune 
 }
 $driversKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Drivers32'
 New-Item -Path $driversKey -Force | Out-Null
-New-ItemProperty -Path $driversKey -Name 'vidc.M2FF' -Value $installedDll -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $driversKey -Name 'vidc.m2ff' -Value $installedDll -PropertyType String -Force | Out-Null
 $classIdBraced = '{C42D995C-3D1B-4E44-A96B-767B6C2A4646}'
 $classIdBare = 'C42D995C-3D1B-4E44-A96B-767B6C2A4646'
 $classKey = "HKCU:\Software\Classes\CLSID\$classIdBraced"

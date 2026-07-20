@@ -6,7 +6,35 @@
 #include <vector>
 
 int wmain() {
-    constexpr DWORD handler = mmioFOURCC('M', '2', 'F', 'F');
+    constexpr DWORD handler = mmioFOURCC('m', '2', 'f', 'f');
+    bool enumerated = false;
+    ICINFO info{};
+    info.dwSize = sizeof(info);
+    for (DWORD index = 0; ICInfo(ICTYPE_VIDEO, index, &info); ++index) {
+        if (info.fccHandler == handler) {
+            enumerated = true;
+            break;
+        }
+        info = {};
+        info.dwSize = sizeof(info);
+    }
+    if (!enumerated) {
+        std::wcerr << L"ICInfo did not enumerate the M2FF VFW codec.\n";
+        info = {};
+        info.dwSize = sizeof(info);
+        for (DWORD index = 0; ICInfo(ICTYPE_VIDEO, index, &info); ++index) {
+            std::wcerr << L"  handler="
+                       << static_cast<wchar_t>(info.fccHandler & 0xff)
+                       << static_cast<wchar_t>((info.fccHandler >> 8) & 0xff)
+                       << static_cast<wchar_t>((info.fccHandler >> 16) & 0xff)
+                       << static_cast<wchar_t>((info.fccHandler >> 24) & 0xff)
+                       << L" name=" << info.szName << L"\n";
+            info = {};
+            info.dwSize = sizeof(info);
+        }
+        return 4;
+    }
+
     HIC codec = ICOpen(ICTYPE_VIDEO, handler, ICMODE_COMPRESS);
     if (!codec) {
         std::wcerr << L"ICOpen failed; install the codec first.\n";
