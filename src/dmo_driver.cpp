@@ -159,19 +159,46 @@ bool supported_output(const DMO_MEDIA_TYPE& type) {
 
 class Encoder final : public IMediaObject {
 public:
-    Encoder() { ++g_objects; }
+    class InnerUnknown final : public IUnknown {
+    public:
+        explicit InnerUnknown(Encoder* owner) : owner_(owner) {}
+        HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) override {
+            return owner_->nondelegating_query_interface(iid, object);
+        }
+        ULONG STDMETHODCALLTYPE AddRef() override { return owner_->nondelegating_add_ref(); }
+        ULONG STDMETHODCALLTYPE Release() override { return owner_->nondelegating_release(); }
+    private:
+        Encoder* owner_;
+    };
+
+    explicit Encoder(IUnknown* outer) : inner_unknown_(this), outer_(outer ? outer : &inner_unknown_) { ++g_objects; }
     ~Encoder() { stop_ffmpeg(); free_type(input_type_); free_type(output_type_); --g_objects; }
 
+    IUnknown* inner_unknown() { return &inner_unknown_; }
+
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) override {
+        return outer_->QueryInterface(iid, object);
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return outer_->AddRef(); }
+    ULONG STDMETHODCALLTYPE Release() override { return outer_->Release(); }
+
+    HRESULT nondelegating_query_interface(REFIID iid, void** object) {
         if (!object) return E_POINTER;
         *object = nullptr;
-        if (iid == IID_IUnknown || iid == IID_IMediaObject) *object = static_cast<IMediaObject*>(this);
+        if (iid == IID_IUnknown) {
+            *object = static_cast<IUnknown*>(&inner_unknown_);
+            nondelegating_add_ref();
+            return S_OK;
+        }
+        if (iid == IID_IMediaObject) {
+            *object = static_cast<IMediaObject*>(this);
+            outer_->AddRef();
+            return S_OK;
+        }
         else return E_NOINTERFACE;
-        AddRef();
-        return S_OK;
     }
-    ULONG STDMETHODCALLTYPE AddRef() override { return ++references_; }
-    ULONG STDMETHODCALLTYPE Release() override {
+    ULONG nondelegating_add_ref() { return ++references_; }
+    ULONG nondelegating_release() {
         const ULONG value = --references_;
         if (!value) delete this;
         return value;
@@ -205,7 +232,13 @@ public:
         if (index != 0) return DMO_E_INVALIDSTREAMINDEX;
         if (!type) return E_POINTER;
         if (type_index != 0) return DMO_E_NO_MORE_ITEMS;
-        if (!input_type_.pbFormat) return DMO_E_TYPE_NOT_SET;
+        if (!input_type_.pbFormat) {
+            ZeroMemory(type, sizeof(*type));
+            type->majortype = MEDIATYPE_Video;
+            type->subtype = MEDIASUBTYPE_M2FF;
+            type->formattype = GUID_NULL;
+            return S_OK;
+        }
         const auto* input = reinterpret_cast<const VIDEOINFOHEADER*>(input_type_.pbFormat);
         return make_output_type(type, input->bmiHeader.biWidth, input->bmiHeader.biHeight,
                                 input->AvgTimePerFrame);
@@ -381,6 +414,8 @@ private:
         return write_all(flipped_.data(), static_cast<DWORD>(flipped_.size()));
     }
 
+    InnerUnknown inner_unknown_;
+    IUnknown* outer_;
     std::atomic<ULONG> references_{1};
     DMO_MEDIA_TYPE input_type_{}; DMO_MEDIA_TYPE output_type_{};
     Settings settings_{};
@@ -403,11 +438,18 @@ public:
     ULONG STDMETHODCALLTYPE AddRef() override { return ++references_; }
     ULONG STDMETHODCALLTYPE Release() override { const ULONG value = --references_; if (!value) delete this; return value; }
     HRESULT STDMETHODCALLTYPE CreateInstance(IUnknown* outer, REFIID iid, void** object) override {
-        if (outer) return CLASS_E_NOAGGREGATION;
-        auto* encoder = new (std::nothrow) Encoder();
+        if (outer && iid != IID_IUnknown) return CLASS_E_NOAGGREGATION;
+        if (!object) return E_POINTER;
+        *object = nullptr;
+        auto* encoder = new (std::nothrow) Encoder(outer);
         if (!encoder) return E_OUTOFMEMORY;
-        const HRESULT result = encoder->QueryInterface(iid, object);
-        encoder->Release(); return result;
+        if (outer) {
+            *object = encoder->inner_unknown();
+            return S_OK;
+        }
+        const HRESULT result = encoder->nondelegating_query_interface(iid, object);
+        encoder->nondelegating_release();
+        return result;
     }
     HRESULT STDMETHODCALLTYPE LockServer(BOOL lock) override { lock ? ++g_locks : --g_locks; return S_OK; }
 private:

@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <dshow.h>
 #include <dmo.h>
+#include <dmodshow.h>
 
 #include <iomanip>
 #include <iostream>
@@ -16,6 +17,13 @@ void free_type(DMO_MEDIA_TYPE& type) {
     if (type.cbFormat && type.pbFormat) CoTaskMemFree(type.pbFormat);
     if (type.pUnk) type.pUnk->Release();
     ZeroMemory(&type, sizeof(type));
+}
+
+void delete_media_type(AM_MEDIA_TYPE* type) {
+    if (!type) return;
+    if (type->cbFormat && type->pbFormat) CoTaskMemFree(type->pbFormat);
+    if (type->pUnk) type->pUnk->Release();
+    CoTaskMemFree(type);
 }
 
 DMO_MEDIA_TYPE make_rgb32_type() {
@@ -112,12 +120,84 @@ bool probe(const wchar_t* name, REFCLSID clsid) {
     object->Release();
     return true;
 }
+
+void probe_wrapper(const wchar_t* name, REFCLSID clsid) {
+    IBaseFilter* filter = nullptr;
+    HRESULT result = CoCreateInstance(CLSID_DMOWrapperFilter, nullptr, CLSCTX_INPROC_SERVER,
+                                      IID_IBaseFilter, reinterpret_cast<void**>(&filter));
+    if (FAILED(result)) {
+        std::wcout << L"[" << name << L" wrapper] create failed 0x" << std::hex << result << std::dec << L"\n";
+        return;
+    }
+    IDMOWrapperFilter* wrapper = nullptr;
+    result = filter->QueryInterface(IID_IDMOWrapperFilter, reinterpret_cast<void**>(&wrapper));
+    if (SUCCEEDED(result)) result = wrapper->Init(clsid, DMOCATEGORY_VIDEO_ENCODER);
+    std::wcout << L"[" << name << L" wrapper] Init=0x" << std::hex << result << std::dec << L"\n";
+    if (wrapper) wrapper->Release();
+    if (FAILED(result)) { filter->Release(); return; }
+
+    IEnumPins* pins = nullptr;
+    if (SUCCEEDED(filter->EnumPins(&pins))) {
+        IPin* pin = nullptr;
+        ULONG fetched = 0;
+        while (pins->Next(1, &pin, &fetched) == S_OK) {
+            PIN_DIRECTION direction{};
+            pin->QueryDirection(&direction);
+            PIN_INFO info{};
+            pin->QueryPinInfo(&info);
+            std::wcout << L"  pin=" << info.achName << L" direction="
+                       << (direction == PINDIR_INPUT ? L"input" : L"output") << L"\n";
+            if (info.pFilter) info.pFilter->Release();
+
+            IAMStreamConfig* stream_config = nullptr;
+            const HRESULT stream_qi = pin->QueryInterface(IID_IAMStreamConfig,
+                                                          reinterpret_cast<void**>(&stream_config));
+            std::wcout << L"    IAMStreamConfig QI=0x" << std::hex << stream_qi << std::dec;
+            if (stream_config) {
+                int count = 0, size = 0;
+                const HRESULT caps = stream_config->GetNumberOfCapabilities(&count, &size);
+                std::wcout << L" caps=0x" << std::hex << caps << std::dec
+                           << L" count=" << count << L" size=" << size;
+                stream_config->Release();
+            }
+            std::wcout << L"\n";
+
+            IAMVideoCompression* compression = nullptr;
+            const HRESULT compression_qi = pin->QueryInterface(IID_IAMVideoCompression,
+                                                               reinterpret_cast<void**>(&compression));
+            std::wcout << L"    IAMVideoCompression QI=0x" << std::hex << compression_qi << std::dec << L"\n";
+            if (compression) compression->Release();
+
+            IEnumMediaTypes* types = nullptr;
+            if (SUCCEEDED(pin->EnumMediaTypes(&types))) {
+                AM_MEDIA_TYPE* media = nullptr;
+                while (types->Next(1, &media, &fetched) == S_OK) {
+                    std::wcout << L"    media subtype=" << guid_text(media->subtype)
+                               << L" format=" << guid_text(media->formattype)
+                               << L" cbFormat=" << media->cbFormat << L"\n";
+                    delete_media_type(media);
+                }
+                types->Release();
+            }
+            pin->Release();
+        }
+        pins->Release();
+    }
+    filter->Release();
+}
 }
 
 int wmain() {
+    std::wcout << std::unitbuf;
+    std::wcout << L"[phase] COM initialization\n";
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    std::wcout << L"[phase] direct DMO probes\n";
     const bool utvideo = probe(L"UtVideo RGB DMO", CLSID_UTVIDEO_RGB);
     const bool bridge = probe(L"MMD2FFMPEG DMO", CLSID_MMD2FFMPEG);
+    std::wcout << L"[phase] DMO Wrapper probes\n";
+    probe_wrapper(L"UtVideo RGB DMO", CLSID_UTVIDEO_RGB);
+    probe_wrapper(L"MMD2FFMPEG DMO", CLSID_MMD2FFMPEG);
+    std::wcout << L"[phase] COM shutdown\n";
     CoUninitialize();
     return utvideo && bridge ? 0 : 1;
 }
