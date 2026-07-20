@@ -1,0 +1,16 @@
+﻿#pragma once
+
+#define IDD_ENCODER_SETTINGS 2001
+
+#define ID_BACKEND 1001
+#define ID_CODEC 1002
+#define ID_DEPTH 1003
+#define ID_PRESET 1004
+#define ID_RATE 1005
+#define ID_QP 1006
+#define ID_BITRATE 1007
+#define ID_COMMAND 1008
+#define ID_REFRESH 1009
+#define ID_STATUS 1010
+#define ID_COMMAND_PREFIX 1101
+#define ID_COMMAND_SUFFIX 1102

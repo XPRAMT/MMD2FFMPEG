@@ -1,0 +1,30 @@
+﻿#include <windows.h>
+#include "resource.h"
+
+IDD_ENCODER_SETTINGS DIALOGEX 0, 0, 260, 194
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS
+EXSTYLE WS_EX_CONTROLPARENT
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Encoder", -1, 8, 8, 58, 10
+    COMBOBOX        ID_BACKEND, 68, 6, 96, 95, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Codec", -1, 8, 24, 58, 10
+    COMBOBOX        ID_CODEC, 68, 22, 96, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Bit depth", -1, 8, 40, 58, 10
+    COMBOBOX        ID_DEPTH, 68, 38, 96, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Encoder preset", -1, 8, 56, 58, 10
+    COMBOBOX        ID_PRESET, 68, 54, 96, 95, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Rate control", -1, 8, 72, 58, 10
+    COMBOBOX        ID_RATE, 68, 70, 96, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Quality / QP", -1, 8, 88, 58, 10
+    EDITTEXT        ID_QP, 68, 86, 45, 14, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "Bitrate (kbps)", -1, 120, 88, 62, 10
+    EDITTEXT        ID_BITRATE, 184, 86, 42, 14, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
+
+    LTEXT           "Encoder status: testing...", ID_STATUS, 8, 105, 192, 12, SS_LEFTNOWORDWRAP
+    PUSHBUTTON      "Retest", ID_REFRESH, 205, 102, 47, 14, WS_TABSTOP
+    LTEXT           "Complete FFmpeg command (middle section is editable)", -1, 8, 120, 244, 10
+    LTEXT           "", ID_COMMAND_PREFIX, 8, 132, 244, 24, SS_LEFT
+    EDITTEXT        ID_COMMAND, 8, 157, 244, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", ID_COMMAND_SUFFIX, 8, 173, 244, 18, SS_LEFT
+END

@@ -19,6 +19,8 @@
 #include <thread>
 #include <vector>
 
+#include "resource.h"
+
 namespace {
 
 // {C42D995C-3D1B-4E44-A96B-767B6C2A4646}
@@ -31,6 +33,13 @@ constexpr GUID MEDIASUBTYPE_M2FF =
     {0x4646324d, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 std::atomic<long> g_objects{0};
 std::atomic<long> g_locks{0};
+
+HINSTANCE module_instance() {
+    HMODULE module = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&module_instance), &module);
+    return module;
+}
 
 struct Settings {
     std::wstring ffmpeg = L"ffmpeg.exe";
@@ -912,13 +921,6 @@ private:
     std::vector<BYTE> flipped_;
 };
 
-enum ControlId : int {
-    ID_BACKEND = 1001, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE, ID_COMMAND,
-    ID_REFRESH, ID_STATUS
-};
-constexpr int ID_COMMAND_PREFIX = 1101;
-constexpr int ID_COMMAND_SUFFIX = 1102;
-
 class SettingsPropertyPage final : public IPropertyPage {
 public:
     SettingsPropertyPage() { ++g_objects; }
@@ -947,17 +949,11 @@ public:
     }
     HRESULT STDMETHODCALLTYPE Activate(HWND parent, LPCRECT rect, BOOL) override {
         if (window_) return E_UNEXPECTED;
-        WNDCLASSW window_class{};
-        window_class.lpfnWndProc = window_proc;
-        window_class.hInstance = GetModuleHandleW(nullptr);
-        window_class.lpszClassName = L"MMD2FFMPEGSettingsPage";
-        window_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-        window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-        RegisterClassW(&window_class);
         settings_ = load_settings();
-        window_ = CreateWindowExW(0, window_class.lpszClassName, L"", WS_CHILD | WS_VISIBLE,
-                                  rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top,
-                                  parent, nullptr, window_class.hInstance, this);
+        window_ = CreateDialogParamW(module_instance(), MAKEINTRESOURCEW(IDD_ENCODER_SETTINGS), parent,
+                                     dialog_proc, reinterpret_cast<LPARAM>(this));
+        if (window_) MoveWindow(window_, rect->left, rect->top, rect->right - rect->left,
+                                rect->bottom - rect->top, TRUE);
         return window_ ? S_OK : HRESULT_FROM_WIN32(GetLastError());
     }
     HRESULT STDMETHODCALLTYPE Deactivate() override {
@@ -972,7 +968,22 @@ public:
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        info->size = {520, 390};
+        HDC dc = GetDC(nullptr);
+        const int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
+        HFONT font = CreateFontW(-MulDiv(9, dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                 CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        HGDIOBJ previous = dc && font ? SelectObject(dc, font) : nullptr;
+        TEXTMETRICW metrics{};
+        SIZE alphabet{};
+        const wchar_t sample[] = L"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        if (dc) { GetTextMetricsW(dc, &metrics); GetTextExtentPoint32W(dc, sample, 52, &alphabet); }
+        const int base_x = alphabet.cx > 0 ? std::max(1, static_cast<int>((alphabet.cx / 26 + 1) / 2)) : 7;
+        const int base_y = metrics.tmHeight > 0 ? metrics.tmHeight : 15;
+        info->size = {MulDiv(260, base_x, 4), MulDiv(194, base_y, 8)};
+        if (dc && previous) SelectObject(dc, previous);
+        if (font) DeleteObject(font);
+        if (dc) ReleaseDC(nullptr, dc);
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -1020,45 +1031,26 @@ public:
     }
 
 private:
-    static HWND label(HWND parent, const wchar_t* text, int x, int y) {
-        return CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE, x, y, 120, 22,
-                             parent, nullptr, GetModuleHandleW(nullptr), nullptr);
-    }
-    HWND control(const wchar_t* type, DWORD style, int id, int x, int y, int width = 190, int height = 24) {
-        return CreateWindowExW(WS_EX_CLIENTEDGE, type, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | style,
-                               x, y, width, height, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
-                               GetModuleHandleW(nullptr), nullptr);
-    }
-    void add_combo(int id, int x, int y, std::initializer_list<const wchar_t*> values, int selected) {
-        HWND combo = control(L"COMBOBOX", CBS_DROPDOWNLIST | WS_VSCROLL, id, x, y, 190, 120);
+    void add_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
+        HWND combo = GetDlgItem(window_, id);
         for (const auto* value : values) ComboBox_AddString(combo, value);
         ComboBox_SetCurSel(combo, selected);
     }
     void create_controls() {
-        HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        label(window_, L"Encoder", 15, 17); add_combo(ID_BACKEND, 135, 12, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
-        label(window_, L"Codec", 15, 49); add_combo(ID_CODEC, 135, 44, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
-        label(window_, L"Bit depth", 15, 81); add_combo(ID_DEPTH, 135, 76, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
-        label(window_, L"Encoder preset", 15, 113); add_combo(ID_PRESET, 135, 108, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
-        label(window_, L"Rate control", 15, 145); add_combo(ID_RATE, 135, 140, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
-        label(window_, L"Quality / QP", 15, 177); HWND qp = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_QP, 135, 172, 90);
-        label(window_, L"Bitrate (kbps)", 240, 177); HWND bitrate = control(L"EDIT", ES_NUMBER | ES_AUTOHSCROLL, ID_BITRATE, 345, 172, 75);
-        SetWindowTextW(qp, std::to_wstring(settings_.qp).c_str()); SetWindowTextW(bitrate, std::to_wstring(settings_.bitrate_kbps).c_str());
-        CreateWindowW(L"BUTTON", L"Retest", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                      410, 205, 95, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_REFRESH)), GetModuleHandleW(nullptr), nullptr);
-        CreateWindowW(L"STATIC", L"Encoder status: testing...", WS_CHILD | WS_VISIBLE,
-                      15, 210, 385, 22, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_STATUS)), GetModuleHandleW(nullptr), nullptr);
-        CreateWindowW(L"STATIC", L"Complete FFmpeg command (middle section is editable)",
-                      WS_CHILD | WS_VISIBLE, 15, 238, 490, 22, window_, nullptr, GetModuleHandleW(nullptr), nullptr);
-        CreateWindowW(L"STATIC", command_prefix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 260, 490, 50, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_COMMAND_PREFIX)), GetModuleHandleW(nullptr), nullptr);
-        HWND command = control(L"EDIT", ES_AUTOHSCROLL, ID_COMMAND, 15, 313, 490);
-        SetWindowTextW(command, (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
-        CreateWindowW(L"STATIC", command_suffix(settings_).c_str(),
-                      WS_CHILD | WS_VISIBLE, 15, 343, 490, 45, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_COMMAND_SUFFIX)), GetModuleHandleW(nullptr), nullptr);
-        EnumChildWindows(window_, [](HWND child, LPARAM value) -> BOOL { SendMessageW(child, WM_SETFONT, value, TRUE); return TRUE; }, reinterpret_cast<LPARAM>(font));
+        updating_command_ = true;
+        add_combo(ID_BACKEND, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
+        add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
+        add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
+        add_combo(ID_PRESET, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
+        add_combo(ID_RATE, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        SetWindowTextW(GetDlgItem(window_, ID_QP), std::to_wstring(settings_.qp).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_BITRATE), std::to_wstring(settings_.bitrate_kbps).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND), (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
         rebuild_backend_options();
         update_controls();
+        updating_command_ = false;
         start_probe();
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
@@ -1170,12 +1162,15 @@ private:
         }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
     }
-    static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+    static INT_PTR CALLBACK dialog_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
         auto* self = reinterpret_cast<SettingsPropertyPage*>(GetWindowLongPtrW(window, GWLP_USERDATA));
-        if (message == WM_NCCREATE) {
-            self = static_cast<SettingsPropertyPage*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
-            SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self)); self->window_ = window;
-        } else if (message == WM_CREATE && self) self->create_controls();
+        if (message == WM_INITDIALOG) {
+            self = reinterpret_cast<SettingsPropertyPage*>(lparam);
+            SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            self->window_ = window;
+            self->create_controls();
+            return TRUE;
+        }
         else if (message == WM_APP + 42 && self) {
             auto* result = reinterpret_cast<ProbeResult*>(lparam);
             self->probe_running_ = false;
@@ -1190,12 +1185,18 @@ private:
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
             EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
             delete result;
+            return TRUE;
         }
-        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) self->start_probe(true);
+        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {
+            self->start_probe(true);
+            return TRUE;
+        }
         else if (message == WM_COMMAND && self && !self->updating_command_ &&
-                 (HIWORD(wparam) == CBN_SELCHANGE || HIWORD(wparam) == EN_CHANGE || HIWORD(wparam) == BN_CLICKED))
+                 (HIWORD(wparam) == CBN_SELCHANGE || HIWORD(wparam) == EN_CHANGE || HIWORD(wparam) == BN_CLICKED)) {
             self->changed(LOWORD(wparam));
-        return DefWindowProcW(window, message, wparam, lparam);
+            return TRUE;
+        }
+        return FALSE;
     }
 
     std::atomic<ULONG> references_{1};
