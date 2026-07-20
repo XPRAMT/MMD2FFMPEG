@@ -53,9 +53,16 @@ int wmain(int argument_count, wchar_t** arguments) {
         page->Release(); CoUninitialize(); return 2;
     }
     CoTaskMemFree(info.pszTitle);
+    // The normal test verifies the exact, natural page size reported to the
+    // property-frame host.  A separate opt-in mode simulates a host whose
+    // available work area is smaller, as can happen with MMD on high-DPI
+    // desktops; this must expose scrolling instead of clipping controls.
+    const bool constrained_host = argument_count > 2 && std::wstring(arguments[2]) == L"constrained";
+    const int page_height = static_cast<int>(info.size.cy);
+    const int host_height = constrained_host ? std::min(page_height, 1000) : page_height;
     HWND parent = CreateWindowExW(0, L"STATIC", L"", WS_OVERLAPPED,
-                                  0, 0, info.size.cx, info.size.cy, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
-    RECT area{0, 0, info.size.cx, info.size.cy};
+                                  0, 0, info.size.cx, host_height, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    RECT area{0, 0, info.size.cx, host_height};
     result = page->Activate(parent, &area, FALSE);
     HWND page_window = FindWindowExW(parent, nullptr, nullptr, nullptr);
     if (FAILED(result) || !page_window) {
@@ -72,9 +79,11 @@ int wmain(int argument_count, wchar_t** arguments) {
                        ID_COMMAND_HEADING};
     for (const int id : ids) {
         const RECT rectangle = child_rect(page_window, id);
-        if (!valid_rect(rectangle) || rectangle.left < 0 || rectangle.top < 0 ||
-            rectangle.right > client.right || rectangle.bottom > client.bottom) {
-            std::wcerr << L"Control outside page: " << id << L"\n";
+        if (!valid_rect(rectangle) || rectangle.left < 0 || rectangle.right > client.right ||
+            (!constrained_host && (rectangle.top < 0 || rectangle.bottom > client.bottom))) {
+            std::wcerr << L"Control outside page: " << id << L" rect=" << rectangle.left << L"," << rectangle.top
+                       << L"," << rectangle.right << L"," << rectangle.bottom << L" client=" << client.right
+                       << L"," << client.bottom << L"\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 4;
         }
     }
@@ -85,13 +94,24 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"FFmpeg command controls overlap.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 5;
     }
-    const RECT status = child_rect(page_window, ID_STATUS);
-    const RECT requirement = child_rect(page_window, ID_TEST_REQUIREMENT);
-    const RECT test_button = child_rect(page_window, ID_REFRESH);
-    if (suffix.bottom > status.top || status.bottom > requirement.top ||
-        status.bottom > test_button.top || test_button.bottom > client.bottom) {
-        std::wcerr << L"Encoder test controls are not at the bottom or overlap.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 6;
+    if (constrained_host) {
+        SCROLLINFO scroll_info{sizeof(SCROLLINFO), SIF_RANGE | SIF_PAGE | SIF_POS};
+        GetScrollInfo(page_window, SB_VERT, &scroll_info);
+        if (scroll_info.nMax - static_cast<int>(scroll_info.nPage) + 1 <= 0) {
+            std::wcerr << L"Constrained property page did not expose a vertical scrollbar.\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 6;
+        }
+        SendMessageW(page_window, WM_VSCROLL, SB_BOTTOM, 0);
+        GetClientRect(page_window, &client);
+        const RECT status = child_rect(page_window, ID_STATUS);
+        const RECT requirement = child_rect(page_window, ID_TEST_REQUIREMENT);
+        const RECT test_button = child_rect(page_window, ID_REFRESH);
+        if (status.top < 0 || requirement.top < 0 || test_button.top < 0 ||
+            status.bottom > client.bottom || requirement.bottom > client.bottom || test_button.bottom > client.bottom ||
+            status.bottom > requirement.top || status.bottom > test_button.top) {
+            std::wcerr << L"Encoder test controls are not reachable after scrolling to the bottom.\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 7;
+        }
     }
     HWND status_control = GetDlgItem(page_window, ID_STATUS);
     HWND command_control = GetDlgItem(page_window, ID_COMMAND);
@@ -103,7 +123,7 @@ int wmain(int argument_count, wchar_t** arguments) {
                                        L"エンコーダー状態：未テスト", L"Encoder status: not tested"};
     if (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH))) {
         std::wcerr << L"The property page started an encoder test automatically.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 7;
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 8;
     }
     for (int language = 0; language < 5; ++language) {
         SendMessageW(language_control, CB_SETCURSEL, language, 0);
@@ -123,7 +143,7 @@ int wmain(int argument_count, wchar_t** arguments) {
             window_text(GetDlgItem(page_window, ID_REFRESH)) != button_labels[text_index] ||
             window_text(status_control) != not_tested_labels[text_index]) {
             std::wcerr << L"Language switch failed for index " << language << L".\n";
-            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 8;
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 9;
         }
     }
     SendMessageW(language_control, CB_SETCURSEL, original_language, 0);
@@ -133,7 +153,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     if (status_after_change.find(L"testing") != std::wstring::npos || status_after_change.find(L"テスト中") != std::wstring::npos ||
         status_after_change.find(L"測試中") != std::wstring::npos || status_after_change.find(L"测试中") != std::wstring::npos) {
         std::wcerr << L"Changing encoder settings started a test automatically.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 9;
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 10;
     }
     std::wcout << mode << L" property page layout OK: "
                << info.size.cx << L"x" << info.size.cy << L"\n";

@@ -1098,22 +1098,8 @@ public:
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        HDC dc = GetDC(nullptr);
-        const int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
-        HFONT font = CreateFontW(-MulDiv(9, dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                                 CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        HGDIOBJ previous = dc && font ? SelectObject(dc, font) : nullptr;
-        TEXTMETRICW metrics{};
-        SIZE alphabet{};
-        const wchar_t sample[] = L"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        if (dc) { GetTextMetricsW(dc, &metrics); GetTextExtentPoint32W(dc, sample, 52, &alphabet); }
-        const int base_x = alphabet.cx > 0 ? std::max(1, static_cast<int>((alphabet.cx / 26 + 1) / 2)) : 7;
-        const int base_y = metrics.tmHeight > 0 ? metrics.tmHeight : 15;
-        info->size = {MulDiv(260, base_x, 4), MulDiv(236, base_y, 8)};
-        if (dc && previous) SelectObject(dc, previous);
-        if (font) DeleteObject(font);
-        if (dc) ReleaseDC(nullptr, dc);
+        info->size = measure_dialog_size();
+        if (info->size.cx <= 0 || info->size.cy <= 0) return E_FAIL;
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -1156,6 +1142,21 @@ public:
     }
 
 private:
+    static SIZE measure_dialog_size() {
+        HWND parent = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr,
+                                      module_instance(), nullptr);
+        HWND dialog = parent ? CreateDialogParamW(module_instance(), MAKEINTRESOURCEW(IDD_ENCODER_SETTINGS), parent,
+                                                   dialog_proc, 0) : nullptr;
+        SIZE size{};
+        if (dialog) {
+            RECT client{};
+            GetClientRect(dialog, &client);
+            size = {static_cast<LONG>(client.right), static_cast<LONG>(client.bottom)};
+            DestroyWindow(dialog);
+        }
+        if (parent) DestroyWindow(parent);
+        return size;
+    }
     void add_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
         for (const auto* value : values) ComboBox_AddString(combo, value);
@@ -1178,6 +1179,8 @@ private:
         update_controls();
         updating_command_ = false;
         apply_language();
+        capture_child_positions();
+        update_vertical_scroll();
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1278,6 +1281,80 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
     }
+    struct ChildPosition {
+        HWND window;
+        RECT rectangle;
+    };
+    void capture_child_positions() {
+        child_positions_.clear();
+        for (HWND child = GetWindow(window_, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
+            RECT rectangle{};
+            GetWindowRect(child, &rectangle);
+            MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&rectangle), 2);
+            child_positions_.push_back({child, rectangle});
+        }
+        RECT client{};
+        GetClientRect(window_, &client);
+        content_height_ = static_cast<int>(client.bottom);
+    }
+    void layout_scrolled_children() {
+        RECT client{};
+        GetClientRect(window_, &client);
+        for (const auto& child : child_positions_) {
+            const int left = static_cast<int>(child.rectangle.left);
+            const int top = static_cast<int>(child.rectangle.top);
+            const int width = std::min(static_cast<int>(child.rectangle.right - child.rectangle.left),
+                                       std::max(1, static_cast<int>(client.right) - left));
+            SetWindowPos(child.window, nullptr, left, top - scroll_offset_,
+                         width, static_cast<int>(child.rectangle.bottom - child.rectangle.top),
+                         SWP_NOACTIVATE | SWP_NOZORDER);
+        }
+    }
+    void update_vertical_scroll() {
+        if (child_positions_.empty()) return;
+        RECT client{};
+        GetClientRect(window_, &client);
+        const int client_height = static_cast<int>(client.bottom);
+        const int maximum = std::max(0, content_height_ - client_height);
+        scroll_offset_ = std::clamp(scroll_offset_, 0, maximum);
+        SCROLLINFO scroll_info{sizeof(SCROLLINFO), SIF_RANGE | SIF_PAGE | SIF_POS, 0, std::max(0, content_height_ - 1),
+                               static_cast<UINT>(std::max(0, client_height)), scroll_offset_, 0};
+        SetScrollInfo(window_, SB_VERT, &scroll_info, TRUE);
+        ShowScrollBar(window_, SB_VERT, maximum > 0);
+        layout_scrolled_children();
+    }
+    void scroll_to(int requested_offset) {
+        RECT client{};
+        GetClientRect(window_, &client);
+        const int client_height = static_cast<int>(client.bottom);
+        const int maximum = std::max(0, content_height_ - client_height);
+        scroll_offset_ = std::clamp(requested_offset, 0, maximum);
+        SCROLLINFO scroll_info{sizeof(SCROLLINFO), SIF_POS, 0, 0, 0, scroll_offset_, 0};
+        SetScrollInfo(window_, SB_VERT, &scroll_info, TRUE);
+        layout_scrolled_children();
+    }
+    void scroll_vertical(WPARAM wparam) {
+        RECT client{};
+        GetClientRect(window_, &client);
+        int requested = scroll_offset_;
+        switch (LOWORD(wparam)) {
+        case SB_TOP: requested = 0; break;
+        case SB_BOTTOM: requested = content_height_; break;
+        case SB_LINEUP: requested -= 40; break;
+        case SB_LINEDOWN: requested += 40; break;
+        case SB_PAGEUP: requested -= std::max(40, static_cast<int>(client.bottom) * 3 / 4); break;
+        case SB_PAGEDOWN: requested += std::max(40, static_cast<int>(client.bottom) * 3 / 4); break;
+        case SB_THUMBPOSITION:
+        case SB_THUMBTRACK: {
+            SCROLLINFO scroll_info{sizeof(SCROLLINFO), SIF_TRACKPOS};
+            GetScrollInfo(window_, SB_VERT, &scroll_info);
+            requested = scroll_info.nTrackPos;
+            break;
+        }
+        default: return;
+        }
+        scroll_to(requested);
+    }
     const UiStrings& current_text() const { return ui_strings(ui_language(settings_.language)); }
     void apply_language() {
         const auto& text = current_text();
@@ -1327,6 +1404,7 @@ private:
         auto* self = reinterpret_cast<SettingsPropertyPage*>(GetWindowLongPtrW(window, GWLP_USERDATA));
         if (message == WM_INITDIALOG) {
             self = reinterpret_cast<SettingsPropertyPage*>(lparam);
+            if (!self) return TRUE;
             SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
             self->window_ = window;
             self->create_controls();
@@ -1349,6 +1427,18 @@ private:
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
             EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
             delete result;
+            return TRUE;
+        }
+        else if (message == WM_SIZE && self) {
+            self->update_vertical_scroll();
+            return TRUE;
+        }
+        else if (message == WM_VSCROLL && self && lparam == 0) {
+            self->scroll_vertical(wparam);
+            return TRUE;
+        }
+        else if (message == WM_MOUSEWHEEL && self) {
+            self->scroll_to(self->scroll_offset_ - GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA * 80);
             return TRUE;
         }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {
@@ -1379,6 +1469,9 @@ private:
     bool current_command_tested_ = false;
     std::wstring tested_signature_;
     std::thread probe_thread_;
+    std::vector<ChildPosition> child_positions_;
+    int content_height_ = 0;
+    int scroll_offset_ = 0;
 };
 
 class Factory final : public IClassFactory {
