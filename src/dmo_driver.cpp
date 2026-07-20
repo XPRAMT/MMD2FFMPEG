@@ -352,7 +352,7 @@ std::wstring decode_process_output(const std::vector<char>& bytes) {
     return trim(result);
 }
 
-struct ProbeResult { bool success; std::wstring message; };
+struct ProbeResult { bool success; std::wstring message; std::wstring signature; };
 
 bool test_encoder(const Settings& settings, std::wstring& error_message) {
     const auto ffmpeg_path = resolve_executable(settings.ffmpeg);
@@ -418,12 +418,23 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     return true;
 }
 
-std::wstring capability_key(const Settings& settings) {
+std::wstring command_test_signature(const Settings& settings) {
     const auto ffmpeg_path = resolve_executable(settings.ffmpeg);
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
-    return L"v2-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
-           settings.codec + L"|" + std::to_wstring(settings.bit_depth);
+    const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
+    return L"v3-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+           settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + arguments;
+}
+
+std::wstring capability_key(const Settings& settings) {
+    const auto signature = command_test_signature(settings);
+    std::uint64_t hash = 1469598103934665603ull;
+    for (const wchar_t character : signature) {
+        hash ^= static_cast<std::uint64_t>(character);
+        hash *= 1099511628211ull;
+    }
+    return L"command-" + std::to_wstring(hash);
 }
 
 bool load_cached_probe(const Settings& settings, ProbeResult& result) {
@@ -440,6 +451,7 @@ bool load_cached_probe(const Settings& settings, ProbeResult& result) {
         const auto value = line.substr(key.size());
         result.success = value.rfind(L"1|", 0) == 0;
         result.message = value.size() > 2 ? value.substr(2) : (result.success ? L"Available" : L"Unavailable");
+        result.signature = command_test_signature(settings);
         found = true;
     }
     return found;
@@ -960,7 +972,7 @@ public:
         info->pszTitle = static_cast<LPOLESTR>(CoTaskMemAlloc(bytes));
         if (!info->pszTitle) return E_OUTOFMEMORY;
         CopyMemory(info->pszTitle, title, bytes);
-        info->size = {520, 420};
+        info->size = {520, 390};
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetObjects(ULONG, IUnknown**) override { return S_OK; }
@@ -986,11 +998,16 @@ public:
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
         candidate.video_args = edit_text(ID_COMMAND);
-        std::wstring test_error;
-        if (!test_encoder(candidate, test_error)) {
-            MessageBoxW(window_, (L"The encoder test failed. Settings were not saved.\n\n" + test_error).c_str(),
-                        L"MMD2FFMPEG Encoder Test", MB_OK | MB_ICONERROR);
-            return E_FAIL;
+        const auto signature = command_test_signature(candidate);
+        if (!current_command_tested_ || tested_signature_ != signature) {
+            std::wstring test_error;
+            if (!test_encoder(candidate, test_error)) {
+                MessageBoxW(window_, (L"The encoder test failed. Settings were not saved.\n\n" + test_error).c_str(),
+                            L"MMD2FFMPEG Encoder Test", MB_OK | MB_ICONERROR);
+                return E_FAIL;
+            }
+            current_command_tested_ = true;
+            tested_signature_ = signature;
         }
         settings_ = std::move(candidate);
         save_settings(settings_); dirty_ = false;
@@ -1078,7 +1095,7 @@ private:
         if (probe_thread_.joinable()) probe_thread_.join();
         sync_structured_settings();
         Settings candidate = settings_;
-        candidate.video_args = encoding_arguments(candidate);
+        candidate.video_args = edit_text(ID_COMMAND);
         ProbeResult cached{};
         if (!force && load_cached_probe(candidate, cached)) {
             auto* result = new ProbeResult(std::move(cached));
@@ -1092,7 +1109,7 @@ private:
         probe_thread_ = std::thread([this, target, candidate]() {
             std::wstring message;
             const bool success = test_encoder(candidate, message);
-            auto* result = new ProbeResult{success, success ? L"Available" : message};
+            auto* result = new ProbeResult{success, success ? L"Available" : message, command_test_signature(candidate)};
             save_cached_probe(candidate, *result);
             if (alive_ && IsWindow(target)) PostMessageW(target, WM_APP + 42, 0, reinterpret_cast<LPARAM>(result));
             else delete result;
@@ -1136,6 +1153,8 @@ private:
     }
     void changed(int id) {
         dirty_ = true;
+        current_command_tested_ = false;
+        tested_signature_.clear();
         if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
         update_controls();
         if (id != ID_COMMAND) {
@@ -1145,8 +1164,8 @@ private:
             update_command_display();
             updating_command_ = false;
         }
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: not tested");
         if (id == ID_BACKEND || id == ID_CODEC || id == ID_DEPTH) {
-            SetWindowTextW(GetDlgItem(window_, ID_STATUS), L"Encoder status: not tested");
             if (!probe_running_) start_probe();
         }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
@@ -1161,6 +1180,11 @@ private:
             auto* result = reinterpret_cast<ProbeResult*>(lparam);
             self->probe_running_ = false;
             self->probe_available_ = result->success;
+            self->sync_structured_settings();
+            Settings current = self->settings_;
+            current.video_args = self->edit_text(ID_COMMAND);
+            self->current_command_tested_ = result->success && result->signature == command_test_signature(current);
+            self->tested_signature_ = self->current_command_tested_ ? result->signature : L"";
             std::wstring status = result->success ? L"Encoder status: Available" : L"Encoder status: Unavailable - " + result->message;
             if (status.size() > 180) status.resize(180);
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
@@ -1183,6 +1207,8 @@ private:
     std::atomic<bool> alive_{true};
     bool probe_running_ = false;
     bool probe_available_ = false;
+    bool current_command_tested_ = false;
+    std::wstring tested_signature_;
     std::thread probe_thread_;
 };
 
