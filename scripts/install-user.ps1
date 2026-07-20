@@ -2,14 +2,20 @@
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dll = Join-Path $projectRoot 'build\mmd2ffmpeg.dll'
+$dmoDll = Join-Path $projectRoot 'build\mmd2ffmpeg_dmo.dll'
 if (-not (Test-Path -LiteralPath $dll)) {
     throw "Build output does not exist: $dll"
 }
+if (-not (Test-Path -LiteralPath $dmoDll)) {
+    throw "DMO build output does not exist: $dmoDll"
+}
 $installDir = Join-Path $env:LOCALAPPDATA 'MMD2FFMPEG'
 $installedDll = Join-Path $installDir 'mmd2ffmpeg.dll'
+$installedDmoDll = Join-Path $installDir 'mmd2ffmpeg_dmo.dll'
 $config = Join-Path $installDir 'config.ini'
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Copy-Item -LiteralPath $dll -Destination $installedDll -Force
+Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
 if (-not (Test-Path -LiteralPath $config)) {
     $defaultConfig = @'
 ffmpeg=C:\Program Files\Hybrid\64bit\ffmpeg.exe
@@ -22,7 +28,33 @@ video_args=-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -movflags +fasts
 $driversKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Drivers32'
 New-Item -Path $driversKey -Force | Out-Null
 New-ItemProperty -Path $driversKey -Name 'vidc.M2FF' -Value $installedDll -PropertyType String -Force | Out-Null
+$classIdBraced = '{C42D995C-3D1B-4E44-A96B-767B6C2A4646}'
+$classIdBare = 'C42D995C-3D1B-4E44-A96B-767B6C2A4646'
+$classKey = "HKCU:\Software\Classes\CLSID\$classIdBraced"
+$serverKey = Join-Path $classKey 'InprocServer32'
+New-Item -Path $serverKey -Force | Out-Null
+Set-Item -Path $classKey -Value 'MMD2FFMPEG DMO Encoder'
+Set-Item -Path $serverKey -Value $installedDmoDll
+New-ItemProperty -Path $serverKey -Name 'ThreadingModel' -Value 'Both' -PropertyType String -Force | Out-Null
+
+$oldMediaObjectKey = "HKCU:\Software\Classes\DirectShow\MediaObjects\$classIdBraced"
+if (Test-Path -LiteralPath $oldMediaObjectKey) { Remove-Item -LiteralPath $oldMediaObjectKey -Recurse -Force }
+$mediaObjectKey = "HKCU:\Software\Classes\DirectShow\MediaObjects\$classIdBare"
+New-Item -Path $mediaObjectKey -Force | Out-Null
+Set-Item -Path $mediaObjectKey -Value 'MMD2FFMPEG DMO Encoder'
+$videoMajor = [Guid]'73646976-0000-0010-8000-00AA00389B71'
+$rgb24 = [Guid]'e436eb7d-524f-11ce-9f53-0020af0ba770'
+$rgb32 = [Guid]'e436eb7e-524f-11ce-9f53-0020af0ba770'
+$m2ff = [Guid]'4646324d-0000-0010-8000-00aa00389b71'
+[byte[]]$inputTypes = $videoMajor.ToByteArray() + $rgb32.ToByteArray() + $videoMajor.ToByteArray() + $rgb24.ToByteArray()
+[byte[]]$outputTypes = $videoMajor.ToByteArray() + $m2ff.ToByteArray()
+New-ItemProperty -Path $mediaObjectKey -Name 'InputTypes' -Value $inputTypes -PropertyType Binary -Force | Out-Null
+New-ItemProperty -Path $mediaObjectKey -Name 'OutputTypes' -Value $outputTypes -PropertyType Binary -Force | Out-Null
+$oldCategoryKey = "HKCU:\Software\Classes\DirectShow\MediaObjects\Categories\33d9a760-90c8-11d0-bd43-00a0c911ce86\$classIdBraced"
+if (Test-Path -LiteralPath $oldCategoryKey) { Remove-Item -LiteralPath $oldCategoryKey -Recurse -Force }
+$categoryKey = "HKCU:\Software\Classes\DirectShow\MediaObjects\Categories\33d9a760-90c8-11d0-bd43-00a0c911ce86\$classIdBare"
+New-Item -Path $categoryKey -Force | Out-Null
 Write-Host "Installed x64 VFW codec: $installedDll"
+Write-Host "Installed x64 DMO encoder: $installedDmoDll"
 Write-Host "Configuration: $config"
 Write-Host 'Restart MMD if it was already open; no Windows reboot is required.'
-

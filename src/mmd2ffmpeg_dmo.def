@@ -1,0 +1,5 @@
+LIBRARY mmd2ffmpeg_dmo
+EXPORTS
+    DllCanUnloadNow PRIVATE
+    DllGetClassObject PRIVATE
+
