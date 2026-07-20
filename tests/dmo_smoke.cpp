@@ -8,6 +8,8 @@
 namespace {
 constexpr GUID CLSID_MMD2FFMPEG =
     {0xc42d995c, 0x3d1b, 0x4e44, {0xa9, 0x6b, 0x76, 0x7b, 0x6c, 0x2a, 0x46, 0x46}};
+constexpr GUID MEDIASUBTYPE_M2FF =
+    {0x4646324d, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
 void free_type(DMO_MEDIA_TYPE& type) {
     if (type.cbFormat && type.pbFormat) CoTaskMemFree(type.pbFormat);
@@ -67,8 +69,9 @@ int wmain() {
 
     DMO_MEDIA_TYPE output{};
     result = object->GetOutputType(0, 0, &output);
-    if (FAILED(result) || output.subtype != input.subtype || output.lSampleSize != input.lSampleSize) {
-        std::wcerr << L"Output is not a complete RGB passthrough media type.\n";
+    if (FAILED(result) || output.subtype != MEDIASUBTYPE_M2FF || output.bFixedSizeSamples ||
+        output.lSampleSize != 0 || output.cbFormat != sizeof(VIDEOINFOHEADER) + 16) {
+        std::wcerr << L"Output is not a complete variable-size compressed media type.\n";
         free_type(output); free_type(input); object->Release(); CoUninitialize(); return 6;
     }
     result = object->SetOutputType(0, &output, DMO_SET_TYPEF_TEST_ONLY);
@@ -80,7 +83,8 @@ int wmain() {
     DWORD output_size = 0, alignment = 0;
     result = object->SetOutputType(0, &output, 0);
     if (SUCCEEDED(result)) result = object->GetOutputSizeInfo(0, &output_size, &alignment);
-    const bool output_size_valid = SUCCEEDED(result) && output_size == output.lSampleSize && alignment == 1;
+    const auto* video = reinterpret_cast<const VIDEOINFOHEADER*>(output.pbFormat);
+    const bool output_size_valid = SUCCEEDED(result) && output_size == video->bmiHeader.biSizeImage && alignment == 1;
     free_type(output); free_type(input); object->Release(); CoUninitialize();
     if (!output_size_valid) {
         std::wcerr << L"Output buffer contract does not match the media type.\n"; return 8;

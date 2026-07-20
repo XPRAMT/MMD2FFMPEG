@@ -46,7 +46,8 @@ $videoMajor = [Guid]'73646976-0000-0010-8000-00AA00389B71'
 $rgb24 = [Guid]'e436eb7d-524f-11ce-9f53-0020af0ba770'
 $rgb32 = [Guid]'e436eb7e-524f-11ce-9f53-0020af0ba770'
 [byte[]]$inputTypes = $videoMajor.ToByteArray() + $rgb32.ToByteArray() + $videoMajor.ToByteArray() + $rgb24.ToByteArray()
-[byte[]]$outputTypes = $videoMajor.ToByteArray() + $rgb32.ToByteArray() + $videoMajor.ToByteArray() + $rgb24.ToByteArray()
+$m2ff = [Guid]'4646324d-0000-0010-8000-00aa00389b71'
+[byte[]]$outputTypes = $videoMajor.ToByteArray() + $m2ff.ToByteArray()
 New-ItemProperty -Path $mediaObjectKey -Name 'InputTypes' -Value $inputTypes -PropertyType Binary -Force | Out-Null
 New-ItemProperty -Path $mediaObjectKey -Name 'OutputTypes' -Value $outputTypes -PropertyType Binary -Force | Out-Null
 $oldCategoryKey = "HKCU:\Software\Classes\DirectShow\MediaObjects\Categories\33d9a760-90c8-11d0-bd43-00a0c911ce86\$classIdBraced"
