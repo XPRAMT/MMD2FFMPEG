@@ -229,6 +229,22 @@ bool is_valid_config(const Config& config) {
     return is_existing_file(config.ntleas_path) && is_existing_file(config.mmd_path);
 }
 
+void populate_same_directory_paths(Config& config) {
+    const std::wstring launcher = get_module_path();
+    if (launcher.empty()) {
+        return;
+    }
+    const std::filesystem::path directory = std::filesystem::path(launcher).parent_path();
+    const std::wstring ntleas = (directory / L"ntleas.exe").wstring();
+    const std::wstring mmd = (directory / L"MikuMikuDance.exe").wstring();
+    if (!is_existing_file(config.ntleas_path) && is_existing_file(ntleas)) {
+        config.ntleas_path = ntleas;
+    }
+    if (!is_existing_file(config.mmd_path) && is_existing_file(mmd)) {
+        config.mmd_path = mmd;
+    }
+}
+
 std::wstring read_window_text(HWND window) {
     const int length = GetWindowTextLengthW(window);
     std::wstring value(static_cast<size_t>(length) + 1, L'\0');
@@ -587,6 +603,8 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
 }
 
 bool show_setup_window(Config& config, bool& register_pmm) {
+    populate_same_directory_paths(config);
+
     WNDCLASSW window_class{};
     window_class.lpfnWndProc = setup_window_proc;
     window_class.hInstance = GetModuleHandleW(nullptr);

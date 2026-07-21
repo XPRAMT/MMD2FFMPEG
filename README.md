@@ -102,7 +102,7 @@ ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
 ```
 
 1. Run `MMDLocaleLauncher.exe` from the extracted Release package. It is not copied by `install-user.bat`; keep the Release folder in a writable permanent location.
-2. On its first run, select the x64 `ntleas.exe` and `MikuMikuDance.exe` paths, then save. The paths are stored in `config.ini` beside the `MMDLocaleLauncher.exe` that is being run.
+2. On its first run, the launcher fills each path only when it finds `ntleas.exe` or `MikuMikuDance.exe` beside itself. Otherwise, select the two executable paths, then save. It never searches other folders. The paths are stored in `config.ini` beside the `MMDLocaleLauncher.exe` that is being run.
 3. After setup, double-clicking `MMDLocaleLauncher.exe` starts MMD through ntleas. Opening a `.pmm` through the launcher passes that PMM to MMD using ntleas's documented `A` application-argument option.
 4. Select **Register and set as the default opener for .pmm** during setup to add the launcher to Windows. Windows displays its own default-app confirmation UI; the launcher never silently overrides the user's file association.
 
