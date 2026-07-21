@@ -19,20 +19,6 @@ MMD2FFMPEG is a 64-bit DirectX Media Object (DMO) encoder for MikuMikuDance 9.32
 - Includes Traditional Chinese, Simplified Chinese, Japanese, English, and system-default UI languages.
 - Writes per-export diagnostics under `%LOCALAPPDATA%\MMD2FFMPEG\logs`, including FFmpeg version, input frames, measured input FPS, elapsed time, exit code, and output size.
 
-## Audio muxing
-
-The **Audio** tab controls what happens after video encoding finishes:
-
-| Setting | Behavior |
-| --- | --- |
-| FLAC | Losslessly encodes PCM audio embedded in the AVI as FLAC and muxes it into the MKV. |
-| WAV | Muxes PCM audio embedded in the AVI into the MKV. |
-| None | Does not mux audio. |
-| Original | Keeps the source sample rate and bit depth. |
-| Hi-Res | When the source is below 48 kHz, uses twice the source sample rate and 24-bit depth for bilibili Hi-Res detection. |
-
-For MMD to place audio in the AVI, enable its WAV/audio output and export starting from **frame 0**. If the export begins later, the AVI exported by MMD contains no audio, so there is nothing for MMD2FFMPEG to mux. The AVI is deleted only after successful video-only completion or successful audio muxing; it is retained when muxing fails for diagnosis.
-
 ## Requirements
 
 - MikuMikuDance 9.32 x64.
@@ -117,8 +103,21 @@ This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`.
 <img src="imgs/MMD2FFMPEG詳細設定介面_EN.jpg" alt="MMD2FFMPEG encoder settings (English)">
 
 1. Save or apply only after the test passes.
-2. If audio is required, enable MMD WAV/audio output and start export from frame **0**.
-3. Start AVI output. The final MKV is written beside the selected AVI path; MMD's placeholder AVI is deleted automatically after successful video-only output or audio muxing.
+2. Start AVI output. The final MKV is written beside the selected AVI path; MMD's placeholder AVI is deleted automatically after successful video-only output or audio muxing.
+
+## Audio muxing
+
+The **Audio** tab controls what happens after video encoding finishes:
+
+| Setting | Behavior |
+| --- | --- |
+| FLAC | Losslessly encodes PCM audio embedded in the AVI as FLAC and muxes it into the MKV. |
+| WAV | Muxes PCM audio embedded in the AVI into the MKV. |
+| None | Does not mux audio. |
+| Original | Keeps the source sample rate and bit depth. |
+| Hi-Res | When the source is below 48 kHz, uses twice the source sample rate and 24-bit depth for bilibili Hi-Res detection. |
+
+For MMD to place audio in the AVI, select **Include WAV** in MMD's AVI output settings and export starting from **frame 0**. If the export begins later, the AVI exported by MMD contains no audio, so there is nothing for MMD2FFMPEG to mux. The AVI is deleted only after successful video-only completion or successful audio muxing; it is retained when muxing fails for diagnosis.
 
 ## Updating and uninstalling
 
