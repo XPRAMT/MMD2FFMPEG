@@ -61,13 +61,13 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 | 檔案 | 功能 |
 | --- | --- |
-| `install-user.bat` | 建議使用的一鍵安裝器；啟動 `install-user.ps1`，不會變更系統的執行原則。 |
+| `install-user.bat` | 建議使用的一鍵安裝器；啟動 `install-user.ps1`。 |
 | `install-user.ps1` | 將執行檔複製到目前使用者的本機 MMD2FFMPEG 資料夾，遷移相容設定，並為目前使用者註冊 DMO。 |
-| `uninstall-user.bat` | 建議使用的一鍵解除安裝器；啟動 `uninstall-user.ps1`，不會變更系統的執行原則。 |
+| `uninstall-user.bat` | 建議使用的一鍵解除安裝器；啟動 `uninstall-user.ps1`。 |
 | `uninstall-user.ps1` | 移除目前使用者的 DMO 註冊。執行檔、設定與 log 會刻意保留，方便手動備份或刪除。 |
 | `mmd2ffmpeg_dmo.dll` | MMD 可見的 DirectX Media Object 編碼器；接收 MMD 影格並串流給 FFmpeg 建立 MKV。 |
 | `mmd2ffmpeg_cleanup.exe` | 影片編碼成功後執行，等待 MMD 釋放 AVI；若已啟用音訊，會將 AVI 內含音訊合併進 MKV，接著刪除佔位 AVI，並將結果寫入輸出 log。 |
-| `MMDLocaleLauncher.exe` | 選用的可攜式 MMD 啟動器；透過 ntleas 以日語 CP932 設定啟動 MMD，並可註冊為 `.pmm` 的開啟程式。`install-user` 不會安裝它，請保留在可寫入的資料夾。`ntleas.exe` 本身不會隨 Release 內附。 |
+| `MMDLocaleLauncher.exe` | 選用的可攜式 MMD 啟動器；透過 ntleas 以日語 CP932 設定啟動 MMD，並可註冊為 `.pmm` 的開啟程式。 |
 
 ### 從原始碼建置
 
@@ -92,29 +92,6 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 此命令會建立 `release\MMD2FFMPEG-x64\` 與 `release\MMD2FFMPEG-x64.zip`。
 
 `build.ps1` 每次成功建置後都會自動執行此產包步驟。
-
-## 選用：MMD Locale Launcher
-
-`MMDLocaleLauncher.exe` 適用於非日語 Windows 中必須透過 ntleas 才能避免 MMD 亂碼的情況。它使用的 ntleas 日語設定等同於：
-
-```text
-ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
-```
-
-1. 從解壓縮後的 Release 資料夾執行 `MMDLocaleLauncher.exe`。`install-user.bat` 不會複製它，請將 Release 資料夾保留在可寫入的固定位置。
-2. 首次啟動時，launcher 只會在自身同資料夾找到 `ntleas.exe` 或 `MikuMikuDance.exe` 時填入該路徑；否則請分別選擇兩個執行檔後儲存，絕不搜尋其它資料夾。路徑會儲存至目前執行的 `MMDLocaleLauncher.exe` 同資料夾內 `MMDLocaleLauncherConfig.ini`。
-3. 完成設定後，直接雙擊 `MMDLocaleLauncher.exe` 即會透過 ntleas 啟動 MMD。經由 launcher 開啟 `.pmm` 時，會使用 ntleas 已定義的 `A` 應用程式參數將 PMM 路徑傳給 MMD。
-4. 在設定頁勾選 **註冊並設定為 .pmm 的預設開啟程式**，可將 launcher 加入 Windows。Windows 會自行顯示預設應用程式確認畫面；launcher 不會在背景強制覆寫使用者的檔案關聯。
-
-日後要修改兩個執行檔路徑時，執行：
-
-```text
-MMDLocaleLauncher.exe /settings
-```
-
-這是 CP932 相容啟動器，不是將 MMD 完整轉換為 UTF-8。若路徑含 CP932 無法表示的字元，仍可能受 MMD 本身限制。
-
-設定視窗採用 Per-Monitor V2 DPI 感知的深色主題。launcher EXE 會內嵌 MMD 原始圖示群組最大的 128 像素版本；視窗圖示與註冊後的 `.pmm` 檔案圖示也會直接讀取所選 `MikuMikuDance.exe`。
 
 ## 在 MMD 中使用
 
@@ -182,3 +159,17 @@ MMDLocaleLauncher.exe /settings
 - MMD 輸出固定為 SDR BT.709，尚未實作 HDR 輸出。
 - 硬體編碼器是否可用取決於 FFmpeg 編譯版本、顯示卡與驅動程式；變更編碼器設定後請使用 **測試編碼** 確認。
 - 編碼器會從 `PATH` 啟動 `ffmpeg.exe`；儲存自訂 FFmpeg 參數前請先確認內容。
+
+## 選用：MMD Locale Launcher
+
+`MMDLocaleLauncher.exe` 適用於非日語 Windows 中必須透過 ntleas 才能避免 MMD 亂碼的情況。它使用的 ntleas 日語設定等同於：
+
+```text
+ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
+```
+
+1. 從解壓縮後的 Release 資料夾將 `MMDLocaleLauncher.exe`複製到MikuMikuDance.exe相同目錄。
+2. 首次啟動時，launcher 只會在自身同資料夾搜尋 `ntleas.exe` 或 `MikuMikuDance.exe`，否則請分別選擇兩個執行檔後儲存，路徑會儲存至目前執行的 `MMDLocaleLauncher.exe` 同資料夾內的`MMDLocaleLauncherConfig.ini`。
+3. 完成設定後，直接雙擊 `MMDLocaleLauncher.exe` 即會透過 ntleas 啟動 MMD。經由 launcher 開啟 `.pmm` 時，會使用 ntleas 已定義的 `A` 應用程式參數將 PMM 路徑傳給 MMD。
+
+這是 CP932 相容啟動器，不是將 MMD 完整轉換為 UTF-8。若路徑含 CP932 無法表示的字元，仍可能受 MMD 本身限制。

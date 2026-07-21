@@ -61,13 +61,13 @@ The installer registers only for the current Windows user and places the runtime
 
 | File | Purpose |
 | --- | --- |
-| `install-user.bat` | Recommended one-click installer. Starts `install-user.ps1` without changing the system execution policy. |
+| `install-user.bat` | Recommended one-click installer. Starts `install-user.ps1`. |
 | `install-user.ps1` | Copies the runtime files to the current user's local MMD2FFMPEG folder, migrates compatible configuration, and registers the DMO for the current user. |
-| `uninstall-user.bat` | Recommended one-click uninstaller. Starts `uninstall-user.ps1` without changing the system execution policy. |
+| `uninstall-user.bat` | Recommended one-click uninstaller. Starts `uninstall-user.ps1`. |
 | `uninstall-user.ps1` | Removes the current user's DMO registration. Runtime files, configuration, and logs are deliberately retained for manual backup or removal. |
 | `mmd2ffmpeg_dmo.dll` | The MMD-visible DirectX Media Object encoder. It receives MMD frames and streams them to FFmpeg to create the MKV. |
 | `mmd2ffmpeg_cleanup.exe` | Runs after successful video encoding. It waits for MMD to release the AVI, muxes embedded audio into MKV when enabled, then deletes the placeholder AVI and records the result in the export log. |
-| `MMDLocaleLauncher.exe` | Optional portable MMD launcher. It starts MMD via ntleas using Japanese CP932 settings and can be registered as a `.pmm` opener. It is not installed by `install-user`; keep it in a writable folder. `ntleas.exe` itself is not bundled. |
+| `MMDLocaleLauncher.exe` | Optional portable MMD launcher. It starts MMD via ntleas using Japanese CP932 settings and can be registered as a `.pmm` opener. |
 
 ### Build from source
 
@@ -92,29 +92,6 @@ Maintainers can create the GitHub Release asset after a successful build:
 This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`.
 
 `build.ps1` runs this packaging step automatically after every successful build.
-
-## Optional MMD Locale Launcher
-
-`MMDLocaleLauncher.exe` is for non-Japanese Windows installations where MMD needs ntleas to avoid mojibake. It uses ntleas's Japanese profile equivalent to:
-
-```text
-ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
-```
-
-1. Run `MMDLocaleLauncher.exe` from the extracted Release package. It is not copied by `install-user.bat`; keep the Release folder in a writable permanent location.
-2. On its first run, the launcher fills each path only when it finds `ntleas.exe` or `MikuMikuDance.exe` beside itself. Otherwise, select the two executable paths, then save. It never searches other folders. The paths are stored in `MMDLocaleLauncherConfig.ini` beside the `MMDLocaleLauncher.exe` that is being run.
-3. After setup, double-clicking `MMDLocaleLauncher.exe` starts MMD through ntleas. Opening a `.pmm` through the launcher passes that PMM to MMD using ntleas's documented `A` application-argument option.
-4. Select **Register and set as the default opener for .pmm** during setup to add the launcher to Windows. Windows displays its own default-app confirmation UI; the launcher never silently overrides the user's file association.
-
-To change the two executable paths later, run:
-
-```text
-MMDLocaleLauncher.exe /settings
-```
-
-This is a CP932 compatibility launcher, not a full UTF-8 conversion of MMD. Paths containing characters that CP932 cannot represent may still be limited by MMD itself.
-
-Its setup window uses a per-monitor V2 DPI-aware dark theme. The launcher executable embeds the largest 128-pixel image extracted from MMD's original icon group; the setup-window icon and registered `.pmm` file icon are also read from the selected `MikuMikuDance.exe`.
 
 ## Use in MMD
 
@@ -182,3 +159,17 @@ The advanced command field exposes the editable FFmpeg video-argument section. T
 - MMD output is SDR BT.709. HDR output is not implemented.
 - Hardware encoder availability depends on the installed FFmpeg build, GPU, and driver. Use **Test encoder** after changing encoder settings.
 - The encoder launches `ffmpeg.exe` from `PATH`. Review custom FFmpeg arguments before saving them.
+
+## Optional MMD Locale Launcher
+
+`MMDLocaleLauncher.exe` is for non-Japanese Windows installations where MMD needs ntleas to avoid mojibake. It uses ntleas's Japanese profile equivalent to:
+
+```text
+ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
+```
+
+1. From the extracted Release package, copy `MMDLocaleLauncher.exe` into the same folder as `MikuMikuDance.exe`.
+2. On its first run, the launcher searches only its own folder for `ntleas.exe` or `MikuMikuDance.exe`. Otherwise, select the two executable paths, then save. The paths are stored in `MMDLocaleLauncherConfig.ini` beside the running `MMDLocaleLauncher.exe`.
+3. After setup, double-clicking `MMDLocaleLauncher.exe` starts MMD through ntleas. Opening a `.pmm` through the launcher passes that PMM to MMD using ntleas's documented `A` application-argument option.
+
+This is a CP932 compatibility launcher, not a full UTF-8 conversion of MMD. Paths containing characters that CP932 cannot represent may still be limited by MMD itself.
