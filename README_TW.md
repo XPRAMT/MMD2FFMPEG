@@ -48,7 +48,7 @@ ffmpeg -version
 
 ### 建議方式：從 GitHub Release 安裝
 
-1. 從專案的 **Releases** 頁面下載 `MMD2FFMPEG-x64.zip`。
+1. 從專案的 [Releases 頁面](https://github.com/XPRAMT/MMD2FFMPEG/releases)下載 `MMD2FFMPEG-x64.zip`。
 2. 將 ZIP 解壓縮到本機資料夾。
 3. 安裝 x64 FFmpeg，並將其資料夾加入系統或使用者 `PATH`。
 4. 完整關閉 MMD；MMD 載入 DMO DLL 時無法替換檔案。
