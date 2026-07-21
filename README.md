@@ -11,6 +11,7 @@ Audio is intentionally out of scope.
 - Appears in MMD's AVI encoder list as **MMD2FFMPEG DMO Encoder**.
 - Streams RGB24/RGB32 frames to FFmpeg through stdin; RGB32 alpha is not preserved.
 - Creates MKV output with the same name and folder as MMD's AVI target. After a successful FFmpeg encode, MMD2FFMPEG automatically removes MMD's placeholder AVI; the AVI is preserved if encoding fails.
+- Writes the MKV `date` metadata field automatically when encoding starts, using the local date in `yy-mm-dd` format.
 - Supports CPU software encoding, NVIDIA NVENC, Intel Quick Sync, and AMD AMF through FFmpeg.
 - Supports AVC, HEVC, and AV1; 8-bit and supported 10-bit output; CRF/CQ, constant QP, and target-bitrate modes.
 - Uses the frame rate chosen by MMD and marks video as BT.709.
@@ -106,10 +107,11 @@ Use **Open log** in the encoder settings to open the dynamic per-user log folder
 | Item | Location |
 | --- | --- |
 | Encoder settings | MMD: **AVI Output > Video encoder > Detailed settings** |
+| Output path | The AVI path selected in MMD; MMD2FFMPEG always changes its extension to `.mkv` |
 | Per-user configuration | `%LOCALAPPDATA%\MMD2FFMPEG\config.ini` |
 | Per-export logs | `%LOCALAPPDATA%\MMD2FFMPEG\logs` |
 
-The advanced command field exposes the editable FFmpeg video-argument section. The fixed input, color conversion, and output-container arguments remain controlled by MMD2FFMPEG.
+The advanced command field exposes the editable FFmpeg video-argument section. The fixed input, color conversion, output-container arguments, and output path remain controlled by MMD2FFMPEG. `config.ini` does not save an output path.
 
 ## Troubleshooting
 

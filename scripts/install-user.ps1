@@ -21,10 +21,8 @@ New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
 Copy-Item -LiteralPath $cleanupExe -Destination $installedCleanupExe -Force
 if (-not (Test-Path -LiteralPath $config)) {
-$defaultOutput = Join-Path ([Environment]::GetFolderPath('MyVideos')) 'mmd-output.mkv'
     $defaultConfig = @"
 ffmpeg=ffmpeg.exe
-output=$defaultOutput
 fps=30
 backend=cpu
 codec=hevc
@@ -44,6 +42,7 @@ if ($configText -match ('(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$')) 
     $configText = [regex]::Replace($configText, '(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$', 'ffmpeg=ffmpeg.exe')
     [System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
 }
+$configText = [regex]::Replace($configText, '(?m)^output=.*\r?\n?', '')
 $configText = [regex]::Replace($configText, '(?m)^follow_avi_path=.*\r?\n?', '')
 [System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
 $classIdBraced = '{C42D995C-3D1B-4E44-A96B-767B6C2A4646}'

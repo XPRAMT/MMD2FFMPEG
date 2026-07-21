@@ -44,7 +44,6 @@ HINSTANCE module_instance() {
 
 struct Settings {
     std::wstring ffmpeg = L"ffmpeg.exe";
-    std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
     std::wstring video_args;
     int fps = 30;
     std::wstring backend = L"cpu";
@@ -266,7 +265,6 @@ Settings load_settings() {
         const auto key = trim(line.substr(0, split));
         const auto value = trim(line.substr(split + 1));
         if (key == L"ffmpeg") settings.ffmpeg = value;
-        else if (key == L"output") settings.output = value;
         else if (key == L"video_args") settings.video_args = value;
         else if (key == L"fps") {
             try { settings.fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {}
@@ -310,7 +308,6 @@ void save_settings(const Settings& settings) {
     std::wofstream file(path, std::ios::trunc);
     if (!file) return;
     file << L"ffmpeg=" << settings.ffmpeg << L"\n"
-         << L"output=" << settings.output << L"\n"
          << L"fps=" << settings.fps << L"\n"
          << L"backend=" << settings.backend << L"\n"
          << L"codec=" << settings.codec << L"\n"
@@ -420,6 +417,8 @@ const wchar_t* output_pixel_format(const Settings& settings) {
     return settings.bit_depth == 10 && settings.codec != L"avc" ? L"p010le" : L"nv12";
 }
 
+std::wstring output_date_metadata();
+
 std::wstring command_prefix(const Settings& settings) {
     const auto pixel_format = output_pixel_format(settings);
     return L"\"" + settings.ffmpeg +
@@ -431,7 +430,8 @@ std::wstring command_prefix(const Settings& settings) {
 std::wstring command_suffix(const Settings& settings) {
     const auto pixel_format = output_pixel_format(settings);
     return L" -pix_fmt " + std::wstring(pixel_format) +
-           L" -colorspace bt709 -color_primaries bt709 -color_trc bt709 \"{output}\"";
+           L" -colorspace bt709 -color_primaries bt709 -color_trc bt709"
+           L" -metadata date=" + output_date_metadata() + L" \"{output}\"";
 }
 
 void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
@@ -442,14 +442,25 @@ void replace_all(std::wstring& value, const std::wstring& from, const std::wstri
     }
 }
 
-std::wstring build_ffmpeg_command(const Settings& settings, int width, int height, int bits) {
+std::wstring output_date_metadata() {
+    SYSTEMTIME time{};
+    GetLocalTime(&time);
+    std::wostringstream value;
+    value << std::setfill(L'0') << std::setw(2) << (time.wYear % 100)
+          << L'-' << std::setw(2) << time.wMonth
+          << L'-' << std::setw(2) << time.wDay;
+    return value.str();
+}
+
+std::wstring build_ffmpeg_command(const Settings& settings, int width, int height, int bits,
+                                  const std::wstring& output_path) {
     const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
     std::wstring command = command_prefix(settings) + arguments + command_suffix(settings);
     replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
     replace_all(command, L"{width}", std::to_wstring(width));
     replace_all(command, L"{height}", std::to_wstring(height));
     replace_all(command, L"{fps}", std::to_wstring(settings.fps));
-    replace_all(command, L"{output}", settings.output);
+    replace_all(command, L"{output}", output_path);
     return command;
 }
 
@@ -995,22 +1006,19 @@ private:
         settings_ = load_settings();
         if (video->AvgTimePerFrame > 0) settings_.fps = static_cast<int>((10000000LL + video->AvgTimePerFrame / 2) / video->AvgTimePerFrame);
         auto avi = current_output_avi();
-        if (!avi.empty()) {
-            avi_output_ = avi;
-            avi.replace_extension(L".mkv");
-            settings_.output = avi.wstring();
-        }
+        if (avi.empty()) return false;
+        avi_output_ = avi;
+        avi.replace_extension(L".mkv");
         const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
         if (ffmpeg_path.empty()) return false;
-        final_output_ = settings_.output;
+        final_output_ = avi;
         partial_output_ = final_output_.parent_path() /
             (final_output_.stem().wstring() + L".mmd2ffmpeg-partial-" + std::to_wstring(GetCurrentProcessId()) + final_output_.extension().wstring());
         std::error_code error;
         std::filesystem::remove(partial_output_, error);
-        settings_.output = partial_output_.wstring();
         log_path_ = make_log_path();
         prune_logs();
-        std::filesystem::create_directories(std::filesystem::path(settings_.output).parent_path(), error);
+        std::filesystem::create_directories(partial_output_.parent_path(), error);
         log_file_ = CreateFileW(log_path_.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                 nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (log_file_ == INVALID_HANDLE_VALUE) log_file_ = nullptr;
@@ -1019,7 +1027,7 @@ private:
         HANDLE read_pipe = nullptr;
         if (!CreatePipe(&read_pipe, &stdin_write_, &security, 1024 * 1024)) return false;
         SetHandleInformation(stdin_write_, HANDLE_FLAG_INHERIT, 0);
-        auto command = build_ffmpeg_command(settings_, width_, height_, bits_);
+        auto command = build_ffmpeg_command(settings_, width_, height_, bits_, partial_output_.wstring());
         std::wostringstream header;
         header << L"MMD2FFMPEG output diagnostics\r\n"
                << L"Started: " << format_local_time() << L"\r\n"
