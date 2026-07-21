@@ -1316,8 +1316,13 @@ private:
     void create_tab_controls() {
         INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES};
         InitCommonControlsEx(&common);
+        const HFONT dialog_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(window_, ID_LANGUAGE), WM_GETFONT, 0, 0));
+        const auto set_dialog_font = [&](HWND control) {
+            if (dialog_font && control) SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(dialog_font), TRUE);
+        };
         tab_ = CreateWindowExW(0, WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                8, 4, 244, 20, window_, reinterpret_cast<HMENU>(ID_TAB), module_instance(), nullptr);
+        set_dialog_font(tab_);
         TCITEMW item{}; item.mask = TCIF_TEXT;
         item.pszText = const_cast<wchar_t*>(L"影片"); TabCtrl_InsertItem(tab_, 0, &item);
         item.pszText = const_cast<wchar_t*>(L"音訊"); TabCtrl_InsertItem(tab_, 1, &item);
@@ -1341,11 +1346,14 @@ private:
         };
         audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"音訊格式", 38), make_label(ID_LABEL_AUDIO_RATE, L"取樣率", 64), make_label(ID_LABEL_AUDIO_DEPTH, L"位元深度", 90)};
         audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 36), make_combo(ID_AUDIO_RATE, 62), make_combo(ID_AUDIO_DEPTH, 88)};
+        for (HWND control : audio_labels_) set_dialog_font(control);
+        for (HWND control : audio_controls_) set_dialog_font(control);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
         add_combo(ID_AUDIO_RATE, {L"原始", L"大於等於48KHz"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
         add_combo(ID_AUDIO_DEPTH, {L"原始", L"24bit"}, settings_.audio_bit_depth == L"24" ? 1 : 0);
         settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT\r\nGitHub: github.com/XPRAMT/MMD2FFMPEG",
                                           WS_CHILD | SS_NOTIFY, 16, 38, 228, 90, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
+        set_dialog_font(settings_info_);
         switch_tab(0);
     }
     void switch_tab(int page) {
