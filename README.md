@@ -44,13 +44,26 @@ Check the FFmpeg installation before building:
 ffmpeg -version
 ```
 
+## Install FFmpeg on Windows
+
+1. Open the [official FFmpeg download page](https://ffmpeg.org/download.html). Its Windows section links to current prebuilt Windows packages.
+2. Download an x64 build, extract it to a permanent location such as `C:\FFmpeg`, and confirm that `C:\FFmpeg\bin\ffmpeg.exe` exists.
+3. Open **System Properties > Advanced > Environment Variables**. Under either **User variables** (current user) or **System variables** (all users), edit `Path`, choose **New**, and add `C:\FFmpeg\bin`.
+4. Close and reopen PowerShell, then verify the installation:
+
+   ```powershell
+   ffmpeg -version
+   ```
+
+MMD2FFMPEG runs `ffmpeg.exe` from `PATH`; do not configure a hard-coded FFmpeg path.
+
 ## Installation
 
 ### Recommended: install from a GitHub Release
 
 1. Download `MMD2FFMPEG-x64.zip` from the [Releases page](https://github.com/XPRAMT/MMD2FFMPEG/releases).
 2. Extract the ZIP to a local folder.
-3. Install an x64 FFmpeg build and add its folder to the system or user `PATH`.
+3. Install FFmpeg and add its `bin` folder to `PATH` as described above.
 4. Close MMD completely. The DMO DLL cannot be replaced while MMD has it loaded.
 5. Double-click `install-user.ps1` in the extracted folder. If `.ps1` files open in an editor on the system, right-click it and choose **Run with PowerShell**.
 6. Start MMD again. No Windows restart, administrator permission, Visual Studio, or `build.ps1` is required.
