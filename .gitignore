@@ -6,6 +6,5 @@ out/
 *.webm
 *.log
 config.local.ini
-/README.md
 /.codegraph/
 /AGENTS.md

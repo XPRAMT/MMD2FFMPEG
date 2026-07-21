@@ -47,12 +47,12 @@ struct Settings {
     std::wstring output = L"C:\\APP\\MMD\\MMD2FFMPEG\\out\\mmd-output.mkv";
     std::wstring video_args;
     int fps = 30;
-    std::wstring backend = L"nvenc";
+    std::wstring backend = L"cpu";
     std::wstring codec = L"hevc";
     int bit_depth = 10;
-    int preset = 7;
-    std::wstring rate_control = L"qp";
-    int qp = 20;
+    int preset = 6;
+    std::wstring rate_control = L"crf";
+    int qp = 18;
     int bitrate_kbps = 20000;
     std::wstring language = L"system";
     std::wstring command_template;

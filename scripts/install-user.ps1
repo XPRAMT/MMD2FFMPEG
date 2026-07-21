@@ -21,15 +21,15 @@ if (-not (Test-Path -LiteralPath $config)) {
 ffmpeg=ffmpeg.exe
 output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mkv
 fps=30
-backend=nvenc
+backend=cpu
 codec=hevc
 bit_depth=10
-preset=7
-rate_control=qp
-qp=20
+preset=6
+rate_control=crf
+qp=18
 bitrate_kbps=20000
 language=system
-video_args=-c:v hevc_nvenc -profile:v main10 -preset p7 -tune hq -rc constqp -qp 20
+video_args=-c:v libx265 -profile:v main10 -preset medium -crf 18
 '@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
 }
