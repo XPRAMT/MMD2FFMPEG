@@ -126,8 +126,9 @@ int wmain(int argument_count, wchar_t** arguments) {
         }
     }
     const RECT command_bounds = child_rect(page_window, ID_COMMAND);
-    if (tab_bounds.right != command_bounds.right) {
-        std::wcerr << L"Tab and video content do not share the common right boundary.\n";
+    if (tab_bounds.left <= 0 || tab_bounds.right != client.right - tab_bounds.left ||
+        command_bounds.right != tab_bounds.right) {
+        std::wcerr << L"Tab and full-width controls do not preserve symmetric horizontal margins.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 16;
     }
     std::array<wchar_t, 16> github_class{};

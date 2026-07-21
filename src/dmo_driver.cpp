@@ -1504,7 +1504,33 @@ private:
         }
         RECT client{};
         GetClientRect(window_, &client);
+        horizontal_margin_ = child_rect(ID_TAB).left;
         content_height_ = static_cast<int>(client.bottom);
+    }
+    RECT child_rect(int id) const {
+        RECT rectangle{};
+        HWND child = GetDlgItem(window_, id);
+        if (!child) return rectangle;
+        GetWindowRect(child, &rectangle);
+        MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&rectangle), 2);
+        return rectangle;
+    }
+    static bool is_full_width_control(int id) {
+        switch (id) {
+        case ID_TAB:
+        case ID_COMMAND_HEADING:
+        case ID_COMMAND_PREFIX:
+        case ID_COMMAND:
+        case ID_COMMAND_SUFFIX:
+        case ID_STATUS:
+        case ID_AUDIO_INTRO:
+        case ID_AUDIO_HELP:
+        case ID_SETTINGS_INFO:
+        case ID_GITHUB_LINK:
+            return true;
+        default:
+            return false;
+        }
     }
     void layout_scrolled_children() {
         RECT client{};
@@ -1512,8 +1538,10 @@ private:
         for (const auto& child : child_positions_) {
             const int left = static_cast<int>(child.rectangle.left);
             const int top = static_cast<int>(child.rectangle.top);
-            const int width = std::min(static_cast<int>(child.rectangle.right - child.rectangle.left),
-                                       std::max(1, static_cast<int>(client.right) - left));
+            const int width = is_full_width_control(GetDlgCtrlID(child.window))
+                ? std::max(1, static_cast<int>(client.right) - horizontal_margin_ - left)
+                : std::min(static_cast<int>(child.rectangle.right - child.rectangle.left),
+                           std::max(1, static_cast<int>(client.right) - left));
             SetWindowPos(child.window, nullptr, left, top - scroll_offset_,
                          width, static_cast<int>(child.rectangle.bottom - child.rectangle.top),
                          SWP_NOACTIVATE | SWP_NOZORDER);
@@ -1724,6 +1752,7 @@ private:
     std::vector<ChildPosition> child_positions_;
     int content_height_ = 0;
     int scroll_offset_ = 0;
+    int horizontal_margin_ = 0;
 };
 
 class Factory final : public IClassFactory {
