@@ -20,3 +20,5 @@ $command = '"{0}" -arch=amd64 -host_arch=amd64 && "{1}" -S "{2}" -B "{3}" -G Nin
 & $env:ComSpec /d /s /c $command
 if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
 
+& (Join-Path $PSScriptRoot 'make-release.ps1')
+if ($LASTEXITCODE -ne 0) { throw "Release packaging failed with exit code $LASTEXITCODE" }

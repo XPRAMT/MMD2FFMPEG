@@ -1,8 +1,12 @@
 ﻿$ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$dmoDll = Join-Path $projectRoot 'build\mmd2ffmpeg_dmo.dll'
-$cleanupExe = Join-Path $projectRoot 'build\mmd2ffmpeg_cleanup.exe'
+$releaseDmoDll = Join-Path $PSScriptRoot 'mmd2ffmpeg_dmo.dll'
+$releaseCleanupExe = Join-Path $PSScriptRoot 'mmd2ffmpeg_cleanup.exe'
+$buildDmoDll = Join-Path $projectRoot 'build\mmd2ffmpeg_dmo.dll'
+$buildCleanupExe = Join-Path $projectRoot 'build\mmd2ffmpeg_cleanup.exe'
+$dmoDll = if (Test-Path -LiteralPath $releaseDmoDll) { $releaseDmoDll } else { $buildDmoDll }
+$cleanupExe = if (Test-Path -LiteralPath $releaseCleanupExe) { $releaseCleanupExe } else { $buildCleanupExe }
 if (-not (Test-Path -LiteralPath $dmoDll)) {
     throw "DMO build output does not exist: $dmoDll"
 }
@@ -17,9 +21,10 @@ New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
 Copy-Item -LiteralPath $cleanupExe -Destination $installedCleanupExe -Force
 if (-not (Test-Path -LiteralPath $config)) {
-    $defaultConfig = @'
+$defaultOutput = Join-Path ([Environment]::GetFolderPath('MyVideos')) 'mmd-output.mkv'
+    $defaultConfig = @"
 ffmpeg=ffmpeg.exe
-output=C:\APP\MMD\MMD2FFMPEG\out\mmd-output.mkv
+output=$defaultOutput
 fps=30
 backend=cpu
 codec=hevc
@@ -30,7 +35,7 @@ qp=18
 bitrate_kbps=20000
 language=system
 video_args=-c:v libx265 -profile:v main10 -preset medium -crf 18
-'@
+"@
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
 }
 $configText = [System.IO.File]::ReadAllText($config)

@@ -45,21 +45,40 @@ ffmpeg -version
 
 ## Installation
 
-1. Install an x64 FFmpeg build and add its folder to the system or user `PATH`.
-2. Clone or download this repository.
-3. Install Visual Studio 2022 with the **Desktop development with C++** workload.
+### Recommended: install from a GitHub Release
+
+1. Download `MMD2FFMPEG-x64.zip` from the repository's **Releases** page.
+2. Extract the ZIP to a local folder.
+3. Install an x64 FFmpeg build and add its folder to the system or user `PATH`.
 4. Close MMD completely. The DMO DLL cannot be replaced while MMD has it loaded.
-5. Build and register the per-user DMO:
+5. Double-click `install-user.ps1` in the extracted folder. If `.ps1` files open in an editor on the system, right-click it and choose **Run with PowerShell**.
+6. Start MMD again. No Windows restart, administrator permission, Visual Studio, or `build.ps1` is required.
+
+The installer registers only for the current Windows user and places the runtime files in `%LOCALAPPDATA%\MMD2FFMPEG`.
+
+### Build from source
+
+1. Clone or download this repository.
+2. Install Visual Studio 2022 with the **Desktop development with C++** workload.
+3. Close MMD completely.
+4. Build and register the per-user DMO:
 
    ```powershell
    & 'C:\APP\MMD\MMD2FFMPEG\scripts\build.ps1'
    & 'C:\APP\MMD\MMD2FFMPEG\scripts\install-user.ps1'
    ```
-6. Start MMD again. No Windows restart or administrator permission is required.
 
-The installer registers only for the current Windows user and places the runtime files in `%LOCALAPPDATA%\MMD2FFMPEG`.
+### Creating a Release package
 
-> **Source checkout note:** `install-user.ps1` installs the already-built DLLs from `build`. It does not compile or download them, so users installing from this repository must run `build.ps1` first. A no-build end-user installation requires a separate prebuilt Release package, which is not provided yet.
+Maintainers can create the GitHub Release asset after a successful build:
+
+```powershell
+& 'C:\APP\MMD\MMD2FFMPEG\scripts\make-release.ps1'
+```
+
+This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`. Upload the ZIP as the GitHub Release asset.
+
+`build.ps1` runs this packaging step automatically after every successful build.
 
 ## Use in MMD
 
@@ -74,7 +93,7 @@ Use **Open log** in the encoder settings to open the dynamic per-user log folder
 ## Updating and uninstalling
 
 - **Update:** Close MMD, run the build command, then run `install-user.ps1` again. Existing `config.ini` is preserved.
-- **Uninstall:** Close MMD and run:
+- **Uninstall:** Close MMD and run `uninstall-user.ps1` in the Release package, or run from source:
 
   ```powershell
   & 'C:\APP\MMD\MMD2FFMPEG\scripts\uninstall-user.ps1'

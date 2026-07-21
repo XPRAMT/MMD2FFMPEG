@@ -45,21 +45,40 @@ ffmpeg -version
 
 ## 安裝
 
-1. 安裝 x64 FFmpeg，並將其資料夾加入系統或使用者 `PATH`。
-2. Clone 或下載本專案。
-3. 安裝 Visual Studio 2022，並選取 **Desktop development with C++** 工作負載。
+### 建議方式：從 GitHub Release 安裝
+
+1. 從專案的 **Releases** 頁面下載 `MMD2FFMPEG-x64.zip`。
+2. 將 ZIP 解壓縮到本機資料夾。
+3. 安裝 x64 FFmpeg，並將其資料夾加入系統或使用者 `PATH`。
 4. 完整關閉 MMD；MMD 載入 DMO DLL 時無法替換檔案。
-5. 建置並註冊目前使用者的 DMO：
+5. 雙擊解壓縮資料夾內的 `install-user.ps1`。若系統將 `.ps1` 開啟為編輯器，請右鍵選擇 **使用 PowerShell 執行**。
+6. 再次開啟 MMD。無需重新啟動 Windows、不需要系統管理員權限、Visual Studio 或 `build.ps1`。
+
+安裝器只會為目前 Windows 使用者註冊，執行檔會放在 `%LOCALAPPDATA%\MMD2FFMPEG`。
+
+### 從原始碼建置
+
+1. Clone 或下載本專案。
+2. 安裝 Visual Studio 2022，並選取 **Desktop development with C++** 工作負載。
+3. 完整關閉 MMD。
+4. 建置並註冊目前使用者的 DMO：
 
    ```powershell
    & 'C:\APP\MMD\MMD2FFMPEG\scripts\build.ps1'
    & 'C:\APP\MMD\MMD2FFMPEG\scripts\install-user.ps1'
    ```
-6. 再次開啟 MMD。無需重新啟動 Windows，也不需要系統管理員權限。
 
-安裝器只會為目前 Windows 使用者註冊，執行檔會放在 `%LOCALAPPDATA%\MMD2FFMPEG`。
+### 建立 Release 安裝包
 
-> **原始碼專案注意事項：** `install-user.ps1` 只會安裝 `build` 中已經建置好的 DLL，不會自行編譯或下載檔案。因此從此 repository 安裝時仍須先執行 `build.ps1`。若要讓一般使用者免建置安裝，必須另外提供含預編譯檔案的 Release 安裝包；目前尚未提供。
+維護者在建置成功後可執行：
+
+```powershell
+& 'C:\APP\MMD\MMD2FFMPEG\scripts\make-release.ps1'
+```
+
+此命令會建立 `release\MMD2FFMPEG-x64\` 與 `release\MMD2FFMPEG-x64.zip`。將 ZIP 上傳為 GitHub Release asset 即可。
+
+`build.ps1` 每次成功建置後都會自動執行此產包步驟。
 
 ## 在 MMD 中使用
 
@@ -74,7 +93,7 @@ ffmpeg -version
 ## 更新與解除安裝
 
 - **更新：** 關閉 MMD，重新執行建置命令，再執行一次 `install-user.ps1`。既有的 `config.ini` 會保留。
-- **解除安裝：** 關閉 MMD 後執行：
+- **解除安裝：** 關閉 MMD 後，執行 Release 包中的 `uninstall-user.ps1`，或從原始碼執行：
 
   ```powershell
   & 'C:\APP\MMD\MMD2FFMPEG\scripts\uninstall-user.ps1'

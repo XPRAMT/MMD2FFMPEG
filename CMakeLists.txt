@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 project(MMD2FFMPEG LANGUAGES CXX)
 
+# Release assets are installed by end users without Visual Studio, so link the
+# Microsoft C/C++ runtime statically rather than requiring a separate redist.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 add_library(mmd2ffmpeg_dmo SHARED
     src/dmo_driver.cpp
     src/mmd2ffmpeg_dmo.rc
