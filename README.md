@@ -95,11 +95,11 @@ This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`. Upload 
 1. Select **File > AVI Output** and choose the desired AVI save path.
 2. In **Video encoder**, select **MMD2FFMPEG DMO Encoder**.
 
-<img src="imgs/MMD編碼選擇介面_EN.png" alt="MMD AVI output encoder selection" width="720">
+<img src="imgs/MMD編碼選擇介面_EN.png" alt="MMD AVI output encoder selection" width="500">
 
 3. Open **Detailed settings**, configure the encoder, and use **Test encoder**.
 
-<img src="imgs/MMD2FFMPEG詳細設定介面_EN.png" alt="MMD2FFMPEG encoder settings (English)" width="720">
+<img src="imgs/MMD2FFMPEG詳細設定介面_EN.png" alt="MMD2FFMPEG encoder settings (English)" width="500">
 
 4. Save or apply only after the test passes.
 5. Start AVI output. The final MKV is written beside the selected AVI path; MMD's placeholder AVI is deleted automatically after successful encoding.
