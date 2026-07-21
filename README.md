@@ -11,7 +11,7 @@ Audio is intentionally out of scope.
 - Appears in MMD's AVI encoder list as **MMD2FFMPEG DMO Encoder**.
 - Streams RGB24/RGB32 frames to FFmpeg through stdin; RGB32 alpha is not preserved.
 - Creates MKV output with the same name and folder as MMD's AVI target. After a successful FFmpeg encode, MMD2FFMPEG automatically removes MMD's placeholder AVI; the AVI is preserved if encoding fails.
-- Writes the MKV `date` metadata field automatically when encoding starts, using the local date in `yy-mm-dd` format.
+- Writes the MKV `DATE_RECORDED` metadata field automatically when encoding starts, using the local date in `yyyy-M-d` format.
 - Supports CPU software encoding, NVIDIA NVENC, Intel Quick Sync, and AMD AMF through FFmpeg.
 - Supports AVC, HEVC, and AV1; 8-bit and supported 10-bit output; CRF/CQ, constant QP, and target-bitrate modes.
 - Uses the frame rate chosen by MMD and marks video as BT.709.

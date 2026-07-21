@@ -417,7 +417,7 @@ const wchar_t* output_pixel_format(const Settings& settings) {
     return settings.bit_depth == 10 && settings.codec != L"avc" ? L"p010le" : L"nv12";
 }
 
-std::wstring output_date_metadata();
+std::wstring recording_date_metadata();
 
 std::wstring command_prefix(const Settings& settings) {
     const auto pixel_format = output_pixel_format(settings);
@@ -431,7 +431,7 @@ std::wstring command_suffix(const Settings& settings) {
     const auto pixel_format = output_pixel_format(settings);
     return L" -pix_fmt " + std::wstring(pixel_format) +
            L" -colorspace bt709 -color_primaries bt709 -color_trc bt709"
-           L" -metadata date=" + output_date_metadata() + L" \"{output}\"";
+           L" -metadata date_recorded=" + recording_date_metadata() + L" \"{output}\"";
 }
 
 void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
@@ -442,13 +442,11 @@ void replace_all(std::wstring& value, const std::wstring& from, const std::wstri
     }
 }
 
-std::wstring output_date_metadata() {
+std::wstring recording_date_metadata() {
     SYSTEMTIME time{};
     GetLocalTime(&time);
     std::wostringstream value;
-    value << std::setfill(L'0') << std::setw(2) << (time.wYear % 100)
-          << L'-' << std::setw(2) << time.wMonth
-          << L'-' << std::setw(2) << time.wDay;
+    value << time.wYear << L'-' << time.wMonth << L'-' << time.wDay;
     return value.str();
 }
 
