@@ -118,11 +118,17 @@ int wmain(int argument_count, wchar_t** arguments) {
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 11;
         }
     }
-    for (const int id : {ID_TAB, ID_LABEL_BACKEND, ID_AUDIO_INTRO, ID_LABEL_LANGUAGE, ID_GITHUB_LINK}) {
-        if (child_rect(page_window, id).left != 0) {
-            std::wcerr << L"Tab page content is not aligned to the left edge: " << id << L"\n";
+    const RECT tab_bounds = child_rect(page_window, ID_TAB);
+    for (const int id : {ID_LABEL_BACKEND, ID_AUDIO_INTRO, ID_LABEL_LANGUAGE, ID_GITHUB_LINK}) {
+        if (child_rect(page_window, id).left != tab_bounds.left) {
+            std::wcerr << L"Tab page content does not share the common left boundary: " << id << L"\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 15;
         }
+    }
+    const RECT command_bounds = child_rect(page_window, ID_COMMAND);
+    if (tab_bounds.right != command_bounds.right) {
+        std::wcerr << L"Tab and video content do not share the common right boundary.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 16;
     }
     std::array<wchar_t, 16> github_class{};
     GetClassNameW(GetDlgItem(page_window, ID_GITHUB_LINK), github_class.data(), static_cast<int>(github_class.size()));
