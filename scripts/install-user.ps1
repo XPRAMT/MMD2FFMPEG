@@ -10,23 +10,31 @@ try {
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseDmoDll = Join-Path $PSScriptRoot 'mmd2ffmpeg_dmo.dll'
 $releaseCleanupExe = Join-Path $PSScriptRoot 'mmd2ffmpeg_cleanup.exe'
+$releaseLocaleLauncherExe = Join-Path $PSScriptRoot 'MMDLocaleLauncher.exe'
 $buildDmoDll = Join-Path $projectRoot 'build\mmd2ffmpeg_dmo.dll'
 $buildCleanupExe = Join-Path $projectRoot 'build\mmd2ffmpeg_cleanup.exe'
+$buildLocaleLauncherExe = Join-Path $projectRoot 'build\MMDLocaleLauncher.exe'
 $dmoDll = if (Test-Path -LiteralPath $releaseDmoDll) { $releaseDmoDll } else { $buildDmoDll }
 $cleanupExe = if (Test-Path -LiteralPath $releaseCleanupExe) { $releaseCleanupExe } else { $buildCleanupExe }
+$localeLauncherExe = if (Test-Path -LiteralPath $releaseLocaleLauncherExe) { $releaseLocaleLauncherExe } else { $buildLocaleLauncherExe }
 if (-not (Test-Path -LiteralPath $dmoDll)) {
     throw "DMO build output does not exist: $dmoDll"
 }
 if (-not (Test-Path -LiteralPath $cleanupExe)) {
     throw "Cleanup helper does not exist: $cleanupExe"
 }
+if (-not (Test-Path -LiteralPath $localeLauncherExe)) {
+    throw "MMD Locale Launcher does not exist: $localeLauncherExe"
+}
 $installDir = Join-Path $env:LOCALAPPDATA 'MMD2FFMPEG'
 $installedDmoDll = Join-Path $installDir 'mmd2ffmpeg_dmo.dll'
 $installedCleanupExe = Join-Path $installDir 'mmd2ffmpeg_cleanup.exe'
+$installedLocaleLauncherExe = Join-Path $installDir 'MMDLocaleLauncher.exe'
 $config = Join-Path $installDir 'config.ini'
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
 Copy-Item -LiteralPath $cleanupExe -Destination $installedCleanupExe -Force
+Copy-Item -LiteralPath $localeLauncherExe -Destination $installedLocaleLauncherExe -Force
 if (-not (Test-Path -LiteralPath $config)) {
     $defaultConfig = @"
 ffmpeg=ffmpeg.exe
@@ -86,6 +94,7 @@ if (Test-Path -LiteralPath $oldCategoryKey) { Remove-Item -LiteralPath $oldCateg
 $categoryKey = "HKCU:\Software\Classes\DirectShow\MediaObjects\Categories\33d9a760-90c8-11d0-bd43-00a0c911ce86\$classIdBare"
 New-Item -Path $categoryKey -Force | Out-Null
 Write-Host "Installed x64 DMO encoder: $installedDmoDll"
+Write-Host "Installed MMD Locale Launcher: $installedLocaleLauncherExe"
 Write-Host "Configuration: $config"
 Write-Host 'Restart MMD if it was already open; no Windows reboot is required.'
 }

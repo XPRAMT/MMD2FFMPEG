@@ -7,7 +7,8 @@ $packageDir = Join-Path $releaseRoot 'MMD2FFMPEG-x64'
 $archivePath = Join-Path $releaseRoot 'MMD2FFMPEG-x64.zip'
 $requiredFiles = @(
     (Join-Path $buildDir 'mmd2ffmpeg_dmo.dll'),
-    (Join-Path $buildDir 'mmd2ffmpeg_cleanup.exe')
+    (Join-Path $buildDir 'mmd2ffmpeg_cleanup.exe'),
+    (Join-Path $buildDir 'MMDLocaleLauncher.exe')
 )
 foreach ($requiredFile in $requiredFiles) {
     if (-not (Test-Path -LiteralPath $requiredFile)) {
@@ -26,6 +27,7 @@ if (Test-Path -LiteralPath $imagesDestination) {
 }
 Copy-Item -LiteralPath (Join-Path $buildDir 'mmd2ffmpeg_dmo.dll') -Destination (Join-Path $packageDir 'mmd2ffmpeg_dmo.dll') -Force
 Copy-Item -LiteralPath (Join-Path $buildDir 'mmd2ffmpeg_cleanup.exe') -Destination (Join-Path $packageDir 'mmd2ffmpeg_cleanup.exe') -Force
+Copy-Item -LiteralPath (Join-Path $buildDir 'MMDLocaleLauncher.exe') -Destination (Join-Path $packageDir 'MMDLocaleLauncher.exe') -Force
 foreach ($fileName in @('install-user.ps1', 'install-user.bat', 'uninstall-user.ps1', 'uninstall-user.bat')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $fileName) -Destination (Join-Path $packageDir $fileName) -Force
 }
