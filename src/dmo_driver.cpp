@@ -1515,7 +1515,7 @@ private:
         MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&rectangle), 2);
         return rectangle;
     }
-    static bool is_full_width_control(int id) {
+    static bool is_right_anchored_control(int id) {
         switch (id) {
         case ID_TAB:
         case ID_COMMAND_HEADING:
@@ -1525,6 +1525,9 @@ private:
         case ID_STATUS:
         case ID_AUDIO_INTRO:
         case ID_AUDIO_HELP:
+        case ID_AUDIO_FORMAT:
+        case ID_AUDIO_RATE:
+        case ID_LANGUAGE:
         case ID_SETTINGS_INFO:
         case ID_GITHUB_LINK:
             return true;
@@ -1538,7 +1541,7 @@ private:
         for (const auto& child : child_positions_) {
             const int left = static_cast<int>(child.rectangle.left);
             const int top = static_cast<int>(child.rectangle.top);
-            const int width = is_full_width_control(GetDlgCtrlID(child.window))
+            const int width = is_right_anchored_control(GetDlgCtrlID(child.window))
                 ? std::max(1, static_cast<int>(client.right) - horizontal_margin_ - left)
                 : std::min(static_cast<int>(child.rectangle.right - child.rectangle.left),
                            std::max(1, static_cast<int>(client.right) - left));

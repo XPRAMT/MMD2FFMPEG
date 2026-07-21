@@ -127,8 +127,11 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     const RECT command_bounds = child_rect(page_window, ID_COMMAND);
     if (tab_bounds.left <= 0 || tab_bounds.right != client.right - tab_bounds.left ||
-        command_bounds.right != tab_bounds.right) {
-        std::wcerr << L"Tab and full-width controls do not preserve symmetric horizontal margins.\n";
+        command_bounds.right != tab_bounds.right ||
+        child_rect(page_window, ID_AUDIO_FORMAT).right != tab_bounds.right ||
+        child_rect(page_window, ID_AUDIO_RATE).right != tab_bounds.right ||
+        child_rect(page_window, ID_LANGUAGE).right != tab_bounds.right) {
+        std::wcerr << L"Tab and right-anchored controls do not preserve symmetric horizontal margins.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 16;
     }
     std::array<wchar_t, 16> github_class{};
