@@ -57,6 +57,15 @@ ffmpeg -version
 
 安裝器只會為目前 Windows 使用者註冊，執行檔會放在 `%LOCALAPPDATA%\MMD2FFMPEG`。
 
+### Release 安裝包內容
+
+| 檔案 | 功能 |
+| --- | --- |
+| `install-user.ps1` | 將執行檔複製到目前使用者的本機 MMD2FFMPEG 資料夾，遷移相容設定，並為目前使用者註冊 DMO。 |
+| `uninstall-user.ps1` | 移除目前使用者的 DMO 註冊。執行檔、設定與 log 會刻意保留，方便手動備份或刪除。 |
+| `mmd2ffmpeg_dmo.dll` | MMD 可見的 DirectX Media Object 編碼器；接收 MMD 影格並串流給 FFmpeg 建立 MKV。 |
+| `mmd2ffmpeg_cleanup.exe` | 僅在 MKV 成功編碼後執行，重試刪除可能仍被 MMD 鎖定的佔位 AVI，並將結果寫入輸出 log。 |
+
 ### 從原始碼建置
 
 1. Clone 或下載本專案。

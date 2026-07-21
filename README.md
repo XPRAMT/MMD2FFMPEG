@@ -57,6 +57,15 @@ ffmpeg -version
 
 The installer registers only for the current Windows user and places the runtime files in `%LOCALAPPDATA%\MMD2FFMPEG`.
 
+### Release package contents
+
+| File | Purpose |
+| --- | --- |
+| `install-user.ps1` | Copies the runtime files to the current user's local MMD2FFMPEG folder, migrates compatible configuration, and registers the DMO for the current user. |
+| `uninstall-user.ps1` | Removes the current user's DMO registration. Runtime files, configuration, and logs are deliberately retained for manual backup or removal. |
+| `mmd2ffmpeg_dmo.dll` | The MMD-visible DirectX Media Object encoder. It receives MMD frames and streams them to FFmpeg to create the MKV. |
+| `mmd2ffmpeg_cleanup.exe` | Runs only after a successful MKV encode and retries deletion of MMD's temporarily locked placeholder AVI, recording the result in the export log. |
+
 ### Build from source
 
 1. Clone or download this repository.
