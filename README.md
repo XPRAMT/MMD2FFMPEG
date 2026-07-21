@@ -67,7 +67,7 @@ The installer registers only for the current Windows user and places the runtime
 | `uninstall-user.ps1` | Removes the current user's DMO registration. Runtime files, configuration, and logs are deliberately retained for manual backup or removal. |
 | `mmd2ffmpeg_dmo.dll` | The MMD-visible DirectX Media Object encoder. It receives MMD frames and streams them to FFmpeg to create the MKV. |
 | `mmd2ffmpeg_cleanup.exe` | Runs after successful video encoding. It waits for MMD to release the AVI, muxes embedded audio into MKV when enabled, then deletes the placeholder AVI and records the result in the export log. |
-| `MMDLocaleLauncher.exe` | Optional per-user MMD launcher. It starts MMD via NTLEA using Japanese CP932 settings and can be registered as a `.pmm` opener. NTLEA itself is not bundled. |
+| `MMDLocaleLauncher.exe` | Optional portable MMD launcher. It starts MMD via NTLEA using Japanese CP932 settings and can be registered as a `.pmm` opener. It is not installed by `install-user`; keep it in a writable folder. NTLEA itself is not bundled. |
 
 ### Build from source
 
@@ -101,7 +101,7 @@ This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`.
 ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
 ```
 
-1. Run `MMDLocaleLauncher.exe` from the Release package or `%LOCALAPPDATA%\MMD2FFMPEG`.
+1. Run `MMDLocaleLauncher.exe` from the extracted Release package. It is not copied by `install-user.bat`; keep the Release folder in a writable permanent location.
 2. On its first run, select the x64 `ntleas.exe` and `MikuMikuDance.exe` paths, then save. The paths are stored in `config.ini` beside the `MMDLocaleLauncher.exe` that is being run.
 3. After setup, double-clicking `MMDLocaleLauncher.exe` starts MMD through NTLEA. Opening a `.pmm` through the launcher passes that PMM to MMD using NTLEA's documented `A` application-argument option.
 4. Select **Register and set as the default opener for .pmm** during setup to add the launcher to Windows. Windows displays its own default-app confirmation UI; the launcher never silently overrides the user's file association.
