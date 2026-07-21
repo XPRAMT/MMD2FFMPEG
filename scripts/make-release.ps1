@@ -31,6 +31,9 @@ foreach ($fileName in @('README.md', 'README_TW.md')) {
 $imagesSource = Join-Path $projectRoot 'imgs'
 if (Test-Path -LiteralPath $imagesSource) {
     $imagesDestination = Join-Path $packageDir 'imgs'
+    if (Test-Path -LiteralPath $imagesDestination) {
+        Remove-Item -LiteralPath $imagesDestination -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $imagesDestination -Force | Out-Null
     Copy-Item -Path (Join-Path $imagesSource '*') -Destination $imagesDestination -Recurse -Force
 }

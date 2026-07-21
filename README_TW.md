@@ -95,11 +95,11 @@ ffmpeg -version
 1. 選擇 **檔案 > AVI輸出**，指定 AVI 儲存位置。
 2. 在 **影片編碼** 選擇 **MMD2FFMPEG DMO Encoder**。
 
-![MMD AVI 輸出編碼器選擇](imgs/MMD編碼選擇介面.png)
+<img src="imgs/MMD編碼選擇介面_TW.png" alt="MMD AVI 輸出編碼器選擇" width="720">
 
 3. 開啟 **詳細設定**，調整編碼選項並按 **測試編碼**。
 
-![MMD2FFMPEG 編碼器詳細設定（繁體中文）](imgs/MMD2FFMPEG詳細設定介面_TW.png)
+<img src="imgs/MMD2FFMPEG詳細設定介面_TW.png" alt="MMD2FFMPEG 編碼器詳細設定（繁體中文）" width="720">
 
 4. 測試通過後再儲存或套用設定。
 5. 執行 AVI 輸出；完成的 MKV 會出現在所選 AVI 路徑旁，成功後 MMD 的佔位 AVI 會自動刪除。
