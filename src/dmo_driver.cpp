@@ -109,7 +109,8 @@ struct TabUiStrings {
     const wchar_t* sample_rate;
     const wchar_t* audio_depth;
     const wchar_t* original;
-    const wchar_t* at_least_48khz;
+    const wchar_t* hi_res;
+    const wchar_t* hi_res_help;
     const wchar_t* version;
     const wchar_t* author;
     const wchar_t* github;
@@ -135,10 +136,10 @@ UiLanguage ui_language(const std::wstring& value) {
 }
 
 const TabUiStrings& tab_ui_strings(UiLanguage language) {
-    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率", L"位元深度", L"原始", L"大於等於48KHz", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率", L"位深度", L"原始", L"大于等于48KHz", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート", L"ビット深度", L"オリジナル", L"48kHz以上", L"バージョン", L"作者", L"GitHub"};
-    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate", L"Bit depth", L"Original", L"At least 48 kHz", L"Version", L"Author", L"GitHub"};
+    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率", L"位元深度", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，自動以原始取樣率2倍進行編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率", L"位深度", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，自动以原始采样率2倍进行编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート", L"ビット深度", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、bilibili Hi-Res 判定のため元の2倍で再エンコードします。", L"バージョン", L"作者", L"GitHub"};
+    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate", L"Bit depth", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, audio is encoded at twice the original sample rate for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -1376,8 +1377,10 @@ private:
         for (HWND control : audio_labels_) set_dialog_font(control);
         for (HWND control : audio_controls_) set_dialog_font(control);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
-        add_combo(ID_AUDIO_RATE, {L"Original", L"At least 48 kHz"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
+        add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
         add_combo(ID_AUDIO_DEPTH, {L"Original", L"24bit"}, settings_.audio_bit_depth == L"24" ? 1 : 0);
+        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 118, 228, 44, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
+        set_dialog_font(audio_help_);
         settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT\r\nGitHub: github.com/XPRAMT/MMD2FFMPEG",
                                           WS_CHILD | SS_NOTIFY, 16, 70, 228, 90, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
         set_dialog_font(settings_info_);
@@ -1393,6 +1396,7 @@ private:
         for (const int id : video_more) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
+        ShowWindow(audio_help_, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LABEL_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         if (page == 2) {
@@ -1600,8 +1604,9 @@ private:
         SetWindowTextW(audio_labels_[2], text.audio_depth);
         const int format = combo_index(ID_AUDIO_FORMAT), rate = combo_index(ID_AUDIO_RATE), depth = combo_index(ID_AUDIO_DEPTH);
         reset_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, format);
-        reset_combo(ID_AUDIO_RATE, {text.original, text.at_least_48khz}, rate);
+        reset_combo(ID_AUDIO_RATE, {text.original, text.hi_res}, rate);
         reset_combo(ID_AUDIO_DEPTH, {text.original, L"24bit"}, depth);
+        SetWindowTextW(audio_help_, text.hi_res_help);
         const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" +
             text.author + L": XPRAMT\r\n" + text.github + L": github.com/XPRAMT/MMD2FFMPEG";
         SetWindowTextW(settings_info_, info.c_str());
@@ -1730,6 +1735,7 @@ private:
     HWND window_ = nullptr;
     HWND tab_ = nullptr;
     HWND settings_info_ = nullptr;
+    HWND audio_help_ = nullptr;
     std::array<HWND, 3> audio_labels_{};
     std::array<HWND, 3> audio_controls_{};
     int active_tab_ = 0;
