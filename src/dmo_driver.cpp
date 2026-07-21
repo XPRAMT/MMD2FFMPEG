@@ -1535,16 +1535,23 @@ private:
             return false;
         }
     }
+    static bool is_fixed_width_right_anchored_control(int id) {
+        return id == ID_OPEN_LOG;
+    }
     void layout_scrolled_children() {
         RECT client{};
         GetClientRect(window_, &client);
         for (const auto& child : child_positions_) {
-            const int left = static_cast<int>(child.rectangle.left);
+            const int original_left = static_cast<int>(child.rectangle.left);
             const int top = static_cast<int>(child.rectangle.top);
-            const int width = is_right_anchored_control(GetDlgCtrlID(child.window))
+            const int original_width = static_cast<int>(child.rectangle.right - child.rectangle.left);
+            const int id = GetDlgCtrlID(child.window);
+            const int left = is_fixed_width_right_anchored_control(id)
+                ? std::max(0, static_cast<int>(client.right) - horizontal_margin_ - original_width)
+                : original_left;
+            const int width = is_right_anchored_control(id)
                 ? std::max(1, static_cast<int>(client.right) - horizontal_margin_ - left)
-                : std::min(static_cast<int>(child.rectangle.right - child.rectangle.left),
-                           std::max(1, static_cast<int>(client.right) - left));
+                : std::min(original_width, std::max(1, static_cast<int>(client.right) - left));
             SetWindowPos(child.window, nullptr, left, top - scroll_offset_,
                          width, static_cast<int>(child.rectangle.bottom - child.rectangle.top),
                          SWP_NOACTIVATE | SWP_NOZORDER);

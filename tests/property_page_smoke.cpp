@@ -130,7 +130,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         command_bounds.right != tab_bounds.right ||
         child_rect(page_window, ID_AUDIO_FORMAT).right != tab_bounds.right ||
         child_rect(page_window, ID_AUDIO_RATE).right != tab_bounds.right ||
-        child_rect(page_window, ID_LANGUAGE).right != tab_bounds.right) {
+        child_rect(page_window, ID_LANGUAGE).right != tab_bounds.right ||
+        child_rect(page_window, ID_OPEN_LOG).right != tab_bounds.right) {
         std::wcerr << L"Tab and right-anchored controls do not preserve symmetric horizontal margins.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 16;
     }
