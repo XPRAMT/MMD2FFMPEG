@@ -19,9 +19,9 @@ namespace {
 constexpr wchar_t kWindowClass[] = L"MMDLocaleLauncherSetupWindow";
 constexpr wchar_t kAppName[] = L"MMD Locale Launcher";
 constexpr wchar_t kProgId[] = L"MMDLocaleLauncher.PMM";
-constexpr int kIdNtleaEdit = 1001;
+constexpr int kIdNtleasEdit = 1001;
 constexpr int kIdMmdEdit = 1002;
-constexpr int kIdBrowseNtlea = 1003;
+constexpr int kIdBrowseNtleas = 1003;
 constexpr int kIdBrowseMmd = 1004;
 constexpr int kIdRegisterPmm = 1005;
 constexpr int kIdSave = 1006;
@@ -322,7 +322,7 @@ void apply_ui_font(HWND window, SetupState* state) {
         DeleteObject(state->font);
     }
     state->font = create_ui_font(window);
-    for (const int id : {1100, 1101, kIdNtleaEdit, kIdBrowseNtlea, 1102, kIdMmdEdit, kIdBrowseMmd, kIdRegisterPmm, 1103, kIdSave, kIdCancel}) {
+    for (const int id : {1100, 1101, kIdNtleasEdit, kIdBrowseNtleas, 1102, kIdMmdEdit, kIdBrowseMmd, kIdRegisterPmm, 1103, kIdSave, kIdCancel}) {
         SendMessageW(GetDlgItem(window, id), WM_SETFONT, reinterpret_cast<WPARAM>(state->font), TRUE);
     }
 }
@@ -348,7 +348,7 @@ void layout_setup_window(HWND window, SetupState* state) {
     MoveWindow(ntleas_label, margin, y, usable_width, label_height, TRUE);
     y += label_height;
     MoveWindow(state->ntleas_edit, margin, y, usable_width - browse_width - gap, edit_height, TRUE);
-    MoveWindow(GetDlgItem(window, kIdBrowseNtlea), margin + usable_width - browse_width, y, browse_width, edit_height, TRUE);
+    MoveWindow(GetDlgItem(window, kIdBrowseNtleas), margin + usable_width - browse_width, y, browse_width, edit_height, TRUE);
     y += edit_height + gap;
 
     HWND mmd_label = GetDlgItem(window, 1102);
@@ -448,7 +448,7 @@ void open_default_apps_ui(HWND owner) {
 
 bool validate_config(const Config& config, HWND owner) {
     if (!is_existing_file(config.ntleas_path)) {
-        show_error(owner, L"找不到 NTLEA 執行檔：\n" + config.ntleas_path);
+        show_error(owner, L"找不到 ntleas 執行檔：\n" + config.ntleas_path);
         return false;
     }
     if (!is_existing_file(config.mmd_path)) {
@@ -470,10 +470,10 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
         state = reinterpret_cast<SetupState*>(GetWindowLongPtrW(window, GWLP_USERDATA));
         enable_dark_title_bar(window);
         apply_mmd_icon(window, state->config.mmd_path);
-        create_control(SS_LEFT, 1100, window, L"STATIC", L"請設定 NTLEA 與 MikuMikuDance 的執行檔。儲存後，直接雙擊本程式即可開啟 MMD。");
-        create_control(SS_LEFT, 1101, window, L"STATIC", L"NTLEA 執行檔（ntleas.exe）");
-        state->ntleas_edit = create_control(WS_BORDER | ES_AUTOHSCROLL, kIdNtleaEdit, window, L"EDIT", state->config.ntleas_path.c_str());
-        create_control(BS_OWNERDRAW, kIdBrowseNtlea, window, L"BUTTON", L"瀏覽…");
+        create_control(SS_LEFT, 1100, window, L"STATIC", L"請設定 ntleas 與 MikuMikuDance 的執行檔。儲存後，直接雙擊本程式即可開啟 MMD。");
+        create_control(SS_LEFT, 1101, window, L"STATIC", L"ntleas 執行檔（ntleas.exe）");
+        state->ntleas_edit = create_control(WS_BORDER | ES_AUTOHSCROLL, kIdNtleasEdit, window, L"EDIT", state->config.ntleas_path.c_str());
+        create_control(BS_OWNERDRAW, kIdBrowseNtleas, window, L"BUTTON", L"瀏覽…");
         create_control(SS_LEFT, 1102, window, L"STATIC", L"MikuMikuDance 執行檔（MikuMikuDance.exe）");
         state->mmd_edit = create_control(WS_BORDER | ES_AUTOHSCROLL, kIdMmdEdit, window, L"EDIT", state->config.mmd_path.c_str());
         create_control(BS_OWNERDRAW, kIdBrowseMmd, window, L"BUTTON", L"瀏覽…");
@@ -505,7 +505,7 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
             return 0;
         }
         switch (LOWORD(wparam)) {
-        case kIdBrowseNtlea: {
+        case kIdBrowseNtleas: {
             const auto chosen = choose_executable(window, L"選擇 ntleas.exe");
             if (chosen) {
                 SetWindowTextW(state->ntleas_edit, chosen->c_str());
@@ -556,7 +556,7 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
             draw_checkbox(*item, state != nullptr && state->register_pmm);
             return TRUE;
         }
-        if (item->CtlID == kIdBrowseNtlea || item->CtlID == kIdBrowseMmd || item->CtlID == kIdSave || item->CtlID == kIdCancel) {
+        if (item->CtlID == kIdBrowseNtleas || item->CtlID == kIdBrowseMmd || item->CtlID == kIdSave || item->CtlID == kIdCancel) {
             draw_button(*item, item->CtlID == kIdSave);
             return TRUE;
         }
@@ -654,7 +654,7 @@ bool launch_mmd(const Config& config, const std::optional<std::wstring>& project
         return false;
     }
     if (project_path && project_path->find(L'\'') != std::wstring::npos) {
-        show_error(nullptr, L"目前 NTLEA 的 A 參數無法安全傳遞含單引號（'）的 PMM 路徑。\n請移動或重新命名該檔案後再開啟。");
+        show_error(nullptr, L"目前 ntleas 的 A 參數無法安全傳遞含單引號（'）的 PMM 路徑。\n請移動或重新命名該檔案後再開啟。");
         return false;
     }
 
@@ -685,7 +685,7 @@ bool launch_mmd(const Config& config, const std::optional<std::wstring>& project
     mutable_command.push_back(L'\0');
     if (!CreateProcessW(config.ntleas_path.c_str(), mutable_command.data(), nullptr, nullptr, FALSE, 0, nullptr,
         working_directory.c_str(), &startup, &process)) {
-        show_error(nullptr, L"無法透過 NTLEA 啟動 MMD。\n\nWindows 錯誤碼：" + std::to_wstring(GetLastError()));
+        show_error(nullptr, L"無法透過 ntleas 啟動 MMD。\n\nWindows 錯誤碼：" + std::to_wstring(GetLastError()));
         return false;
     }
     CloseHandle(process.hThread);
