@@ -101,6 +101,20 @@ struct UiOptions {
     const wchar_t* quality;
 };
 
+struct TabUiStrings {
+    const wchar_t* video;
+    const wchar_t* audio;
+    const wchar_t* settings;
+    const wchar_t* audio_format;
+    const wchar_t* sample_rate;
+    const wchar_t* audio_depth;
+    const wchar_t* original;
+    const wchar_t* at_least_48khz;
+    const wchar_t* version;
+    const wchar_t* author;
+    const wchar_t* github;
+};
+
 UiLanguage system_ui_language() {
     const LANGID language = GetUserDefaultUILanguage();
     if (PRIMARYLANGID(language) == LANG_JAPANESE) return UiLanguage::Japanese;
@@ -118,6 +132,19 @@ UiLanguage ui_language(const std::wstring& value) {
     if (value == L"ja") return UiLanguage::Japanese;
     if (value == L"en") return UiLanguage::English;
     return system_ui_language();
+}
+
+const TabUiStrings& tab_ui_strings(UiLanguage language) {
+    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率", L"位元深度", L"原始", L"大於等於48KHz", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率", L"位深度", L"原始", L"大于等于48KHz", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート", L"ビット深度", L"オリジナル", L"48kHz以上", L"バージョン", L"作者", L"GitHub"};
+    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate", L"Bit depth", L"Original", L"At least 48 kHz", L"Version", L"Author", L"GitHub"};
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return traditional;
+    case UiLanguage::SimplifiedChinese: return simplified;
+    case UiLanguage::Japanese: return japanese;
+    default: return english;
+    }
 }
 
 const UiStrings& ui_strings(UiLanguage language) {
@@ -1324,9 +1351,9 @@ private:
                                8, 4, 244, 20, window_, reinterpret_cast<HMENU>(ID_TAB), module_instance(), nullptr);
         set_dialog_font(tab_);
         TCITEMW item{}; item.mask = TCIF_TEXT;
-        item.pszText = const_cast<wchar_t*>(L"影片"); TabCtrl_InsertItem(tab_, 0, &item);
-        item.pszText = const_cast<wchar_t*>(L"音訊"); TabCtrl_InsertItem(tab_, 1, &item);
-        item.pszText = const_cast<wchar_t*>(L"設定"); TabCtrl_InsertItem(tab_, 2, &item);
+        item.pszText = const_cast<wchar_t*>(L"Video"); TabCtrl_InsertItem(tab_, 0, &item);
+        item.pszText = const_cast<wchar_t*>(L"Audio"); TabCtrl_InsertItem(tab_, 1, &item);
+        item.pszText = const_cast<wchar_t*>(L"Settings"); TabCtrl_InsertItem(tab_, 2, &item);
         TabCtrl_SetCurSel(tab_, 0);
         const std::array<int, 24> video_ids{ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
                                             ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
@@ -1344,27 +1371,34 @@ private:
             return CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST | WS_TABSTOP,
                                    120, y, 128, 120, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
         };
-        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"音訊格式", 38), make_label(ID_LABEL_AUDIO_RATE, L"取樣率", 64), make_label(ID_LABEL_AUDIO_DEPTH, L"位元深度", 90)};
+        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"Audio format", 38), make_label(ID_LABEL_AUDIO_RATE, L"Sample rate", 64), make_label(ID_LABEL_AUDIO_DEPTH, L"Bit depth", 90)};
         audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 36), make_combo(ID_AUDIO_RATE, 62), make_combo(ID_AUDIO_DEPTH, 88)};
         for (HWND control : audio_labels_) set_dialog_font(control);
         for (HWND control : audio_controls_) set_dialog_font(control);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
-        add_combo(ID_AUDIO_RATE, {L"原始", L"大於等於48KHz"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
-        add_combo(ID_AUDIO_DEPTH, {L"原始", L"24bit"}, settings_.audio_bit_depth == L"24" ? 1 : 0);
+        add_combo(ID_AUDIO_RATE, {L"Original", L"At least 48 kHz"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
+        add_combo(ID_AUDIO_DEPTH, {L"Original", L"24bit"}, settings_.audio_bit_depth == L"24" ? 1 : 0);
         settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT\r\nGitHub: github.com/XPRAMT/MMD2FFMPEG",
-                                          WS_CHILD | SS_NOTIFY, 16, 38, 228, 90, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
+                                          WS_CHILD | SS_NOTIFY, 16, 70, 228, 90, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
         set_dialog_font(settings_info_);
+        apply_tab_language();
         switch_tab(0);
     }
     void switch_tab(int page) {
-        const std::array<int, 18> video{ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
+        const std::array<int, 16> video{ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
                                         ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
-                                        ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC};
+                                        ID_TEST_REQUIREMENT, ID_LABEL_BACKEND, ID_LABEL_CODEC};
         const std::array<int, 6> video_more{ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE, ID_COMMAND_HEADING};
         for (const int id : video) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (const int id : video_more) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_LABEL_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
+        if (page == 2) {
+            SetWindowPos(GetDlgItem(window_, ID_LABEL_LANGUAGE), nullptr, 16, 38, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(GetDlgItem(window_, ID_LANGUAGE), nullptr, 120, 36, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
         active_tab_ = page;
     }
@@ -1554,6 +1588,24 @@ private:
         scroll_to(requested);
     }
     const UiStrings& current_text() const { return ui_strings(ui_language(settings_.language)); }
+    void apply_tab_language() {
+        if (!tab_) return;
+        const auto& text = tab_ui_strings(ui_language(settings_.language));
+        const wchar_t* tabs[] = {text.video, text.audio, text.settings};
+        for (int index = 0; index < 3; ++index) {
+            TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(tabs[index]); TabCtrl_SetItem(tab_, index, &item);
+        }
+        SetWindowTextW(audio_labels_[0], text.audio_format);
+        SetWindowTextW(audio_labels_[1], text.sample_rate);
+        SetWindowTextW(audio_labels_[2], text.audio_depth);
+        const int format = combo_index(ID_AUDIO_FORMAT), rate = combo_index(ID_AUDIO_RATE), depth = combo_index(ID_AUDIO_DEPTH);
+        reset_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, format);
+        reset_combo(ID_AUDIO_RATE, {text.original, text.at_least_48khz}, rate);
+        reset_combo(ID_AUDIO_DEPTH, {text.original, L"24bit"}, depth);
+        const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" +
+            text.author + L": XPRAMT\r\n" + text.github + L": github.com/XPRAMT/MMD2FFMPEG";
+        SetWindowTextW(settings_info_, info.c_str());
+    }
     void apply_language() {
         const auto& text = current_text();
         const auto& options = ui_options(ui_language(settings_.language));
@@ -1573,13 +1625,7 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_TEST_REQUIREMENT), text.test_required);
         SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
         SetWindowTextW(GetDlgItem(window_, ID_OPEN_LOG), text.open_log_button);
-        if (tab_) {
-            const UiLanguage current_language = ui_language(settings_.language);
-            const wchar_t* names[] = {current_language == UiLanguage::TraditionalChinese ? L"影片" : L"Video",
-                                      current_language == UiLanguage::TraditionalChinese ? L"音訊" : L"Audio",
-                                      current_language == UiLanguage::TraditionalChinese ? L"設定" : L"Settings"};
-            for (int index = 0; index < 3; ++index) { TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(names[index]); TabCtrl_SetItem(tab_, index, &item); }
-        }
+        apply_tab_language();
         const wchar_t* status = probe_running_ ? text.testing : current_command_tested_ ? text.test_passed : text.not_tested;
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), status);
     }
