@@ -1522,6 +1522,19 @@ private:
         for (const int id : ids) width = std::max(width, text_width(id, minimum));
         return width;
     }
+    int text_height(int id, int width, int minimum) const {
+        HWND control = GetDlgItem(window_, id);
+        const std::wstring text = edit_text(id);
+        HDC dc = GetDC(window_);
+        HFONT font = reinterpret_cast<HFONT>(SendMessageW(control, WM_GETFONT, 0, 0));
+        HGDIOBJ previous = font ? SelectObject(dc, font) : nullptr;
+        RECT rectangle{0, 0, std::max(1, width), 0};
+        DrawTextW(dc, text.c_str(), static_cast<int>(text.size()), &rectangle,
+                  DT_LEFT | DT_WORDBREAK | DT_EDITCONTROL | DT_CALCRECT | DT_NOPREFIX);
+        if (previous) SelectObject(dc, previous);
+        ReleaseDC(window_, dc);
+        return std::max(minimum, static_cast<int>(rectangle.bottom));
+    }
     void add_layout(int id, int left, int top, int width, int height, bool scrolls = true) {
         layouts_.push_back({id, {left, top, left + std::max(1, width), top + std::max(1, height)}, scrolls});
     }
@@ -1580,37 +1593,54 @@ private:
             add_layout(ID_BITRATE, bitrate_left, y, std::max(1, right - bitrate_left), edit_height);
             y += row_height;
             add_layout(ID_COMMAND_HEADING, margin_x, y, full_width, label_height);
-            y += dlu_y(12);
+            y += label_height + dlu_y(2);
             add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, dlu_y(24));
-            y += dlu_y(25);
+            y += dlu_y(24) + dlu_y(2);
             add_layout(ID_COMMAND, margin_x, y, full_width, edit_height);
-            y += dlu_y(16);
+            y += edit_height + dlu_y(2);
             add_layout(ID_COMMAND_SUFFIX, margin_x, y, full_width, dlu_y(18));
-            y += dlu_y(20);
+            y += dlu_y(18) + dlu_y(1);
             add_layout(ID_STATUS, margin_x, y, full_width, label_height);
-            y += dlu_y(18);
+            y += label_height;
             const int open_log_width = text_width(ID_OPEN_LOG, dlu_x(58));
             const int test_width = text_width(ID_REFRESH, dlu_x(54));
             const int open_log_left = right - open_log_width;
             const int test_left = open_log_left - field_gap - test_width;
-            add_layout(ID_TEST_REQUIREMENT, margin_x, y + dlu_y(3), std::max(1, test_left - field_gap - margin_x), label_height);
-            add_layout(ID_REFRESH, test_left, y, test_width, button_height);
-            add_layout(ID_OPEN_LOG, open_log_left, y, open_log_width, button_height);
-            y += button_height + margin_y;
+            const int requirement_width = std::max(1, test_left - field_gap - margin_x);
+            const int requirement_height = text_height(ID_TEST_REQUIREMENT, requirement_width, label_height);
+            const bool stack_actions = requirement_width < dlu_x(88) || requirement_height > button_height * 2;
+            if (stack_actions) {
+                const int full_requirement_height = text_height(ID_TEST_REQUIREMENT, full_width, label_height);
+                add_layout(ID_TEST_REQUIREMENT, margin_x, y, full_width, full_requirement_height);
+                y += full_requirement_height + gap;
+                add_layout(ID_REFRESH, test_left, y, test_width, button_height);
+                add_layout(ID_OPEN_LOG, open_log_left, y, open_log_width, button_height);
+                y += button_height + margin_y;
+            } else {
+                const int action_height = std::max(button_height, requirement_height);
+                add_layout(ID_TEST_REQUIREMENT, margin_x, y + (action_height - requirement_height) / 2,
+                           requirement_width, requirement_height);
+                add_layout(ID_REFRESH, test_left, y + (action_height - button_height) / 2, test_width, button_height);
+                add_layout(ID_OPEN_LOG, open_log_left, y + (action_height - button_height) / 2, open_log_width, button_height);
+                y += action_height + margin_y;
+            }
         } else if (active_tab_ == 1) {
-            add_layout(ID_AUDIO_INTRO, margin_x, y, full_width, dlu_y(20));
-            y += dlu_y(20) + gap;
+            const int intro_height = text_height(ID_AUDIO_INTRO, full_width, dlu_y(12));
+            add_layout(ID_AUDIO_INTRO, margin_x, y, full_width, intro_height);
+            y += intro_height + gap;
             const int label_width = maximum_text_width({ID_LABEL_AUDIO_FORMAT, ID_LABEL_AUDIO_RATE}, dlu_x(82));
             add_form_row(ID_LABEL_AUDIO_FORMAT, ID_AUDIO_FORMAT, label_width, y);
-            add_layout(ID_AUDIO_HELP, margin_x, y, full_width, dlu_y(20));
-            y += dlu_y(20) + gap;
+            const int help_height = text_height(ID_AUDIO_HELP, full_width, dlu_y(12));
+            add_layout(ID_AUDIO_HELP, margin_x, y, full_width, help_height);
+            y += help_height + gap;
             add_form_row(ID_LABEL_AUDIO_RATE, ID_AUDIO_RATE, label_width, y);
             y += margin_y;
         } else {
             const int label_width = text_width(ID_LABEL_LANGUAGE, dlu_x(82));
             add_form_row(ID_LABEL_LANGUAGE, ID_LANGUAGE, label_width, y);
-            add_layout(ID_SETTINGS_INFO, margin_x, y, full_width, dlu_y(28));
-            y += dlu_y(28) + gap;
+            const int info_height = text_height(ID_SETTINGS_INFO, full_width, dlu_y(12));
+            add_layout(ID_SETTINGS_INFO, margin_x, y, full_width, info_height);
+            y += info_height + gap;
             add_layout(ID_GITHUB_LINK, margin_x, y, full_width, edit_height);
             y += edit_height + margin_y;
         }

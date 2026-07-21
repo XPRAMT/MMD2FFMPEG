@@ -273,6 +273,19 @@ int wmain(int argument_count, wchar_t** arguments) {
             std::wcerr << L"Language switch failed for index " << language << L".\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 9;
         }
+        const RECT status_bounds = child_rect(page_window, ID_STATUS);
+        if (constrained_host) SendMessageW(page_window, WM_VSCROLL, SB_BOTTOM, 0);
+        GetClientRect(page_window, &client);
+        const RECT requirement_bounds = child_rect(page_window, ID_TEST_REQUIREMENT);
+        const RECT test_bounds = child_rect(page_window, ID_REFRESH);
+        const RECT log_bounds = child_rect(page_window, ID_OPEN_LOG);
+        if ((!constrained_host && requirement_bounds.top - status_bounds.bottom > 48) ||
+            requirement_bounds.top < 0 || requirement_bounds.bottom > client.bottom ||
+            test_bounds.top < 0 || test_bounds.bottom > client.bottom ||
+            log_bounds.top < 0 || log_bounds.bottom > client.bottom || test_bounds.right >= log_bounds.left) {
+            std::wcerr << L"Localized action row is clipped, spaced too far from status, or overlaps.\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 21;
+        }
     }
     SendMessageW(language_control, CB_SETCURSEL, original_language, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_LANGUAGE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(language_control));
