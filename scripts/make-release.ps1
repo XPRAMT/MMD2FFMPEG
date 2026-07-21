@@ -28,7 +28,13 @@ foreach ($fileName in @('install-user.ps1', 'uninstall-user.ps1')) {
 foreach ($fileName in @('README.md', 'README_TW.md')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $fileName) -Destination (Join-Path $packageDir $fileName) -Force
 }
+$imagesSource = Join-Path $projectRoot 'imgs'
+if (Test-Path -LiteralPath $imagesSource) {
+    $imagesDestination = Join-Path $packageDir 'imgs'
+    New-Item -ItemType Directory -Path $imagesDestination -Force | Out-Null
+    Copy-Item -Path (Join-Path $imagesSource '*') -Destination $imagesDestination -Recurse -Force
+}
 
-Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $packageDir -File | Select-Object -ExpandProperty FullName) -DestinationPath $archivePath -Force
+Compress-Archive -Path (Join-Path $packageDir '*') -DestinationPath $archivePath -Force
 Write-Host "Release folder: $packageDir"
 Write-Host "Release archive: $archivePath"
