@@ -7,8 +7,8 @@ MMD2FFMPEG is a 64-bit DirectX Media Object (DMO) encoder for MikuMikuDance 9.32
 ## Features
 
 - Appears in MMD's AVI encoder list as **MMD2FFMPEG DMO Encoder**.
-- Streams RGB24/RGB32 frames to FFmpeg through stdin; RGB32 alpha is not preserved.
-- Creates MKV output with the same name and folder as MMD's AVI target. After a successful FFmpeg encode, MMD2FFMPEG automatically removes MMD's placeholder AVI; the AVI is preserved if encoding fails.
+- Streams MMD's RGB24 frames to FFmpeg through stdin.
+- The MKV uses the same name and folder as MMD's AVI output. After a successful FFmpeg encode, MMD2FFMPEG automatically removes MMD's placeholder AVI; the AVI is preserved if encoding fails.
 - After video encoding, can read audio embedded in MMD's AVI and mux it into the MKV as FLAC, WAV/PCM, or no audio.
 - Includes an optional Hi-Res audio mode: audio below 48 kHz is encoded at twice its original sample rate and 24-bit depth.
 - Writes the MKV `DATE_RECORDED` metadata field automatically when encoding starts, using the local date in `yyyy-M-d` format.
@@ -19,32 +19,19 @@ MMD2FFMPEG is a 64-bit DirectX Media Object (DMO) encoder for MikuMikuDance 9.32
 - Includes Traditional Chinese, Simplified Chinese, Japanese, English, and system-default UI languages.
 - Writes per-export diagnostics under `%LOCALAPPDATA%\MMD2FFMPEG\logs`, including FFmpeg version, input frames, measured input FPS, elapsed time, exit code, and output size.
 
-## Default first-run encoder
-
-The first generated configuration uses a compatible CPU baseline:
-
-| Setting | Default |
-| --- | --- |
-| Encoder | CPU software (`libx265`) |
-| Codec | HEVC / H.265 |
-| Bit depth | 10-bit Main 10 |
-| Preset | medium |
-| Rate control | CRF |
-| CRF | 18 |
-
 ## Audio muxing
 
 The **Audio** tab controls what happens after video encoding finishes:
 
 | Setting | Behavior |
 | --- | --- |
-| FLAC | Losslessly encodes the AVI audio stream as FLAC and muxes it into the MKV. |
-| WAV | Preserves the AVI PCM audio when possible; Hi-Res mode outputs 24-bit PCM. |
-| None | Produces video-only MKV output. |
+| FLAC | Losslessly encodes PCM audio embedded in the AVI as FLAC and muxes it into the MKV. |
+| WAV | Muxes PCM audio embedded in the AVI into the MKV. |
+| None | Does not mux audio. |
 | Original | Keeps the source sample rate and bit depth. |
 | Hi-Res | When the source is below 48 kHz, uses twice the source sample rate and 24-bit depth for bilibili Hi-Res detection. |
 
-For MMD to place audio in the AVI, enable its WAV/audio output and export starting from **frame 0**. If the export begins later, the AVI may contain no audio stream, so there is nothing for MMD2FFMPEG to mux. The AVI is deleted only after successful video-only completion or successful audio muxing; it is retained when muxing fails for diagnosis.
+For MMD to place audio in the AVI, enable its WAV/audio output and export starting from **frame 0**. If the export begins later, the AVI exported by MMD contains no audio, so there is nothing for MMD2FFMPEG to mux. The AVI is deleted only after successful video-only completion or successful audio muxing; it is retained when muxing fails for diagnosis.
 
 ## Requirements
 
@@ -78,9 +65,8 @@ MMD2FFMPEG runs `ffmpeg.exe` from `PATH`; do not configure a hard-coded FFmpeg p
 1. Download `MMD2FFMPEG-x64.zip` from the [Releases page](https://github.com/XPRAMT/MMD2FFMPEG/releases).
 2. Extract the ZIP to a local folder.
 3. Install FFmpeg and add its `bin` folder to `PATH` as described above.
-4. Close MMD completely. The DMO DLL cannot be replaced while MMD has it loaded.
-5. Double-click `install-user.bat` in the extracted folder. It starts the installer with the required temporary PowerShell execution-policy bypass and keeps the window open so that you can read the result.
-6. Start MMD again. No Windows restart, administrator permission, Visual Studio, or `build.ps1` is required.
+4. Double-click `install-user.bat` in the extracted folder. It starts the installer with the required temporary PowerShell execution-policy bypass and keeps the window open so that you can read the result.
+5. Start MMD again.
 
 The installer registers only for the current Windows user and places the runtime files in `%LOCALAPPDATA%\MMD2FFMPEG`.
 
@@ -115,7 +101,7 @@ Maintainers can create the GitHub Release asset after a successful build:
 & 'C:\APP\MMD\MMD2FFMPEG\scripts\make-release.ps1'
 ```
 
-This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`. Upload the ZIP as the GitHub Release asset.
+This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`.
 
 `build.ps1` runs this packaging step automatically after every successful build.
 
@@ -124,17 +110,15 @@ This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`. Upload 
 1. Select **File > AVI Output** and choose the desired AVI save path.
 2. In **Video encoder**, select **MMD2FFMPEG DMO Encoder**.
 
-<img src="imgs/MMD編碼選擇介面_EN.png" alt="MMD AVI output encoder selection" width="500">
+<img src="imgs/MMD編碼選擇介面_EN.png" alt="MMD AVI output encoder selection" width="300">
 
 3. Open **Detailed settings**, configure the encoder, and use **Test encoder**.
 
-<img src="imgs/MMD2FFMPEG詳細設定介面_EN.jpg" alt="MMD2FFMPEG encoder settings (English)" width="500">
+<img src="imgs/MMD2FFMPEG詳細設定介面_EN.jpg" alt="MMD2FFMPEG encoder settings (English)">
 
-4. Save or apply only after the test passes.
-5. If audio is required, enable MMD WAV/audio output and start export from frame **0**.
-6. Start AVI output. The final MKV is written beside the selected AVI path; MMD's placeholder AVI is deleted automatically after successful video-only output or audio muxing.
-
-Use **Open log** in the encoder settings to open the dynamic per-user log folder.
+1. Save or apply only after the test passes.
+2. If audio is required, enable MMD WAV/audio output and start export from frame **0**.
+3. Start AVI output. The final MKV is written beside the selected AVI path; MMD's placeholder AVI is deleted automatically after successful video-only output or audio muxing.
 
 ## Updating and uninstalling
 
@@ -156,7 +140,7 @@ Use **Open log** in the encoder settings to open the dynamic per-user log folder
 | Per-user configuration | `%LOCALAPPDATA%\MMD2FFMPEG\config.ini` |
 | Per-export logs | `%LOCALAPPDATA%\MMD2FFMPEG\logs` |
 
-The advanced command field exposes the editable FFmpeg video-argument section. The fixed input, color conversion, output-container arguments, and output path remain controlled by MMD2FFMPEG. `config.ini` does not save an output path.
+The advanced command field exposes the editable FFmpeg video-argument section. The fixed input, color conversion, output-container arguments, and output path remain controlled by MMD2FFMPEG.
 
 ## Troubleshooting
 
@@ -174,7 +158,3 @@ The advanced command field exposes the editable FFmpeg video-argument section. T
 - MMD output is SDR BT.709. HDR output is not implemented.
 - Hardware encoder availability depends on the installed FFmpeg build, GPU, and driver. Use **Test encoder** after changing encoder settings.
 - The encoder launches `ffmpeg.exe` from `PATH`. Review custom FFmpeg arguments before saving them.
-
-## License
-
-No license file has been added to this repository yet.
