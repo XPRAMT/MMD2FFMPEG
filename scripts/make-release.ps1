@@ -20,6 +20,10 @@ foreach ($obsoleteFile in @('install.cmd', 'uninstall.cmd')) {
     $obsoletePath = Join-Path $packageDir $obsoleteFile
     if (Test-Path -LiteralPath $obsoletePath) { Remove-Item -LiteralPath $obsoletePath -Force }
 }
+$imagesDestination = Join-Path $packageDir 'imgs'
+if (Test-Path -LiteralPath $imagesDestination) {
+    Remove-Item -LiteralPath $imagesDestination -Recurse -Force
+}
 Copy-Item -LiteralPath (Join-Path $buildDir 'mmd2ffmpeg_dmo.dll') -Destination (Join-Path $packageDir 'mmd2ffmpeg_dmo.dll') -Force
 Copy-Item -LiteralPath (Join-Path $buildDir 'mmd2ffmpeg_cleanup.exe') -Destination (Join-Path $packageDir 'mmd2ffmpeg_cleanup.exe') -Force
 foreach ($fileName in @('install-user.ps1', 'install-user.bat', 'uninstall-user.ps1', 'uninstall-user.bat')) {
@@ -27,15 +31,6 @@ foreach ($fileName in @('install-user.ps1', 'install-user.bat', 'uninstall-user.
 }
 foreach ($fileName in @('README.md', 'README_TW.md')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $fileName) -Destination (Join-Path $packageDir $fileName) -Force
-}
-$imagesSource = Join-Path $projectRoot 'imgs'
-if (Test-Path -LiteralPath $imagesSource) {
-    $imagesDestination = Join-Path $packageDir 'imgs'
-    if (Test-Path -LiteralPath $imagesDestination) {
-        Remove-Item -LiteralPath $imagesDestination -Recurse -Force
-    }
-    New-Item -ItemType Directory -Path $imagesDestination -Force | Out-Null
-    Copy-Item -Path (Join-Path $imagesSource '*') -Destination $imagesDestination -Recurse -Force
 }
 
 Compress-Archive -Path (Join-Path $packageDir '*') -DestinationPath $archivePath -Force
