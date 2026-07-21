@@ -128,7 +128,7 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 3. 開啟 **詳細設定**，調整編碼選項並按 **測試編碼**。
 
-<img src="imgs/MMD2FFMPEG詳細設定介面_TW.png" alt="MMD2FFMPEG 編碼器詳細設定（繁體中文）" width="500">
+<img src="imgs/MMD2FFMPEG詳細設定介面_TW.jpg" alt="MMD2FFMPEG 編碼器詳細設定（繁體中文）" width="500">
 
 4. 測試通過後再儲存或套用設定。
 5. 若需要音訊，開啟 MMD 的 WAV／音訊輸出，並從**第 0 幀**開始輸出。

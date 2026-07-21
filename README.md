@@ -128,7 +128,7 @@ This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`. Upload 
 
 3. Open **Detailed settings**, configure the encoder, and use **Test encoder**.
 
-<img src="imgs/MMD2FFMPEG詳細設定介面_EN.png" alt="MMD2FFMPEG encoder settings (English)" width="500">
+<img src="imgs/MMD2FFMPEG詳細設定介面_EN.jpg" alt="MMD2FFMPEG encoder settings (English)" width="500">
 
 4. Save or apply only after the test passes.
 5. If audio is required, enable MMD WAV/audio output and start export from frame **0**.
