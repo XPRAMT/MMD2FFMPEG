@@ -16,7 +16,7 @@ if (-not (Test-Path -LiteralPath $cmake)) {
     throw "Visual Studio CMake was not found: $cmake"
 }
 New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
-$command = '"{0}" -arch=amd64 -host_arch=amd64 && "{1}" -S "{2}" -B "{3}" -G Ninja && "{1}" --build "{3}" --config Release' -f $devShell, $cmake, $projectRoot, $buildDir
+$command = '"{0}" -arch=amd64 -host_arch=amd64 && "{1}" -S "{2}" -B "{3}" -G Ninja -DCMAKE_BUILD_TYPE=Release && "{1}" --build "{3}" --config Release' -f $devShell, $cmake, $projectRoot, $buildDir
 & $env:ComSpec /d /s /c $command
 if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
 

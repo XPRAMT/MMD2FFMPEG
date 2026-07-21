@@ -4,6 +4,7 @@ project(MMD2FFMPEG LANGUAGES CXX)
 # Release assets are installed by end users without Visual Studio, so link the
 # Microsoft C/C++ runtime statically rather than requiring a separate redist.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
 add_library(mmd2ffmpeg_dmo SHARED
     src/dmo_driver.cpp
@@ -29,6 +30,8 @@ add_executable(MMDLocaleLauncher WIN32
 target_compile_features(MMDLocaleLauncher PRIVATE cxx_std_20)
 target_compile_definitions(MMDLocaleLauncher PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(MMDLocaleLauncher PRIVATE /W4 /permissive- /utf-8)
+target_compile_options(MMDLocaleLauncher PRIVATE $<$<CONFIG:Release>:/O1> $<$<CONFIG:Release>:/Ob1> $<$<CONFIG:Release>:/Gy> $<$<CONFIG:Release>:/Gw>)
+target_link_options(MMDLocaleLauncher PRIVATE $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
 target_link_libraries(MMDLocaleLauncher PRIVATE ole32 shell32 comdlg32 dwmapi)
 
 add_executable(dmo_smoke tests/dmo_smoke.cpp)

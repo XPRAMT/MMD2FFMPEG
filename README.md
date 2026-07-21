@@ -114,7 +114,7 @@ MMDLocaleLauncher.exe /settings
 
 This is a CP932 compatibility launcher, not a full UTF-8 conversion of MMD. Paths containing characters that CP932 cannot represent may still be limited by MMD itself.
 
-Its setup window uses a per-monitor V2 DPI-aware dark theme. The launcher executable embeds the MMD icon extracted for this release; the setup-window icon and registered `.pmm` file icon are also read from the selected `MikuMikuDance.exe`.
+Its setup window uses a per-monitor V2 DPI-aware dark theme. The launcher executable embeds 16-, 24-, 32-, and 48-pixel variants extracted from MMD's original icon group; the setup-window icon and registered `.pmm` file icon are also read from the selected `MikuMikuDance.exe`.
 
 ## Use in MMD
 
