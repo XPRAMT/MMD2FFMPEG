@@ -1107,20 +1107,10 @@ private:
                                  !std::filesystem::exists(partial_output_, error);
             summary << L"Partial output cleanup: " << (removed ? L"success" : L"failed") << L"\r\n";
         }
+        if (success && !avi_output_.empty())
+            summary << L"Placeholder AVI retained for audio-stream inspection: " << avi_output_.wstring() << L"\r\n";
         write_log_line(log_file_, summary.str());
         close_handle(log_file_);
-        if (success && !avi_output_.empty()) {
-            const auto cleanup = local_data_dir() / L"mmd2ffmpeg_cleanup.exe";
-            if (std::filesystem::exists(cleanup, error)) {
-                std::wstring command = L"\"" + cleanup.wstring() + L"\" \"" + avi_output_.wstring() + L"\" \"" + log_path_.wstring() + L"\"";
-                std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
-                STARTUPINFOW startup{}; startup.cb = sizeof(startup); PROCESS_INFORMATION cleanup_process{};
-                if (CreateProcessW(cleanup.c_str(), mutable_command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
-                                   nullptr, nullptr, &startup, &cleanup_process)) {
-                    CloseHandle(cleanup_process.hThread); CloseHandle(cleanup_process.hProcess);
-                }
-            }
-        }
         if (!success && started_) {
             const std::wstring message = L"FFmpeg output failed (exit code " + std::to_wstring(exit_code) +
                                          L").\nThe original MKV and AVI were preserved.\n\nLog: " + log_path_.wstring();
