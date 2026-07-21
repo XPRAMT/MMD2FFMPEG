@@ -136,10 +136,10 @@ UiLanguage ui_language(const std::wstring& value) {
 }
 
 const TabUiStrings& tab_ui_strings(UiLanguage language) {
-    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後，讀取AVI內含音訊，無損合併進MKV檔案，花費時間取決於硬碟速度。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，自動以原始取樣率2倍進行編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后，读取AVI内含音频，无损合并进MKV文件，耗时取决于硬盘速度。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，自动以原始采样率2倍进行编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を読み取り、MKV にロスレスで結合します。所要時間はディスク速度に依存します。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、bilibili Hi-Res 判定のため元の2倍で再エンコードします。", L"バージョン", L"作者", L"GitHub"};
-    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio from the AVI is read and losslessly merged into the MKV. Time required depends on disk speed.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, audio is encoded at twice the original sample rate for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub"};
+    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後,自動讀取AVI內含音訊,合併進MKV檔案,花費時間取決於硬碟速度。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz,Hi-Res模式以原始取樣率2倍以及24bit進行編碼,以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后,自动读取AVI内含音频,合并进MKV文件,耗时取决于硬盘速度。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz,Hi-Res模式以原始采样率2倍以及24bit进行编码,以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を自動的に読み取り、MKV に結合します。所要時間はディスク速度に依存します。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、Hi-Res モードでは元の2倍かつ24bitで再エンコードし、bilibili Hi-Res 判定に対応します。", L"バージョン", L"作者", L"GitHub"};
+    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio embedded in the AVI is automatically read and merged into the MKV. Time required depends on disk speed.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, Hi-Res mode encodes at twice the original sample rate and 24-bit for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -1373,16 +1373,16 @@ private:
                                    120, y, 128, 120, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
         };
         audio_intro_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 36, 350, 42, window_, reinterpret_cast<HMENU>(ID_AUDIO_INTRO), module_instance(), nullptr);
-        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"Audio format", 86), make_label(ID_LABEL_AUDIO_RATE, L"Sample rate / bit depth", 112)};
-        audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 84), make_combo(ID_AUDIO_RATE, 110)};
+        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"Audio format", 86), make_label(ID_LABEL_AUDIO_RATE, L"Sample rate / bit depth", 160)};
+        audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 84), make_combo(ID_AUDIO_RATE, 158)};
         SetWindowPos(audio_controls_[0], nullptr, 160, 84, 180, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(audio_controls_[1], nullptr, 160, 110, 180, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(audio_controls_[1], nullptr, 160, 158, 180, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         set_dialog_font(audio_intro_);
         for (HWND control : audio_labels_) set_dialog_font(control);
         for (HWND control : audio_controls_) set_dialog_font(control);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
         add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
-        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 144, 350, 44, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
+        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 112, 350, 42, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
         set_dialog_font(audio_help_);
         settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT",
                                           WS_CHILD, 16, 70, 228, 56, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
