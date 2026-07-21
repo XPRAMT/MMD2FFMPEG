@@ -126,9 +126,9 @@ std::wstring get_module_path() {
 std::filesystem::path config_path() {
     const std::wstring launcher = get_module_path();
     if (launcher.empty()) {
-        return L"config.ini";
+        return L"MMDLocaleLauncherConfig.ini";
     }
-    return std::filesystem::path(launcher).parent_path() / L"config.ini";
+    return std::filesystem::path(launcher).parent_path() / L"MMDLocaleLauncherConfig.ini";
 }
 
 std::string utf8_from_wide(std::wstring_view value) {

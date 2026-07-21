@@ -102,7 +102,7 @@ ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
 ```
 
 1. 從解壓縮後的 Release 資料夾執行 `MMDLocaleLauncher.exe`。`install-user.bat` 不會複製它，請將 Release 資料夾保留在可寫入的固定位置。
-2. 首次啟動時，launcher 只會在自身同資料夾找到 `ntleas.exe` 或 `MikuMikuDance.exe` 時填入該路徑；否則請分別選擇兩個執行檔後儲存，絕不搜尋其它資料夾。路徑會儲存至目前執行的 `MMDLocaleLauncher.exe` 同資料夾內 `config.ini`。
+2. 首次啟動時，launcher 只會在自身同資料夾找到 `ntleas.exe` 或 `MikuMikuDance.exe` 時填入該路徑；否則請分別選擇兩個執行檔後儲存，絕不搜尋其它資料夾。路徑會儲存至目前執行的 `MMDLocaleLauncher.exe` 同資料夾內 `MMDLocaleLauncherConfig.ini`。
 3. 完成設定後，直接雙擊 `MMDLocaleLauncher.exe` 即會透過 ntleas 啟動 MMD。經由 launcher 開啟 `.pmm` 時，會使用 ntleas 已定義的 `A` 應用程式參數將 PMM 路徑傳給 MMD。
 4. 在設定頁勾選 **註冊並設定為 .pmm 的預設開啟程式**，可將 launcher 加入 Windows。Windows 會自行顯示預設應用程式確認畫面；launcher 不會在背景強制覆寫使用者的檔案關聯。
 
