@@ -106,8 +106,8 @@ struct TabUiStrings {
     const wchar_t* audio;
     const wchar_t* settings;
     const wchar_t* audio_format;
-    const wchar_t* sample_rate;
-    const wchar_t* audio_depth;
+    const wchar_t* sample_rate_depth;
+    const wchar_t* audio_intro;
     const wchar_t* original;
     const wchar_t* hi_res;
     const wchar_t* hi_res_help;
@@ -136,10 +136,10 @@ UiLanguage ui_language(const std::wstring& value) {
 }
 
 const TabUiStrings& tab_ui_strings(UiLanguage language) {
-    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率", L"位元深度", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，自動以原始取樣率2倍進行編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率", L"位深度", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，自动以原始采样率2倍进行编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート", L"ビット深度", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、bilibili Hi-Res 判定のため元の2倍で再エンコードします。", L"バージョン", L"作者", L"GitHub"};
-    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate", L"Bit depth", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, audio is encoded at twice the original sample rate for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub"};
+    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後，讀取AVI內含音訊，無損合併進MKV檔案，花費時間取決於硬碟速度。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，自動以原始取樣率2倍進行編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后，读取AVI内含音频，无损合并进MKV文件，耗时取决于硬盘速度。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，自动以原始采样率2倍进行编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を読み取り、MKV にロスレスで結合します。所要時間はディスク速度に依存します。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、bilibili Hi-Res 判定のため元の2倍で再エンコードします。", L"バージョン", L"作者", L"GitHub"};
+    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio from the AVI is read and losslessly merged into the MKV. Time required depends on disk speed.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, audio is encoded at twice the original sample rate for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -1282,7 +1282,7 @@ public:
         candidate.video_args = edit_text(ID_COMMAND);
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         candidate.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
-        candidate.audio_bit_depth = combo_index(ID_AUDIO_DEPTH) == 1 ? L"24" : L"original";
+        candidate.audio_bit_depth = candidate.audio_sample_rate == L"hires" ? L"24" : L"original";
         const auto signature = command_test_signature(candidate);
         if (!current_command_tested_ || tested_signature_ != signature) {
             const auto& text = current_text();
@@ -1372,14 +1372,15 @@ private:
             return CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST | WS_TABSTOP,
                                    120, y, 128, 120, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
         };
-        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"Audio format", 38), make_label(ID_LABEL_AUDIO_RATE, L"Sample rate", 64), make_label(ID_LABEL_AUDIO_DEPTH, L"Bit depth", 90)};
-        audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 36), make_combo(ID_AUDIO_RATE, 62), make_combo(ID_AUDIO_DEPTH, 88)};
+        audio_intro_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 36, 228, 42, window_, reinterpret_cast<HMENU>(ID_AUDIO_INTRO), module_instance(), nullptr);
+        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"Audio format", 86), make_label(ID_LABEL_AUDIO_RATE, L"Sample rate / bit depth", 112)};
+        audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 84), make_combo(ID_AUDIO_RATE, 110)};
+        set_dialog_font(audio_intro_);
         for (HWND control : audio_labels_) set_dialog_font(control);
         for (HWND control : audio_controls_) set_dialog_font(control);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
         add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
-        add_combo(ID_AUDIO_DEPTH, {L"Original", L"24bit"}, settings_.audio_bit_depth == L"24" ? 1 : 0);
-        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 118, 228, 44, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
+        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 144, 228, 44, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
         set_dialog_font(audio_help_);
         settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT",
                                           WS_CHILD, 16, 70, 228, 56, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
@@ -1399,6 +1400,7 @@ private:
         for (const int id : video_more) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
+        ShowWindow(audio_intro_, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(audio_help_, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LABEL_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
@@ -1515,7 +1517,7 @@ private:
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
-        settings_.audio_bit_depth = combo_index(ID_AUDIO_DEPTH) == 1 ? L"24" : L"original";
+        settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
     }
     void update_command_display() {
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
@@ -1604,12 +1606,11 @@ private:
             TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(tabs[index]); TabCtrl_SetItem(tab_, index, &item);
         }
         SetWindowTextW(audio_labels_[0], text.audio_format);
-        SetWindowTextW(audio_labels_[1], text.sample_rate);
-        SetWindowTextW(audio_labels_[2], text.audio_depth);
-        const int format = combo_index(ID_AUDIO_FORMAT), rate = combo_index(ID_AUDIO_RATE), depth = combo_index(ID_AUDIO_DEPTH);
+        SetWindowTextW(audio_labels_[1], text.sample_rate_depth);
+        const int format = combo_index(ID_AUDIO_FORMAT), rate = combo_index(ID_AUDIO_RATE);
         reset_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, format);
         reset_combo(ID_AUDIO_RATE, {text.original, text.hi_res}, rate);
-        reset_combo(ID_AUDIO_DEPTH, {text.original, L"24bit"}, depth);
+        SetWindowTextW(audio_intro_, text.audio_intro);
         SetWindowTextW(audio_help_, text.hi_res_help);
         const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" + text.author + L": XPRAMT";
         SetWindowTextW(settings_info_, info.c_str());
@@ -1646,7 +1647,7 @@ private:
     }
     void changed(int id) {
         dirty_ = true;
-        if (id != ID_AUDIO_FORMAT && id != ID_AUDIO_RATE && id != ID_AUDIO_DEPTH) {
+        if (id != ID_AUDIO_FORMAT && id != ID_AUDIO_RATE) {
             current_command_tested_ = false;
             tested_signature_.clear();
         }
@@ -1744,9 +1745,10 @@ private:
     HWND tab_ = nullptr;
     HWND settings_info_ = nullptr;
     HWND github_link_ = nullptr;
+    HWND audio_intro_ = nullptr;
     HWND audio_help_ = nullptr;
-    std::array<HWND, 3> audio_labels_{};
-    std::array<HWND, 3> audio_controls_{};
+    std::array<HWND, 2> audio_labels_{};
+    std::array<HWND, 2> audio_controls_{};
     int active_tab_ = 0;
     Settings settings_{};
     bool dirty_ = false;
