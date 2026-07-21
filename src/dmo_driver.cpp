@@ -1342,7 +1342,7 @@ private:
         update_vertical_scroll();
     }
     void create_tab_controls() {
-        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES};
+        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES | ICC_LINK_CLASS};
         InitCommonControlsEx(&common);
         const HFONT dialog_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(window_, ID_LANGUAGE), WM_GETFONT, 0, 0));
         const auto set_dialog_font = [&](HWND control) {
@@ -1363,7 +1363,7 @@ private:
         for (const int id : video_ids) {
             HWND control = GetDlgItem(window_, id); RECT bounds{};
             GetWindowRect(control, &bounds); MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&bounds), 2);
-            SetWindowPos(control, nullptr, bounds.left, bounds.top + 24, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(control, nullptr, bounds.left, bounds.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
         auto make_label = [&](int id, const wchar_t* text, int y) {
             return CreateWindowExW(0, L"STATIC", text, WS_CHILD, 16, y, 100, 18, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
@@ -1372,21 +1372,23 @@ private:
             return CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST | WS_TABSTOP,
                                    120, y, 128, 120, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
         };
-        audio_intro_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 36, 228, 42, window_, reinterpret_cast<HMENU>(ID_AUDIO_INTRO), module_instance(), nullptr);
+        audio_intro_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 36, 350, 42, window_, reinterpret_cast<HMENU>(ID_AUDIO_INTRO), module_instance(), nullptr);
         audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"Audio format", 86), make_label(ID_LABEL_AUDIO_RATE, L"Sample rate / bit depth", 112)};
         audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 84), make_combo(ID_AUDIO_RATE, 110)};
+        SetWindowPos(audio_controls_[0], nullptr, 160, 84, 180, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(audio_controls_[1], nullptr, 160, 110, 180, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         set_dialog_font(audio_intro_);
         for (HWND control : audio_labels_) set_dialog_font(control);
         for (HWND control : audio_controls_) set_dialog_font(control);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
         add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
-        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 144, 228, 44, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
+        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 144, 350, 44, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
         set_dialog_font(audio_help_);
         settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT",
                                           WS_CHILD, 16, 70, 228, 56, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
         set_dialog_font(settings_info_);
-        github_link_ = CreateWindowExW(0, L"STATIC", L"https://github.com/XPRAMT/MMD2FFMPEG", WS_CHILD | SS_NOTIFY,
-                                        16, 128, 228, 20, window_, reinterpret_cast<HMENU>(ID_GITHUB_LINK), module_instance(), nullptr);
+        github_link_ = CreateWindowExW(0, WC_LINK, L"<a href=\"https://github.com/XPRAMT/MMD2FFMPEG\">https://github.com/XPRAMT/MMD2FFMPEG</a>", WS_CHILD | WS_TABSTOP,
+                                        16, 128, 350, 20, window_, reinterpret_cast<HMENU>(ID_GITHUB_LINK), module_instance(), nullptr);
         set_dialog_font(github_link_);
         apply_tab_language();
         switch_tab(0);
@@ -1709,6 +1711,11 @@ private:
             self->switch_tab(TabCtrl_GetCurSel(self->tab_));
             return TRUE;
         }
+        else if (message == WM_NOTIFY && self && reinterpret_cast<NMHDR*>(lparam)->idFrom == ID_GITHUB_LINK &&
+                 reinterpret_cast<NMHDR*>(lparam)->code == NM_CLICK) {
+            ShellExecuteW(window, L"open", L"https://github.com/XPRAMT/MMD2FFMPEG", nullptr, nullptr, SW_SHOWNORMAL);
+            return TRUE;
+        }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {
             self->start_probe(true);
             return TRUE;
@@ -1716,15 +1723,6 @@ private:
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_OPEN_LOG && HIWORD(wparam) == BN_CLICKED) {
             self->open_log_folder();
             return TRUE;
-        }
-        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_GITHUB_LINK && HIWORD(wparam) == STN_CLICKED) {
-            ShellExecuteW(window, L"open", L"https://github.com/XPRAMT/MMD2FFMPEG", nullptr, nullptr, SW_SHOWNORMAL);
-            return TRUE;
-        }
-        else if (message == WM_CTLCOLORSTATIC && self && reinterpret_cast<HWND>(lparam) == self->github_link_) {
-            SetTextColor(reinterpret_cast<HDC>(wparam), RGB(0, 102, 204));
-            SetBkMode(reinterpret_cast<HDC>(wparam), TRANSPARENT);
-            return reinterpret_cast<INT_PTR>(GetSysColorBrush(COLOR_WINDOW));
         }
         else if (message == WM_COMMAND && self && !self->updating_command_ &&
                  LOWORD(wparam) == ID_LANGUAGE && HIWORD(wparam) == CBN_SELCHANGE) {
