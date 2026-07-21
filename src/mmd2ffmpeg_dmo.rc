@@ -31,5 +31,5 @@ BEGIN
     LTEXT           "Encoder status: not tested", ID_STATUS, 8, 196, 244, 12, SS_LEFTNOWORDWRAP
     LTEXT           "Test must pass before saving or applying.", ID_TEST_REQUIREMENT, 8, 218, 124, 10
     DEFPUSHBUTTON   "Test encoder", ID_REFRESH, 136, 214, 54, 16, WS_TABSTOP
-    PUSHBUTTON      "Open log folder", ID_OPEN_LOG, 194, 214, 58, 16, WS_TABSTOP
+    PUSHBUTTON      "Open log", ID_OPEN_LOG, 194, 214, 58, 16, WS_TABSTOP
 END

@@ -123,7 +123,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"完整 FFmpeg 指令（中間區段可編輯）",
         L"編碼器狀態：尚未測試", L"編碼器狀態：測試中…", L"編碼器狀態：測試通過",
         L"編碼器狀態：設定已變更，請重新測試", L"編碼器狀態：測試失敗 - ",
-        L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟 log 資料夾",
+        L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟log",
         L"無法開啟編碼 log 資料夾。", L"MMD2FFMPEG log",
         L"請先測試目前的編碼指令。\n\n通過測試後才能儲存或套用設定。",
         L"需要測試 MMD2FFMPEG 編碼器"};
@@ -132,7 +132,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"完整 FFmpeg 命令（中间部分可编辑）",
         L"编码器状态：尚未测试", L"编码器状态：测试中…", L"编码器状态：测试通过",
         L"编码器状态：设置已更改，请重新测试", L"编码器状态：测试失败 - ",
-        L"测试通过后才能保存或应用。", L"测试编码", L"打开日志文件夹",
+        L"测试通过后才能保存或应用。", L"测试编码", L"打开日志",
         L"无法打开编码日志文件夹。", L"MMD2FFMPEG 日志",
         L"请先测试当前的编码命令。\n\n测试通过后才能保存或应用设置。",
         L"需要测试 MMD2FFMPEG 编码器"};
@@ -141,7 +141,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"完全な FFmpeg コマンド（中央部分は編集可能）",
         L"エンコーダー状態：未テスト", L"エンコーダー状態：テスト中…", L"エンコーダー状態：テスト合格",
         L"エンコーダー状態：設定が変更されました。再テストしてください", L"エンコーダー状態：テスト失敗 - ",
-        L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログフォルダーを開く",
+        L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログを開く",
         L"エンコードログのフォルダーを開けません。", L"MMD2FFMPEG ログ",
         L"現在のエンコーダーコマンドを先にテストしてください。\n\nテストに合格するまで設定を保存または適用できません。",
         L"MMD2FFMPEG エンコーダーのテストが必要です"};
@@ -150,7 +150,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Complete FFmpeg command (middle section is editable)",
         L"Encoder status: not tested", L"Encoder status: testing...", L"Encoder status: test passed",
         L"Encoder status: settings changed; test again", L"Encoder status: test failed - ",
-        L"Test must pass before saving or applying.", L"Test encoder", L"Open log folder",
+        L"Test must pass before saving or applying.", L"Test encoder", L"Open log",
         L"Could not open the encoding log folder.", L"MMD2FFMPEG Log",
         L"Test the current encoder command first.\n\nSettings can only be saved or applied after the test passes.",
         L"MMD2FFMPEG Encoder Test Required"};
