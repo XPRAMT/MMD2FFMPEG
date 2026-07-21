@@ -118,6 +118,12 @@ int wmain(int argument_count, wchar_t** arguments) {
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 11;
         }
     }
+    for (const int id : {ID_TAB, ID_LABEL_BACKEND, ID_AUDIO_INTRO, ID_LABEL_LANGUAGE, ID_GITHUB_LINK}) {
+        if (child_rect(page_window, id).left != 0) {
+            std::wcerr << L"Tab page content is not aligned to the left edge: " << id << L"\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 15;
+        }
+    }
     std::array<wchar_t, 16> github_class{};
     GetClassNameW(GetDlgItem(page_window, ID_GITHUB_LINK), github_class.data(), static_cast<int>(github_class.size()));
     if (wcscmp(github_class.data(), L"Edit") != 0) {

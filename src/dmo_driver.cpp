@@ -54,7 +54,7 @@ struct Settings {
     std::wstring rate_control = L"crf";
     int qp = 18;
     int bitrate_kbps = 20000;
-    std::wstring audio_format = L"none";
+    std::wstring audio_format = L"flac";
     std::wstring audio_sample_rate = L"original";
     std::wstring audio_bit_depth = L"original";
     std::wstring language = L"system";
