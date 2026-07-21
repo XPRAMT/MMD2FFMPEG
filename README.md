@@ -102,7 +102,7 @@ ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
 ```
 
 1. Run `MMDLocaleLauncher.exe` from the Release package or `%LOCALAPPDATA%\MMD2FFMPEG`.
-2. On its first run, select the x64 `ntleas.exe` and `MikuMikuDance.exe` paths, then save. The paths are stored in `%LOCALAPPDATA%\MMDLocaleLauncher\config.ini`.
+2. On its first run, select the x64 `ntleas.exe` and `MikuMikuDance.exe` paths, then save. The paths are stored in `config.ini` beside the `MMDLocaleLauncher.exe` that is being run.
 3. After setup, double-clicking `MMDLocaleLauncher.exe` starts MMD through NTLEA. Opening a `.pmm` through the launcher passes that PMM to MMD using NTLEA's documented `A` application-argument option.
 4. Select **Register and set as the default opener for .pmm** during setup to add the launcher to Windows. Windows displays its own default-app confirmation UI; the launcher never silently overrides the user's file association.
 
@@ -114,7 +114,7 @@ MMDLocaleLauncher.exe /settings
 
 This is a CP932 compatibility launcher, not a full UTF-8 conversion of MMD. Paths containing characters that CP932 cannot represent may still be limited by MMD itself.
 
-Its setup window uses a per-monitor V2 DPI-aware dark theme. The launcher executable embeds 16-, 24-, 32-, and 48-pixel variants extracted from MMD's original icon group; the setup-window icon and registered `.pmm` file icon are also read from the selected `MikuMikuDance.exe`.
+Its setup window uses a per-monitor V2 DPI-aware dark theme. The launcher executable embeds the largest 128-pixel image extracted from MMD's original icon group; the setup-window icon and registered `.pmm` file icon are also read from the selected `MikuMikuDance.exe`.
 
 ## Use in MMD
 

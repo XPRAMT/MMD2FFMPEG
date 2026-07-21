@@ -102,7 +102,7 @@ ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
 ```
 
 1. 從 Release 解壓縮資料夾或 `%LOCALAPPDATA%\MMD2FFMPEG` 執行 `MMDLocaleLauncher.exe`。
-2. 首次啟動時，選擇 x64 `ntleas.exe` 與 `MikuMikuDance.exe` 的路徑後儲存。路徑會儲存至 `%LOCALAPPDATA%\MMDLocaleLauncher\config.ini`。
+2. 首次啟動時，選擇 x64 `ntleas.exe` 與 `MikuMikuDance.exe` 的路徑後儲存。路徑會儲存至目前執行的 `MMDLocaleLauncher.exe` 同資料夾內 `config.ini`。
 3. 完成設定後，直接雙擊 `MMDLocaleLauncher.exe` 即會透過 NTLEA 啟動 MMD。經由 launcher 開啟 `.pmm` 時，會使用 NTLEA 已定義的 `A` 應用程式參數將 PMM 路徑傳給 MMD。
 4. 在設定頁勾選 **註冊並設定為 .pmm 的預設開啟程式**，可將 launcher 加入 Windows。Windows 會自行顯示預設應用程式確認畫面；launcher 不會在背景強制覆寫使用者的檔案關聯。
 
@@ -114,7 +114,7 @@ MMDLocaleLauncher.exe /settings
 
 這是 CP932 相容啟動器，不是將 MMD 完整轉換為 UTF-8。若路徑含 CP932 無法表示的字元，仍可能受 MMD 本身限制。
 
-設定視窗採用 Per-Monitor V2 DPI 感知的深色主題。launcher EXE 會內嵌 MMD 原始圖示群組的 16、24、32、48 像素版本；視窗圖示與註冊後的 `.pmm` 檔案圖示也會直接讀取所選 `MikuMikuDance.exe`。
+設定視窗採用 Per-Monitor V2 DPI 感知的深色主題。launcher EXE 會內嵌 MMD 原始圖示群組最大的 128 像素版本；視窗圖示與註冊後的 `.pmm` 檔案圖示也會直接讀取所選 `MikuMikuDance.exe`。
 
 ## 在 MMD 中使用
 

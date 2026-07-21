@@ -123,19 +123,12 @@ std::wstring get_module_path() {
     }
 }
 
-std::wstring get_local_app_data() {
-    PWSTR path = nullptr;
-    const HRESULT result = SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path);
-    if (FAILED(result) || path == nullptr) {
-        return {};
-    }
-    std::wstring value(path);
-    CoTaskMemFree(path);
-    return value;
-}
-
 std::filesystem::path config_path() {
-    return std::filesystem::path(get_local_app_data()) / L"MMDLocaleLauncher" / L"config.ini";
+    const std::wstring launcher = get_module_path();
+    if (launcher.empty()) {
+        return L"config.ini";
+    }
+    return std::filesystem::path(launcher).parent_path() / L"config.ini";
 }
 
 std::string utf8_from_wide(std::wstring_view value) {
