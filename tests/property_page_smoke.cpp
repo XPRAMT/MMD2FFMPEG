@@ -135,6 +135,12 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Tab and right-anchored controls do not preserve symmetric horizontal margins.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 16;
     }
+    const RECT encoder_test_button = child_rect(page_window, ID_REFRESH);
+    const RECT open_log_button = child_rect(page_window, ID_OPEN_LOG);
+    if (encoder_test_button.right >= open_log_button.left) {
+        std::wcerr << L"Test encoder and open log buttons overlap.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 17;
+    }
     std::array<wchar_t, 16> github_class{};
     GetClassNameW(GetDlgItem(page_window, ID_GITHUB_LINK), github_class.data(), static_cast<int>(github_class.size()));
     if (wcscmp(github_class.data(), L"Edit") != 0) {

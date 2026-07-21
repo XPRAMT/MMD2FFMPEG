@@ -1505,6 +1505,11 @@ private:
         RECT client{};
         GetClientRect(window_, &client);
         horizontal_margin_ = child_rect(ID_TAB).left;
+        const RECT test_button = child_rect(ID_REFRESH);
+        const RECT open_log_button = child_rect(ID_OPEN_LOG);
+        test_button_width_ = static_cast<int>(test_button.right - test_button.left);
+        open_log_button_width_ = static_cast<int>(open_log_button.right - open_log_button.left);
+        button_gap_ = std::max(0, static_cast<int>(open_log_button.left - test_button.right));
         content_height_ = static_cast<int>(client.bottom);
     }
     RECT child_rect(int id) const {
@@ -1535,9 +1540,6 @@ private:
             return false;
         }
     }
-    static bool is_fixed_width_right_anchored_control(int id) {
-        return id == ID_OPEN_LOG;
-    }
     void layout_scrolled_children() {
         RECT client{};
         GetClientRect(window_, &client);
@@ -1546,9 +1548,12 @@ private:
             const int top = static_cast<int>(child.rectangle.top);
             const int original_width = static_cast<int>(child.rectangle.right - child.rectangle.left);
             const int id = GetDlgCtrlID(child.window);
-            const int left = is_fixed_width_right_anchored_control(id)
-                ? std::max(0, static_cast<int>(client.right) - horizontal_margin_ - original_width)
-                : original_left;
+            const int right_edge = static_cast<int>(client.right) - horizontal_margin_;
+            const int left = id == ID_OPEN_LOG
+                ? std::max(0, right_edge - open_log_button_width_)
+                : id == ID_REFRESH
+                    ? std::max(0, right_edge - open_log_button_width_ - button_gap_ - test_button_width_)
+                    : original_left;
             const int width = is_right_anchored_control(id)
                 ? std::max(1, static_cast<int>(client.right) - horizontal_margin_ - left)
                 : std::min(original_width, std::max(1, static_cast<int>(client.right) - left));
@@ -1763,6 +1768,9 @@ private:
     int content_height_ = 0;
     int scroll_offset_ = 0;
     int horizontal_margin_ = 0;
+    int test_button_width_ = 0;
+    int open_log_button_width_ = 0;
+    int button_gap_ = 0;
 };
 
 class Factory final : public IClassFactory {
