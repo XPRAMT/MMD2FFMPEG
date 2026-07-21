@@ -1,6 +1,8 @@
 #include <windows.h>
 #include <shellapi.h>
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -36,6 +38,30 @@ bool run_ffmpeg(const std::filesystem::path& ffmpeg, const std::wstring& command
     return exit_code == 0;
 }
 
+int probe_audio_rate(const std::filesystem::path& ffmpeg, const std::filesystem::path& avi) {
+    SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
+    HANDLE read_pipe = nullptr, write_pipe = nullptr;
+    if (!CreatePipe(&read_pipe, &write_pipe, &security, 65536)) return 0;
+    SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0);
+    std::wstring command = L"\"" + ffmpeg.wstring() + L"\" -hide_banner -i \"" + avi.wstring() + L"\"";
+    std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
+    STARTUPINFOW startup{}; startup.cb = sizeof(startup); startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE); startup.hStdOutput = write_pipe; startup.hStdError = write_pipe;
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(ffmpeg.c_str(), mutable_command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+        CloseHandle(read_pipe); CloseHandle(write_pipe); return 0;
+    }
+    CloseHandle(write_pipe); std::string output; std::array<char, 4096> buffer{}; DWORD read = 0;
+    while (output.size() < 65536 && ReadFile(read_pipe, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) && read)
+        output.append(buffer.data(), read);
+    CloseHandle(read_pipe); WaitForSingleObject(process.hProcess, 5000); CloseHandle(process.hThread); CloseHandle(process.hProcess);
+    const auto audio = output.find("Audio:"); const auto hz = output.find(" Hz", audio);
+    if (audio == std::string::npos || hz == std::string::npos) return 0;
+    std::size_t begin = hz;
+    while (begin > audio && output[begin - 1] >= '0' && output[begin - 1] <= '9') --begin;
+    try { return std::stoi(output.substr(begin, hz - begin)); } catch (...) { return 0; }
+}
+
 }
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -59,7 +85,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     const auto temporary = mkv.parent_path() / (mkv.stem().wstring() + L".mmd2ffmpeg-audio-partial" + mkv.extension().wstring());
     std::error_code error; std::filesystem::remove(temporary, error);
     std::wstring audio = format == L"flac" ? L"-c:a flac" : depth == L"24" ? L"-c:a pcm_s24le" : L"-c:a copy";
-    if (rate == L"hires") audio += L" -ar 88200";
+    if (depth == L"24" && format == L"flac") audio += L" -sample_fmt s32";
+    if (rate == L"hires") {
+        const int source_rate = probe_audio_rate(ffmpeg, avi);
+        if (source_rate > 0 && source_rate < 48000) audio += L" -ar " + std::to_wstring(std::max(48000, source_rate * 2));
+    }
     const std::wstring command = L"\"" + ffmpeg.wstring() + L"\" -hide_banner -loglevel warning -y -i \"" + mkv.wstring() +
                                  L"\" -i \"" + avi.wstring() + L"\" -map 0:v:0 -map 1:a:0 -c:v copy " + audio +
                                  L" \"" + temporary.wstring() + L"\"";
