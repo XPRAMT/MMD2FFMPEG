@@ -586,30 +586,7 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
     }
 }
 
-std::wstring first_existing_default(const std::vector<std::filesystem::path>& candidates) {
-    for (const auto& candidate : candidates) {
-        std::error_code error;
-        if (std::filesystem::is_regular_file(candidate, error)) {
-            return candidate.wstring();
-        }
-    }
-    return {};
-}
-
 bool show_setup_window(Config& config, bool& register_pmm) {
-    if (config.ntleas_path.empty()) {
-        config.ntleas_path = first_existing_default({
-            LR"(C:\APP\ntleas046_x64\x64\ntleas.exe)",
-            LR"(C:\ntleas046_x64\x64\ntleas.exe)"
-        });
-    }
-    if (config.mmd_path.empty()) {
-        config.mmd_path = first_existing_default({
-            LR"(C:\APP\MikuMikuDance_v932x64\MikuMikuDance.exe)",
-            LR"(C:\MikuMikuDance_v932x64\MikuMikuDance.exe)"
-        });
-    }
-
     WNDCLASSW window_class{};
     window_class.lpfnWndProc = setup_window_proc;
     window_class.hInstance = GetModuleHandleW(nullptr);
