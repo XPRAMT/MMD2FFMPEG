@@ -1677,7 +1677,13 @@ private:
             return TRUE;
         }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_GITHUB_LINK && HIWORD(wparam) == STN_CLICKED) {
-            ShellExecuteW(window, L"open", L"https://github.com/XPRAMT/MMD2FFMPEG", nullptr, nullptr, SW_SHOWNORMAL);
+            SHELLEXECUTEINFOW launch{sizeof(launch)};
+            launch.fMask = SEE_MASK_ASYNCOK | SEE_MASK_FLAG_NO_UI;
+            launch.hwnd = window;
+            launch.lpVerb = L"open";
+            launch.lpFile = L"https://github.com/XPRAMT/MMD2FFMPEG";
+            launch.nShow = SW_SHOWNORMAL;
+            ShellExecuteExW(&launch);
             return TRUE;
         }
         else if (message == WM_CTLCOLORSTATIC && self && reinterpret_cast<HWND>(lparam) == self->github_link_) {

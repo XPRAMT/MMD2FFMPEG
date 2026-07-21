@@ -6,43 +6,43 @@ STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN | WS_CLI
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "Segoe UI", 400, 0, 0x1
 BEGIN
-    CONTROL         "", ID_TAB, "SysTabControl32", WS_TABSTOP, 8, 4, 244, 18
+    CONTROL         "", ID_TAB, "SysTabControl32", WS_TABSTOP, 8, 4, 244, 12
 
     // Video tab
-    LTEXT           "Encoder", ID_LABEL_BACKEND, 8, 26, 58, 10
-    COMBOBOX        ID_BACKEND, 68, 24, 96, 95, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Codec", ID_LABEL_CODEC, 8, 42, 58, 10
-    COMBOBOX        ID_CODEC, 68, 40, 96, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Bit depth", ID_LABEL_DEPTH, 8, 58, 58, 10
-    COMBOBOX        ID_DEPTH, 68, 56, 96, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Encoder preset", ID_LABEL_PRESET, 8, 74, 58, 10
-    COMBOBOX        ID_PRESET, 68, 72, 96, 95, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Rate control", ID_LABEL_RATE, 8, 90, 58, 10
-    COMBOBOX        ID_RATE, 68, 88, 96, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Quality / QP", ID_LABEL_QP, 8, 106, 58, 10
-    EDITTEXT        ID_QP, 68, 104, 45, 14, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
-    LTEXT           "Bitrate (kbps)", ID_LABEL_BITRATE, 120, 106, 62, 10
-    EDITTEXT        ID_BITRATE, 184, 104, 42, 14, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
-    LTEXT           "Complete FFmpeg command (middle section is editable)", ID_COMMAND_HEADING, 8, 123, 244, 10
-    LTEXT           "", ID_COMMAND_PREFIX, 8, 135, 244, 24, SS_LEFT
-    EDITTEXT        ID_COMMAND, 8, 160, 244, 14, ES_AUTOHSCROLL | WS_TABSTOP
-    LTEXT           "", ID_COMMAND_SUFFIX, 8, 176, 244, 18, SS_LEFT
-    LTEXT           "Encoder status: not tested", ID_STATUS, 8, 198, 244, 12, SS_LEFTNOWORDWRAP
-    LTEXT           "Test must pass before saving or applying.", ID_TEST_REQUIREMENT, 8, 220, 124, 10
-    DEFPUSHBUTTON   "Test encoder", ID_REFRESH, 136, 216, 54, 16, WS_TABSTOP
-    PUSHBUTTON      "Open log", ID_OPEN_LOG, 194, 216, 58, 16, WS_TABSTOP
+    LTEXT           "Encoder", ID_LABEL_BACKEND, 8, 20, 58, 10
+    COMBOBOX        ID_BACKEND, 68, 18, 96, 95, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Codec", ID_LABEL_CODEC, 8, 36, 58, 10
+    COMBOBOX        ID_CODEC, 68, 34, 96, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Bit depth", ID_LABEL_DEPTH, 8, 52, 58, 10
+    COMBOBOX        ID_DEPTH, 68, 50, 96, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Encoder preset", ID_LABEL_PRESET, 8, 68, 58, 10
+    COMBOBOX        ID_PRESET, 68, 66, 96, 95, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Rate control", ID_LABEL_RATE, 8, 84, 58, 10
+    COMBOBOX        ID_RATE, 68, 82, 96, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Quality / QP", ID_LABEL_QP, 8, 100, 58, 10
+    EDITTEXT        ID_QP, 68, 98, 45, 14, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "Bitrate (kbps)", ID_LABEL_BITRATE, 120, 100, 62, 10
+    EDITTEXT        ID_BITRATE, 184, 98, 42, 14, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "Complete FFmpeg command (middle section is editable)", ID_COMMAND_HEADING, 8, 117, 244, 10
+    LTEXT           "", ID_COMMAND_PREFIX, 8, 129, 244, 24, SS_LEFT
+    EDITTEXT        ID_COMMAND, 8, 154, 244, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", ID_COMMAND_SUFFIX, 8, 170, 244, 18, SS_LEFT
+    LTEXT           "Encoder status: not tested", ID_STATUS, 8, 192, 244, 12, SS_LEFTNOWORDWRAP
+    LTEXT           "Test must pass before saving or applying.", ID_TEST_REQUIREMENT, 8, 214, 124, 10
+    DEFPUSHBUTTON   "Test encoder", ID_REFRESH, 136, 210, 54, 16, WS_TABSTOP
+    PUSHBUTTON      "Open log", ID_OPEN_LOG, 194, 210, 58, 16, WS_TABSTOP
 
     // Audio tab
-    LTEXT           "", ID_AUDIO_INTRO, 8, 28, 244, 30
-    LTEXT           "Audio format", ID_LABEL_AUDIO_FORMAT, 8, 64, 82, 10
-    COMBOBOX        ID_AUDIO_FORMAT, 94, 62, 158, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "", ID_AUDIO_HELP, 8, 86, 244, 32
-    LTEXT           "Sample rate / bit depth", ID_LABEL_AUDIO_RATE, 8, 124, 82, 10
-    COMBOBOX        ID_AUDIO_RATE, 94, 122, 158, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "", ID_AUDIO_INTRO, 8, 20, 244, 20
+    LTEXT           "Audio format", ID_LABEL_AUDIO_FORMAT, 8, 46, 82, 10
+    COMBOBOX        ID_AUDIO_FORMAT, 94, 44, 158, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "", ID_AUDIO_HELP, 8, 62, 244, 20
+    LTEXT           "Sample rate / bit depth", ID_LABEL_AUDIO_RATE, 8, 88, 82, 10
+    COMBOBOX        ID_AUDIO_RATE, 94, 86, 158, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
     // Settings tab
-    LTEXT           "Language", ID_LABEL_LANGUAGE, 8, 30, 82, 10
-    COMBOBOX        ID_LANGUAGE, 94, 28, 158, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "MMD2FFMPEG", ID_SETTINGS_INFO, 8, 54, 244, 42
-    LTEXT           "https://github.com/XPRAMT/MMD2FFMPEG", ID_GITHUB_LINK, 8, 100, 244, 14, SS_NOTIFY | WS_TABSTOP
+    LTEXT           "Language", ID_LABEL_LANGUAGE, 8, 20, 82, 10
+    COMBOBOX        ID_LANGUAGE, 94, 18, 158, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "MMD2FFMPEG", ID_SETTINGS_INFO, 8, 44, 244, 20
+    LTEXT           "https://github.com/XPRAMT/MMD2FFMPEG", ID_GITHUB_LINK, 8, 70, 244, 14, SS_NOTIFY | WS_TABSTOP
 END
