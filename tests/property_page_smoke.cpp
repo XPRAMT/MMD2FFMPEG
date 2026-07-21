@@ -1,6 +1,9 @@
 ﻿#include <windows.h>
 #include <ocidl.h>
+#include <commctrl.h>
+#include <array>
 
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -22,6 +25,10 @@ bool valid_rect(const RECT& rectangle) {
     return rectangle.right > rectangle.left && rectangle.bottom > rectangle.top;
 }
 
+bool has_visible_style(HWND window) {
+    return window && (GetWindowLongPtrW(window, GWL_STYLE) & WS_VISIBLE) != 0;
+}
+
 std::wstring window_text(HWND window) {
     const int length = GetWindowTextLengthW(window);
     std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
@@ -38,11 +45,24 @@ int wmain(int argument_count, wchar_t** arguments) {
     SetProcessDpiAwarenessContext(awareness);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+    std::array<wchar_t, 32768> executable_path{};
+    GetModuleFileNameW(nullptr, executable_path.data(), static_cast<DWORD>(executable_path.size()));
+    const auto dll_path = std::filesystem::path(executable_path.data()).parent_path() / L"mmd2ffmpeg_dmo.dll";
+    HMODULE module = LoadLibraryW(dll_path.c_str());
+    if (!module) {
+        std::wcerr << L"Could not load build DLL: " << dll_path.wstring() << L"\n";
+        CoUninitialize(); return 1;
+    }
+    using DllGetClassObjectFn = HRESULT(WINAPI*)(REFCLSID, REFIID, LPVOID*);
+    const auto get_class_object = reinterpret_cast<DllGetClassObjectFn>(GetProcAddress(module, "DllGetClassObject"));
+    IClassFactory* factory = nullptr;
+    HRESULT result = get_class_object ? get_class_object(CLSID_MMD2FFMPEG_SETTINGS, IID_IClassFactory,
+                                                          reinterpret_cast<void**>(&factory)) : E_NOINTERFACE;
     IPropertyPage* page = nullptr;
-    HRESULT result = CoCreateInstance(CLSID_MMD2FFMPEG_SETTINGS, nullptr, CLSCTX_INPROC_SERVER,
-                                      IID_IPropertyPage, reinterpret_cast<void**>(&page));
+    if (SUCCEEDED(result)) result = factory->CreateInstance(nullptr, IID_IPropertyPage, reinterpret_cast<void**>(&page));
+    if (factory) factory->Release();
     if (FAILED(result)) {
-        std::wcerr << L"CoCreateInstance failed: 0x" << std::hex << result << L"\n";
+        std::wcerr << L"Build DLL property-page creation failed: 0x" << std::hex << result << L"\n";
         CoUninitialize(); return 1;
     }
     PROPPAGEINFO info{};
@@ -59,7 +79,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     // desktops; this must expose scrolling instead of clipping controls.
     const bool constrained_host = argument_count > 2 && std::wstring(arguments[2]) == L"constrained";
     const int page_height = static_cast<int>(info.size.cy);
-    const int host_height = constrained_host ? std::min(page_height, 1000) : page_height;
+    const int host_height = constrained_host ? std::max(1, page_height * 3 / 4) : page_height;
     HWND parent = CreateWindowExW(0, L"STATIC", L"", WS_OVERLAPPED,
                                   0, 0, info.size.cx, host_height, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     RECT area{0, 0, info.size.cx, host_height};
@@ -72,11 +92,12 @@ int wmain(int argument_count, wchar_t** arguments) {
 
     RECT client{};
     GetClientRect(page_window, &client);
-    const int ids[] = {ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
+    const int ids[] = {ID_TAB, ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
                        ID_STATUS, ID_REFRESH, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND, ID_COMMAND_SUFFIX,
                        ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC,
                        ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE,
-                       ID_COMMAND_HEADING};
+                       ID_COMMAND_HEADING, ID_AUDIO_FORMAT, ID_AUDIO_RATE, ID_LABEL_AUDIO_FORMAT,
+                       ID_LABEL_AUDIO_RATE, ID_AUDIO_INTRO, ID_AUDIO_HELP, ID_SETTINGS_INFO, ID_GITHUB_LINK};
     for (const int id : ids) {
         const RECT rectangle = child_rect(page_window, id);
         if (!valid_rect(rectangle) || rectangle.left < 0 || rectangle.right > client.right ||
@@ -87,6 +108,42 @@ int wmain(int argument_count, wchar_t** arguments) {
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 4;
         }
     }
+    const HFONT page_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(page_window, ID_BACKEND), WM_GETFONT, 0, 0));
+    const int same_font_ids[] = {ID_TAB, ID_AUDIO_FORMAT, ID_AUDIO_RATE, ID_AUDIO_INTRO, ID_AUDIO_HELP,
+                                 ID_LANGUAGE, ID_SETTINGS_INFO, ID_GITHUB_LINK};
+    for (const int id : same_font_ids) {
+        const HFONT control_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(page_window, id), WM_GETFONT, 0, 0));
+        if (!page_font || control_font != page_font) {
+            std::wcerr << L"Control does not inherit the shared dialog font: " << id << L"\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 11;
+        }
+    }
+    struct TabVisibility {
+        int page;
+        bool video;
+        bool audio;
+        bool settings;
+    };
+    const TabVisibility tab_visibility[] = {
+        {0, true, false, false},
+        {1, false, true, false},
+        {2, false, false, true},
+    };
+    for (const auto& expected : tab_visibility) {
+        SendMessageW(GetDlgItem(page_window, ID_TAB), TCM_SETCURSEL, expected.page, 0);
+        NMHDR selection_changed{GetDlgItem(page_window, ID_TAB), ID_TAB, TCN_SELCHANGE};
+        SendMessageW(page_window, WM_NOTIFY, ID_TAB, reinterpret_cast<LPARAM>(&selection_changed));
+        if (has_visible_style(GetDlgItem(page_window, ID_BACKEND)) != expected.video ||
+            has_visible_style(GetDlgItem(page_window, ID_AUDIO_FORMAT)) != expected.audio ||
+            has_visible_style(GetDlgItem(page_window, ID_LANGUAGE)) != expected.settings ||
+            has_visible_style(GetDlgItem(page_window, ID_SETTINGS_INFO)) != expected.settings) {
+            std::wcerr << L"Tab visibility failed for page " << expected.page << L".\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 12;
+        }
+    }
+    SendMessageW(GetDlgItem(page_window, ID_TAB), TCM_SETCURSEL, 0, 0);
+    NMHDR video_selected{GetDlgItem(page_window, ID_TAB), ID_TAB, TCN_SELCHANGE};
+    SendMessageW(page_window, WM_NOTIFY, ID_TAB, reinterpret_cast<LPARAM>(&video_selected));
     const RECT prefix = child_rect(page_window, ID_COMMAND_PREFIX);
     const RECT command = child_rect(page_window, ID_COMMAND);
     const RECT suffix = child_rect(page_window, ID_COMMAND_SUFFIX);

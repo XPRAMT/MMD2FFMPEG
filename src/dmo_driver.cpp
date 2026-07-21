@@ -1234,6 +1234,8 @@ public:
     HRESULT STDMETHODCALLTYPE Activate(HWND parent, LPCRECT rect, BOOL) override {
         if (window_) return E_UNEXPECTED;
         settings_ = load_settings();
+        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES};
+        InitCommonControlsEx(&common);
         window_ = CreateDialogParamW(module_instance(), MAKEINTRESOURCEW(IDD_ENCODER_SETTINGS), parent,
                                      dialog_proc, reinterpret_cast<LPARAM>(this));
         if (window_) MoveWindow(window_, rect->left, rect->top, rect->right - rect->left,
@@ -1301,6 +1303,8 @@ public:
 
 private:
     static SIZE measure_dialog_size() {
+        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES};
+        InitCommonControlsEx(&common);
         HWND parent = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr,
                                       module_instance(), nullptr);
         HWND dialog = parent ? CreateDialogParamW(module_instance(), MAKEINTRESOURCEW(IDD_ENCODER_SETTINGS), parent,
@@ -1321,6 +1325,21 @@ private:
         ComboBox_SetCurSel(combo, selected);
     }
     void create_controls() {
+        tab_ = GetDlgItem(window_, ID_TAB);
+        audio_intro_ = GetDlgItem(window_, ID_AUDIO_INTRO);
+        audio_help_ = GetDlgItem(window_, ID_AUDIO_HELP);
+        audio_labels_ = {GetDlgItem(window_, ID_LABEL_AUDIO_FORMAT), GetDlgItem(window_, ID_LABEL_AUDIO_RATE)};
+        audio_controls_ = {GetDlgItem(window_, ID_AUDIO_FORMAT), GetDlgItem(window_, ID_AUDIO_RATE)};
+        settings_info_ = GetDlgItem(window_, ID_SETTINGS_INFO);
+        github_link_ = GetDlgItem(window_, ID_GITHUB_LINK);
+
+        TCITEMW item{};
+        item.mask = TCIF_TEXT;
+        item.pszText = const_cast<wchar_t*>(L"Video"); TabCtrl_InsertItem(tab_, 0, &item);
+        item.pszText = const_cast<wchar_t*>(L"Audio"); TabCtrl_InsertItem(tab_, 1, &item);
+        item.pszText = const_cast<wchar_t*>(L"Settings"); TabCtrl_InsertItem(tab_, 2, &item);
+        TabCtrl_SetCurSel(tab_, 0);
+
         updating_command_ = true;
         add_combo(ID_LANGUAGE, {L"系統預設", L"繁體中文", L"簡體中文", L"日本語", L"English"}, language_index(settings_.language));
         add_combo(ID_BACKEND, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
@@ -1328,6 +1347,8 @@ private:
         add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
         add_combo(ID_PRESET, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
         add_combo(ID_RATE, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
+        add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
         SetWindowTextW(GetDlgItem(window_, ID_QP), std::to_wstring(settings_.qp).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_BITRATE), std::to_wstring(settings_.bitrate_kbps).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
@@ -1337,61 +1358,9 @@ private:
         update_controls();
         updating_command_ = false;
         apply_language();
-        create_tab_controls();
+        switch_tab(0);
         capture_child_positions();
         update_vertical_scroll();
-    }
-    void create_tab_controls() {
-        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES | ICC_LINK_CLASS};
-        InitCommonControlsEx(&common);
-        const HFONT dialog_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(window_, ID_LANGUAGE), WM_GETFONT, 0, 0));
-        const auto set_dialog_font = [&](HWND control) {
-            if (dialog_font && control) SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(dialog_font), TRUE);
-        };
-        tab_ = CreateWindowExW(0, WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                               8, 4, 244, 20, window_, reinterpret_cast<HMENU>(ID_TAB), module_instance(), nullptr);
-        set_dialog_font(tab_);
-        TCITEMW item{}; item.mask = TCIF_TEXT;
-        item.pszText = const_cast<wchar_t*>(L"Video"); TabCtrl_InsertItem(tab_, 0, &item);
-        item.pszText = const_cast<wchar_t*>(L"Audio"); TabCtrl_InsertItem(tab_, 1, &item);
-        item.pszText = const_cast<wchar_t*>(L"Settings"); TabCtrl_InsertItem(tab_, 2, &item);
-        TabCtrl_SetCurSel(tab_, 0);
-        const std::array<int, 24> video_ids{ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
-                                            ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
-                                            ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC, ID_LABEL_DEPTH,
-                                            ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE, ID_COMMAND_HEADING};
-        for (const int id : video_ids) {
-            HWND control = GetDlgItem(window_, id); RECT bounds{};
-            GetWindowRect(control, &bounds); MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&bounds), 2);
-            SetWindowPos(control, nullptr, bounds.left, bounds.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
-        auto make_label = [&](int id, const wchar_t* text, int y) {
-            return CreateWindowExW(0, L"STATIC", text, WS_CHILD, 16, y, 100, 18, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
-        };
-        auto make_combo = [&](int id, int y) {
-            return CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST | WS_TABSTOP,
-                                   120, y, 128, 120, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
-        };
-        audio_intro_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 36, 350, 42, window_, reinterpret_cast<HMENU>(ID_AUDIO_INTRO), module_instance(), nullptr);
-        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"Audio format", 86), make_label(ID_LABEL_AUDIO_RATE, L"Sample rate / bit depth", 160)};
-        audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 84), make_combo(ID_AUDIO_RATE, 158)};
-        SetWindowPos(audio_controls_[0], nullptr, 160, 84, 180, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(audio_controls_[1], nullptr, 160, 158, 180, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        set_dialog_font(audio_intro_);
-        for (HWND control : audio_labels_) set_dialog_font(control);
-        for (HWND control : audio_controls_) set_dialog_font(control);
-        add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
-        add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
-        audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 112, 350, 42, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
-        set_dialog_font(audio_help_);
-        settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT",
-                                          WS_CHILD, 16, 70, 228, 56, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
-        set_dialog_font(settings_info_);
-        github_link_ = CreateWindowExW(0, WC_LINK, L"<a href=\"https://github.com/XPRAMT/MMD2FFMPEG\">https://github.com/XPRAMT/MMD2FFMPEG</a>", WS_CHILD | WS_TABSTOP,
-                                        16, 128, 350, 20, window_, reinterpret_cast<HMENU>(ID_GITHUB_LINK), module_instance(), nullptr);
-        set_dialog_font(github_link_);
-        apply_tab_language();
-        switch_tab(0);
     }
     void switch_tab(int page) {
         const std::array<int, 16> video{ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
@@ -1406,10 +1375,6 @@ private:
         ShowWindow(audio_help_, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LABEL_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
-        if (page == 2) {
-            SetWindowPos(GetDlgItem(window_, ID_LABEL_LANGUAGE), nullptr, 16, 38, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-            SetWindowPos(GetDlgItem(window_, ID_LANGUAGE), nullptr, 120, 36, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
         ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
         active_tab_ = page;
@@ -1711,10 +1676,14 @@ private:
             self->switch_tab(TabCtrl_GetCurSel(self->tab_));
             return TRUE;
         }
-        else if (message == WM_NOTIFY && self && reinterpret_cast<NMHDR*>(lparam)->idFrom == ID_GITHUB_LINK &&
-                 reinterpret_cast<NMHDR*>(lparam)->code == NM_CLICK) {
+        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_GITHUB_LINK && HIWORD(wparam) == STN_CLICKED) {
             ShellExecuteW(window, L"open", L"https://github.com/XPRAMT/MMD2FFMPEG", nullptr, nullptr, SW_SHOWNORMAL);
             return TRUE;
+        }
+        else if (message == WM_CTLCOLORSTATIC && self && reinterpret_cast<HWND>(lparam) == self->github_link_) {
+            SetTextColor(reinterpret_cast<HDC>(wparam), RGB(0, 102, 204));
+            SetBkMode(reinterpret_cast<HDC>(wparam), TRANSPARENT);
+            return reinterpret_cast<INT_PTR>(GetSysColorBrush(COLOR_WINDOW));
         }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {
             self->start_probe(true);
