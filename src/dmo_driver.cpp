@@ -4,6 +4,7 @@
 #include <dmo.h>
 #include <ocidl.h>
 #include <shellapi.h>
+#include <commctrl.h>
 #include <winternl.h>
 
 #include <algorithm>
@@ -53,6 +54,9 @@ struct Settings {
     std::wstring rate_control = L"crf";
     int qp = 18;
     int bitrate_kbps = 20000;
+    std::wstring audio_format = L"none";
+    std::wstring audio_sample_rate = L"original";
+    std::wstring audio_bit_depth = L"original";
     std::wstring language = L"system";
     std::wstring command_template;
 };
@@ -276,6 +280,9 @@ Settings load_settings() {
         else if (key == L"rate_control" && (value == L"crf" || value == L"qp" || value == L"vbr")) settings.rate_control = value;
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
         else if (key == L"bitrate_kbps") { try { settings.bitrate_kbps = std::clamp(std::stoi(value), 100, 1000000); } catch (...) {} }
+        else if (key == L"audio_format" && (value == L"flac" || value == L"wav" || value == L"none")) settings.audio_format = value;
+        else if (key == L"audio_sample_rate" && (value == L"original" || value == L"hires")) settings.audio_sample_rate = value;
+        else if (key == L"audio_bit_depth" && (value == L"original" || value == L"24")) settings.audio_bit_depth = value;
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
@@ -315,7 +322,10 @@ void save_settings(const Settings& settings) {
          << L"preset=" << settings.preset << L"\n"
          << L"rate_control=" << settings.rate_control << L"\n"
          << L"qp=" << settings.qp << L"\n"
-         << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n";
+         << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n"
+         << L"audio_format=" << settings.audio_format << L"\n"
+         << L"audio_sample_rate=" << settings.audio_sample_rate << L"\n"
+         << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n";
     file << L"language=" << settings.language << L"\n";
     if (!settings.video_args.empty()) file << L"video_args=" << settings.video_args << L"\n";
 }
@@ -1107,10 +1117,23 @@ private:
                                  !std::filesystem::exists(partial_output_, error);
             summary << L"Partial output cleanup: " << (removed ? L"success" : L"failed") << L"\r\n";
         }
-        if (success && !avi_output_.empty())
-            summary << L"Placeholder AVI retained for audio-stream inspection: " << avi_output_.wstring() << L"\r\n";
         write_log_line(log_file_, summary.str());
         close_handle(log_file_);
+        if (success && !avi_output_.empty()) {
+            const auto cleanup = local_data_dir() / L"mmd2ffmpeg_cleanup.exe";
+            const auto ffmpeg = resolve_executable(settings_.ffmpeg);
+            if (std::filesystem::exists(cleanup, error) && !ffmpeg.empty()) {
+                std::wstring command = L"\"" + cleanup.wstring() + L"\" \"" + avi_output_.wstring() + L"\" \"" +
+                    final_output_.wstring() + L"\" \"" + ffmpeg.wstring() + L"\" " + settings_.audio_format + L" " +
+                    settings_.audio_sample_rate + L" " + settings_.audio_bit_depth + L" \"" + log_path_.wstring() + L"\"";
+                std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
+                STARTUPINFOW startup{}; startup.cb = sizeof(startup); PROCESS_INFORMATION cleanup_process{};
+                if (CreateProcessW(cleanup.c_str(), mutable_command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                                   nullptr, nullptr, &startup, &cleanup_process)) {
+                    CloseHandle(cleanup_process.hThread); CloseHandle(cleanup_process.hProcess);
+                }
+            }
+        }
         if (!success && started_) {
             const std::wstring message = L"FFmpeg output failed (exit code " + std::to_wstring(exit_code) +
                                          L").\nThe original MKV and AVI were preserved.\n\nLog: " + log_path_.wstring();
@@ -1229,6 +1252,9 @@ public:
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
         candidate.video_args = edit_text(ID_COMMAND);
+        candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
+        candidate.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
+        candidate.audio_bit_depth = combo_index(ID_AUDIO_DEPTH) == 1 ? L"24" : L"original";
         const auto signature = command_test_signature(candidate);
         if (!current_command_tested_ || tested_signature_ != signature) {
             const auto& text = current_text();
@@ -1283,8 +1309,56 @@ private:
         update_controls();
         updating_command_ = false;
         apply_language();
+        create_tab_controls();
         capture_child_positions();
         update_vertical_scroll();
+    }
+    void create_tab_controls() {
+        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES};
+        InitCommonControlsEx(&common);
+        tab_ = CreateWindowExW(0, WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                               8, 4, 244, 20, window_, reinterpret_cast<HMENU>(ID_TAB), module_instance(), nullptr);
+        TCITEMW item{}; item.mask = TCIF_TEXT;
+        item.pszText = const_cast<wchar_t*>(L"影片"); TabCtrl_InsertItem(tab_, 0, &item);
+        item.pszText = const_cast<wchar_t*>(L"音訊"); TabCtrl_InsertItem(tab_, 1, &item);
+        item.pszText = const_cast<wchar_t*>(L"設定"); TabCtrl_InsertItem(tab_, 2, &item);
+        TabCtrl_SetCurSel(tab_, 0);
+        const std::array<int, 24> video_ids{ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
+                                            ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
+                                            ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC, ID_LABEL_DEPTH,
+                                            ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE, ID_COMMAND_HEADING};
+        for (const int id : video_ids) {
+            HWND control = GetDlgItem(window_, id); RECT bounds{};
+            GetWindowRect(control, &bounds); MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&bounds), 2);
+            SetWindowPos(control, nullptr, bounds.left, bounds.top + 24, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        auto make_label = [&](int id, const wchar_t* text, int y) {
+            return CreateWindowExW(0, L"STATIC", text, WS_CHILD, 16, y, 100, 18, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
+        };
+        auto make_combo = [&](int id, int y) {
+            return CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST | WS_TABSTOP,
+                                   120, y, 128, 120, window_, reinterpret_cast<HMENU>(id), module_instance(), nullptr);
+        };
+        audio_labels_ = {make_label(ID_LABEL_AUDIO_FORMAT, L"音訊格式", 38), make_label(ID_LABEL_AUDIO_RATE, L"取樣率", 64), make_label(ID_LABEL_AUDIO_DEPTH, L"位元深度", 90)};
+        audio_controls_ = {make_combo(ID_AUDIO_FORMAT, 36), make_combo(ID_AUDIO_RATE, 62), make_combo(ID_AUDIO_DEPTH, 88)};
+        add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
+        add_combo(ID_AUDIO_RATE, {L"原始", L"大於等於48KHz"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
+        add_combo(ID_AUDIO_DEPTH, {L"原始", L"24bit"}, settings_.audio_bit_depth == L"24" ? 1 : 0);
+        settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT\r\nGitHub: github.com/XPRAMT/MMD2FFMPEG",
+                                          WS_CHILD | SS_NOTIFY, 16, 38, 228, 90, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
+        switch_tab(0);
+    }
+    void switch_tab(int page) {
+        const std::array<int, 18> video{ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
+                                        ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
+                                        ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC};
+        const std::array<int, 6> video_more{ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE, ID_COMMAND_HEADING};
+        for (const int id : video) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
+        for (const int id : video_more) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
+        for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
+        for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
+        ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
+        active_tab_ = page;
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1389,6 +1463,9 @@ private:
         settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
+        settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
+        settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
+        settings_.audio_bit_depth = combo_index(ID_AUDIO_DEPTH) == 1 ? L"24" : L"original";
     }
     void update_command_display() {
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
@@ -1488,6 +1565,13 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_TEST_REQUIREMENT), text.test_required);
         SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
         SetWindowTextW(GetDlgItem(window_, ID_OPEN_LOG), text.open_log_button);
+        if (tab_) {
+            const UiLanguage current_language = ui_language(settings_.language);
+            const wchar_t* names[] = {current_language == UiLanguage::TraditionalChinese ? L"影片" : L"Video",
+                                      current_language == UiLanguage::TraditionalChinese ? L"音訊" : L"Audio",
+                                      current_language == UiLanguage::TraditionalChinese ? L"設定" : L"Settings"};
+            for (int index = 0; index < 3; ++index) { TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(names[index]); TabCtrl_SetItem(tab_, index, &item); }
+        }
         const wchar_t* status = probe_running_ ? text.testing : current_command_tested_ ? text.test_passed : text.not_tested;
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), status);
     }
@@ -1500,8 +1584,10 @@ private:
     }
     void changed(int id) {
         dirty_ = true;
-        current_command_tested_ = false;
-        tested_signature_.clear();
+        if (id != ID_AUDIO_FORMAT && id != ID_AUDIO_RATE && id != ID_AUDIO_DEPTH) {
+            current_command_tested_ = false;
+            tested_signature_.clear();
+        }
         if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
         update_controls();
         if (id != ID_COMMAND) {
@@ -1555,12 +1641,21 @@ private:
             self->scroll_to(self->scroll_offset_ - GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA * 80);
             return TRUE;
         }
+        else if (message == WM_NOTIFY && self && reinterpret_cast<NMHDR*>(lparam)->idFrom == ID_TAB &&
+                 reinterpret_cast<NMHDR*>(lparam)->code == TCN_SELCHANGE) {
+            self->switch_tab(TabCtrl_GetCurSel(self->tab_));
+            return TRUE;
+        }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {
             self->start_probe(true);
             return TRUE;
         }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_OPEN_LOG && HIWORD(wparam) == BN_CLICKED) {
             self->open_log_folder();
+            return TRUE;
+        }
+        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_SETTINGS_INFO && HIWORD(wparam) == STN_CLICKED) {
+            ShellExecuteW(window, L"open", L"https://github.com/XPRAMT/MMD2FFMPEG", nullptr, nullptr, SW_SHOWNORMAL);
             return TRUE;
         }
         else if (message == WM_COMMAND && self && !self->updating_command_ &&
@@ -1579,6 +1674,11 @@ private:
     std::atomic<ULONG> references_{1};
     IPropertyPageSite* site_ = nullptr;
     HWND window_ = nullptr;
+    HWND tab_ = nullptr;
+    HWND settings_info_ = nullptr;
+    std::array<HWND, 3> audio_labels_{};
+    std::array<HWND, 3> audio_controls_{};
+    int active_tab_ = 0;
     Settings settings_{};
     bool dirty_ = false;
     bool updating_command_ = false;
