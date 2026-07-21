@@ -137,8 +137,8 @@ UiLanguage ui_language(const std::wstring& value) {
 }
 
 const TabUiStrings& tab_ui_strings(UiLanguage language) {
-    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後,自動讀取AVI內含音訊,合併進MKV檔案,花費時間取決於硬碟速度。注意：MMD必須從第0幀開始輸出，AVI中才會包含音訊檔。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，Hi-Res模式以原始取樣率2倍及24bit編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后,自动读取AVI内含音频,合并进MKV文件,耗时取决于硬盘速度。注意：MMD必须从第0帧开始输出，AVI中才会包含音频文件。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，Hi-Res模式以原始采样率2倍及24bit编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後，自動讀取AVI內含音訊，合併進MKV檔案，花費時間取決於硬碟速度。注意：MMD必須從第0幀開始輸出，AVI中才會包含音訊檔。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，Hi-Res模式以原始取樣率2倍及24bit編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
+    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后，自动读取AVI内含音频，合并进MKV文件，耗时取决于硬盘速度。注意：MMD必须从第0帧开始输出，AVI中才会包含音频文件。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，Hi-Res模式以原始采样率2倍及24bit编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
     static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を自動的に読み取り、MKV に結合します。所要時間はディスク速度に依存します。注意：AVI に音声を含めるには、MMD の出力開始フレームを 0 にしてください。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、Hi-Res モードでは元の2倍かつ24bitで再エンコードし、bilibili Hi-Res 判定に対応します。", L"バージョン", L"作者", L"GitHub"};
     static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio embedded in the AVI is automatically read and merged into the MKV. Time required depends on disk speed. Note: MMD must export from frame 0 for the AVI to contain audio.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, Hi-Res mode encodes at twice the original sample rate and 24-bit for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub"};
     switch (language) {
