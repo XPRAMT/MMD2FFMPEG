@@ -19,6 +19,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "resource.h"
@@ -1359,8 +1360,6 @@ private:
         updating_command_ = false;
         apply_language();
         switch_tab(0);
-        capture_child_positions();
-        update_vertical_scroll();
     }
     void switch_tab(int page) {
         const std::array<int, 16> video{ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
@@ -1376,8 +1375,9 @@ private:
         ShowWindow(GetDlgItem(window_, ID_LABEL_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
-        ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
         active_tab_ = page;
+        ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
+        rebuild_layout();
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1490,80 +1490,135 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
     }
-    struct ChildPosition {
-        HWND window;
+    struct LayoutItem {
+        int id;
         RECT rectangle;
+        bool scrolls;
     };
-    void capture_child_positions() {
-        child_positions_.clear();
-        for (HWND child = GetWindow(window_, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
-            RECT rectangle{};
-            GetWindowRect(child, &rectangle);
-            MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&rectangle), 2);
-            child_positions_.push_back({child, rectangle});
-        }
-        RECT client{};
-        GetClientRect(window_, &client);
-        horizontal_margin_ = child_rect(ID_TAB).left;
-        const RECT test_button = child_rect(ID_REFRESH);
-        const RECT open_log_button = child_rect(ID_OPEN_LOG);
-        test_button_width_ = static_cast<int>(test_button.right - test_button.left);
-        open_log_button_width_ = static_cast<int>(open_log_button.right - open_log_button.left);
-        button_gap_ = std::max(0, static_cast<int>(open_log_button.left - test_button.right));
-        content_height_ = static_cast<int>(client.bottom);
+    int dlu_x(int value) const {
+        RECT rectangle{0, 0, value, 0};
+        MapDialogRect(window_, &rectangle);
+        return rectangle.right;
     }
-    RECT child_rect(int id) const {
-        RECT rectangle{};
-        HWND child = GetDlgItem(window_, id);
-        if (!child) return rectangle;
-        GetWindowRect(child, &rectangle);
-        MapWindowPoints(HWND_DESKTOP, window_, reinterpret_cast<POINT*>(&rectangle), 2);
-        return rectangle;
+    int dlu_y(int value) const {
+        RECT rectangle{0, 0, 0, value};
+        MapDialogRect(window_, &rectangle);
+        return rectangle.bottom;
     }
-    static bool is_right_anchored_control(int id) {
-        switch (id) {
-        case ID_TAB:
-        case ID_COMMAND_HEADING:
-        case ID_COMMAND_PREFIX:
-        case ID_COMMAND:
-        case ID_COMMAND_SUFFIX:
-        case ID_STATUS:
-        case ID_AUDIO_INTRO:
-        case ID_AUDIO_HELP:
-        case ID_AUDIO_FORMAT:
-        case ID_AUDIO_RATE:
-        case ID_LANGUAGE:
-        case ID_SETTINGS_INFO:
-        case ID_GITHUB_LINK:
-            return true;
-        default:
-            return false;
-        }
+    int text_width(int id, int minimum) const {
+        HWND control = GetDlgItem(window_, id);
+        const std::wstring text = edit_text(id);
+        HDC dc = GetDC(window_);
+        HFONT font = reinterpret_cast<HFONT>(SendMessageW(control, WM_GETFONT, 0, 0));
+        HGDIOBJ previous = font ? SelectObject(dc, font) : nullptr;
+        SIZE size{};
+        GetTextExtentPoint32W(dc, text.c_str(), static_cast<int>(text.size()), &size);
+        if (previous) SelectObject(dc, previous);
+        ReleaseDC(window_, dc);
+        return std::max(minimum, static_cast<int>(size.cx) + dlu_x(4));
     }
-    void layout_scrolled_children() {
-        RECT client{};
-        GetClientRect(window_, &client);
-        for (const auto& child : child_positions_) {
-            const int original_left = static_cast<int>(child.rectangle.left);
-            const int top = static_cast<int>(child.rectangle.top);
-            const int original_width = static_cast<int>(child.rectangle.right - child.rectangle.left);
-            const int id = GetDlgCtrlID(child.window);
-            const int right_edge = static_cast<int>(client.right) - horizontal_margin_;
-            const int left = id == ID_OPEN_LOG
-                ? std::max(0, right_edge - open_log_button_width_)
-                : id == ID_REFRESH
-                    ? std::max(0, right_edge - open_log_button_width_ - button_gap_ - test_button_width_)
-                    : original_left;
-            const int width = is_right_anchored_control(id)
-                ? std::max(1, static_cast<int>(client.right) - horizontal_margin_ - left)
-                : std::min(original_width, std::max(1, static_cast<int>(client.right) - left));
-            SetWindowPos(child.window, nullptr, left, top - scroll_offset_,
-                         width, static_cast<int>(child.rectangle.bottom - child.rectangle.top),
+    int maximum_text_width(std::initializer_list<int> ids, int minimum) const {
+        int width = minimum;
+        for (const int id : ids) width = std::max(width, text_width(id, minimum));
+        return width;
+    }
+    void add_layout(int id, int left, int top, int width, int height, bool scrolls = true) {
+        layouts_.push_back({id, {left, top, left + std::max(1, width), top + std::max(1, height)}, scrolls});
+    }
+    void apply_layout() {
+        for (const auto& item : layouts_) {
+            const int top = item.rectangle.top - (item.scrolls ? scroll_offset_ : 0);
+            SetWindowPos(GetDlgItem(window_, item.id), nullptr, item.rectangle.left, top,
+                         item.rectangle.right - item.rectangle.left, item.rectangle.bottom - item.rectangle.top,
                          SWP_NOACTIVATE | SWP_NOZORDER);
         }
     }
+    void rebuild_layout() {
+        if (!window_) return;
+        RECT client{};
+        GetClientRect(window_, &client);
+        if (client.right <= 0 || client.bottom <= 0) return;
+        layouts_.clear();
+
+        const int margin_x = dlu_x(4);
+        const int margin_y = dlu_y(4);
+        const int right = std::max(margin_x + 1, static_cast<int>(client.right) - margin_x);
+        const int full_width = right - margin_x;
+        const int tab_height = dlu_y(12);
+        const int row_height = dlu_y(16);
+        const int label_height = dlu_y(12);
+        const int combo_height = dlu_y(80);
+        const int edit_height = dlu_y(14);
+        const int button_height = dlu_y(16);
+        const int gap = dlu_y(4);
+        const int field_gap = dlu_x(4);
+        add_layout(ID_TAB, margin_x, margin_y, full_width, tab_height, false);
+        int y = margin_y + tab_height + gap;
+
+        const auto add_form_row = [&](int label, int control, int label_width, int& row_y) {
+            const int field_left = margin_x + label_width + field_gap;
+            add_layout(label, margin_x, row_y + dlu_y(2), label_width, label_height);
+            add_layout(control, field_left, row_y, std::max(1, right - field_left), combo_height);
+            row_y += row_height;
+        };
+        if (active_tab_ == 0) {
+            const int label_width = maximum_text_width({ID_LABEL_BACKEND, ID_LABEL_CODEC, ID_LABEL_DEPTH,
+                                                        ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP}, dlu_x(52));
+            for (const auto& row : std::array<std::pair<int, int>, 5>{{
+                    {ID_LABEL_BACKEND, ID_BACKEND}, {ID_LABEL_CODEC, ID_CODEC}, {ID_LABEL_DEPTH, ID_DEPTH},
+                    {ID_LABEL_PRESET, ID_PRESET}, {ID_LABEL_RATE, ID_RATE}}}) {
+                add_form_row(row.first, row.second, label_width, y);
+            }
+            const int content_width = right - margin_x;
+            const int middle = margin_x + content_width / 2;
+            const int qp_left = margin_x + label_width + field_gap;
+            const int bitrate_label_width = text_width(ID_LABEL_BITRATE, dlu_x(52));
+            const int bitrate_left = middle + bitrate_label_width + field_gap;
+            add_layout(ID_LABEL_QP, margin_x, y + dlu_y(2), label_width, label_height);
+            add_layout(ID_QP, qp_left, y, std::max(1, middle - field_gap - qp_left), edit_height);
+            add_layout(ID_LABEL_BITRATE, middle, y + dlu_y(2), bitrate_label_width, label_height);
+            add_layout(ID_BITRATE, bitrate_left, y, std::max(1, right - bitrate_left), edit_height);
+            y += row_height;
+            add_layout(ID_COMMAND_HEADING, margin_x, y, full_width, label_height);
+            y += dlu_y(12);
+            add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, dlu_y(24));
+            y += dlu_y(25);
+            add_layout(ID_COMMAND, margin_x, y, full_width, edit_height);
+            y += dlu_y(16);
+            add_layout(ID_COMMAND_SUFFIX, margin_x, y, full_width, dlu_y(18));
+            y += dlu_y(20);
+            add_layout(ID_STATUS, margin_x, y, full_width, label_height);
+            y += dlu_y(18);
+            const int open_log_width = text_width(ID_OPEN_LOG, dlu_x(58));
+            const int test_width = text_width(ID_REFRESH, dlu_x(54));
+            const int open_log_left = right - open_log_width;
+            const int test_left = open_log_left - field_gap - test_width;
+            add_layout(ID_TEST_REQUIREMENT, margin_x, y + dlu_y(3), std::max(1, test_left - field_gap - margin_x), label_height);
+            add_layout(ID_REFRESH, test_left, y, test_width, button_height);
+            add_layout(ID_OPEN_LOG, open_log_left, y, open_log_width, button_height);
+            y += button_height + margin_y;
+        } else if (active_tab_ == 1) {
+            add_layout(ID_AUDIO_INTRO, margin_x, y, full_width, dlu_y(20));
+            y += dlu_y(20) + gap;
+            const int label_width = maximum_text_width({ID_LABEL_AUDIO_FORMAT, ID_LABEL_AUDIO_RATE}, dlu_x(82));
+            add_form_row(ID_LABEL_AUDIO_FORMAT, ID_AUDIO_FORMAT, label_width, y);
+            add_layout(ID_AUDIO_HELP, margin_x, y, full_width, dlu_y(20));
+            y += dlu_y(20) + gap;
+            add_form_row(ID_LABEL_AUDIO_RATE, ID_AUDIO_RATE, label_width, y);
+            y += margin_y;
+        } else {
+            const int label_width = text_width(ID_LABEL_LANGUAGE, dlu_x(82));
+            add_form_row(ID_LABEL_LANGUAGE, ID_LANGUAGE, label_width, y);
+            add_layout(ID_SETTINGS_INFO, margin_x, y, full_width, dlu_y(28));
+            y += dlu_y(28) + gap;
+            add_layout(ID_GITHUB_LINK, margin_x, y, full_width, edit_height);
+            y += edit_height + margin_y;
+        }
+        content_height_ = y;
+        update_vertical_scroll();
+    }
     void update_vertical_scroll() {
-        if (child_positions_.empty()) return;
+        if (layouts_.empty()) return;
         RECT client{};
         GetClientRect(window_, &client);
         const int client_height = static_cast<int>(client.bottom);
@@ -1573,7 +1628,7 @@ private:
                                static_cast<UINT>(std::max(0, client_height)), scroll_offset_, 0};
         SetScrollInfo(window_, SB_VERT, &scroll_info, TRUE);
         ShowScrollBar(window_, SB_VERT, maximum > 0);
-        layout_scrolled_children();
+        apply_layout();
     }
     void scroll_to(int requested_offset) {
         RECT client{};
@@ -1583,7 +1638,7 @@ private:
         scroll_offset_ = std::clamp(requested_offset, 0, maximum);
         SCROLLINFO scroll_info{sizeof(SCROLLINFO), SIF_POS, 0, 0, 0, scroll_offset_, 0};
         SetScrollInfo(window_, SB_VERT, &scroll_info, TRUE);
-        layout_scrolled_children();
+        apply_layout();
     }
     void scroll_vertical(WPARAM wparam) {
         RECT client{};
@@ -1647,6 +1702,7 @@ private:
         apply_tab_language();
         const wchar_t* status = probe_running_ ? text.testing : current_command_tested_ ? text.test_passed : text.not_tested;
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), status);
+        rebuild_layout();
     }
     void change_language() {
         settings_.language = language_key(combo_index(ID_LANGUAGE));
@@ -1703,7 +1759,7 @@ private:
             return TRUE;
         }
         else if (message == WM_SIZE && self) {
-            self->update_vertical_scroll();
+            self->rebuild_layout();
             return TRUE;
         }
         else if (message == WM_VSCROLL && self && lparam == 0) {
@@ -1764,13 +1820,9 @@ private:
     bool current_command_tested_ = false;
     std::wstring tested_signature_;
     std::thread probe_thread_;
-    std::vector<ChildPosition> child_positions_;
+    std::vector<LayoutItem> layouts_;
     int content_height_ = 0;
     int scroll_offset_ = 0;
-    int horizontal_margin_ = 0;
-    int test_button_width_ = 0;
-    int open_log_button_width_ = 0;
-    int button_gap_ = 0;
 };
 
 class Factory final : public IClassFactory {

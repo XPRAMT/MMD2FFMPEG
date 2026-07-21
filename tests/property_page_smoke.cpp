@@ -77,12 +77,19 @@ int wmain(int argument_count, wchar_t** arguments) {
     // property-frame host.  A separate opt-in mode simulates a host whose
     // available work area is smaller, as can happen with MMD on high-DPI
     // desktops; this must expose scrolling instead of clipping controls.
-    const bool constrained_host = argument_count > 2 && std::wstring(arguments[2]) == L"constrained";
+    bool constrained_host = false;
+    bool wide_host = false;
+    for (int index = 2; index < argument_count; ++index) {
+        const std::wstring option(arguments[index]);
+        constrained_host = constrained_host || option == L"constrained";
+        wide_host = wide_host || option == L"wide";
+    }
     const int page_height = static_cast<int>(info.size.cy);
     const int host_height = constrained_host ? std::max(1, page_height * 3 / 4) : page_height;
+    const int host_width = wide_host ? static_cast<int>(info.size.cx) * 5 / 4 : static_cast<int>(info.size.cx);
     HWND parent = CreateWindowExW(0, L"STATIC", L"", WS_OVERLAPPED,
-                                  0, 0, info.size.cx, host_height, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
-    RECT area{0, 0, info.size.cx, host_height};
+                                  0, 0, host_width, host_height, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    RECT area{0, 0, host_width, host_height};
     result = page->Activate(parent, &area, FALSE);
     HWND page_window = FindWindowExW(parent, nullptr, nullptr, nullptr);
     if (FAILED(result) || !page_window) {
@@ -92,12 +99,11 @@ int wmain(int argument_count, wchar_t** arguments) {
 
     RECT client{};
     GetClientRect(page_window, &client);
-    const int ids[] = {ID_TAB, ID_LANGUAGE, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
+    const int ids[] = {ID_TAB, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
                        ID_STATUS, ID_REFRESH, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND, ID_COMMAND_SUFFIX,
-                       ID_TEST_REQUIREMENT, ID_LABEL_LANGUAGE, ID_LABEL_BACKEND, ID_LABEL_CODEC,
+                       ID_TEST_REQUIREMENT, ID_LABEL_BACKEND, ID_LABEL_CODEC,
                        ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE,
-                       ID_COMMAND_HEADING, ID_AUDIO_FORMAT, ID_AUDIO_RATE, ID_LABEL_AUDIO_FORMAT,
-                       ID_LABEL_AUDIO_RATE, ID_AUDIO_INTRO, ID_AUDIO_HELP, ID_SETTINGS_INFO, ID_GITHUB_LINK};
+                       ID_COMMAND_HEADING};
     for (const int id : ids) {
         const RECT rectangle = child_rect(page_window, id);
         if (!valid_rect(rectangle) || rectangle.left < 0 || rectangle.right > client.right ||
@@ -119,7 +125,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         }
     }
     const RECT tab_bounds = child_rect(page_window, ID_TAB);
-    for (const int id : {ID_LABEL_BACKEND, ID_AUDIO_INTRO, ID_LABEL_LANGUAGE, ID_GITHUB_LINK}) {
+    for (const int id : {ID_LABEL_BACKEND}) {
         if (child_rect(page_window, id).left != tab_bounds.left) {
             std::wcerr << L"Tab page content does not share the common left boundary: " << id << L"\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 15;
@@ -128,9 +134,6 @@ int wmain(int argument_count, wchar_t** arguments) {
     const RECT command_bounds = child_rect(page_window, ID_COMMAND);
     if (tab_bounds.left <= 0 || tab_bounds.right != client.right - tab_bounds.left ||
         command_bounds.right != tab_bounds.right ||
-        child_rect(page_window, ID_AUDIO_FORMAT).right != tab_bounds.right ||
-        child_rect(page_window, ID_AUDIO_RATE).right != tab_bounds.right ||
-        child_rect(page_window, ID_LANGUAGE).right != tab_bounds.right ||
         child_rect(page_window, ID_OPEN_LOG).right != tab_bounds.right) {
         std::wcerr << L"Tab and right-anchored controls do not preserve symmetric horizontal margins.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 16;
@@ -175,6 +178,36 @@ int wmain(int argument_count, wchar_t** arguments) {
             has_visible_style(GetDlgItem(page_window, ID_SETTINGS_INFO)) != expected.settings) {
             std::wcerr << L"Tab visibility failed for page " << expected.page << L".\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 12;
+        }
+        const int* page_ids = nullptr;
+        int page_id_count = 0;
+        const int audio_ids[]{ID_AUDIO_INTRO, ID_LABEL_AUDIO_FORMAT, ID_AUDIO_FORMAT, ID_AUDIO_HELP,
+                              ID_LABEL_AUDIO_RATE, ID_AUDIO_RATE};
+        const int settings_ids[]{ID_LABEL_LANGUAGE, ID_LANGUAGE, ID_SETTINGS_INFO, ID_GITHUB_LINK};
+        if (expected.audio) { page_ids = audio_ids; page_id_count = static_cast<int>(std::size(audio_ids)); }
+        if (expected.settings) { page_ids = settings_ids; page_id_count = static_cast<int>(std::size(settings_ids)); }
+        GetClientRect(page_window, &client);
+        for (int index = 0; index < page_id_count; ++index) {
+            const RECT rectangle = child_rect(page_window, page_ids[index]);
+            if (!valid_rect(rectangle) || rectangle.left < 0 || rectangle.right > client.right ||
+                rectangle.top < 0 || rectangle.bottom > client.bottom) {
+                std::wcerr << L"Visible tab control outside page: " << page_ids[index] << L"\n";
+                page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 18;
+            }
+            const bool has_common_left_boundary = page_ids[index] != ID_AUDIO_FORMAT &&
+                                                  page_ids[index] != ID_AUDIO_RATE &&
+                                                  page_ids[index] != ID_LANGUAGE;
+            if (has_common_left_boundary && rectangle.left != child_rect(page_window, ID_TAB).left) {
+                std::wcerr << L"Visible tab control does not share the common left boundary: " << page_ids[index] << L"\n";
+                page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 20;
+            }
+        }
+        const RECT active_tab = child_rect(page_window, ID_TAB);
+        if ((expected.audio && (child_rect(page_window, ID_AUDIO_FORMAT).right != active_tab.right ||
+                                child_rect(page_window, ID_AUDIO_RATE).right != active_tab.right)) ||
+            (expected.settings && child_rect(page_window, ID_LANGUAGE).right != active_tab.right)) {
+            std::wcerr << L"Visible dropdown does not share the tab right boundary.\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 19;
         }
     }
     SendMessageW(GetDlgItem(page_window, ID_TAB), TCM_SETCURSEL, 0, 0);
