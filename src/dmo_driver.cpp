@@ -480,46 +480,6 @@ void replace_all(std::wstring& value, const std::wstring& from, const std::wstri
     }
 }
 
-std::wstring registry_string(HKEY root, const std::wstring& subkey, const wchar_t* value_name = nullptr) {
-    DWORD bytes = 0;
-    if (RegGetValueW(root, subkey.c_str(), value_name, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ,
-                     nullptr, nullptr, &bytes) != ERROR_SUCCESS || bytes < sizeof(wchar_t)) return {};
-    std::wstring value(bytes / sizeof(wchar_t), L'\0');
-    if (RegGetValueW(root, subkey.c_str(), value_name, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ,
-                     nullptr, value.data(), &bytes) != ERROR_SUCCESS) return {};
-    const auto terminator = value.find(L'\0');
-    if (terminator != std::wstring::npos) value.resize(terminator);
-    const DWORD expanded_length = value.empty() ? 0 : ExpandEnvironmentStringsW(value.c_str(), nullptr, 0);
-    if (!expanded_length) return value;
-    std::wstring expanded(expanded_length, L'\0');
-    if (!ExpandEnvironmentStringsW(value.c_str(), expanded.data(), expanded_length)) return value;
-    expanded.resize(expanded_length - 1);
-    return expanded;
-}
-
-bool open_url_directly(const wchar_t* url) {
-    constexpr wchar_t user_choice_key[] =
-        L"Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice";
-    const std::wstring prog_id = registry_string(HKEY_CURRENT_USER, user_choice_key, L"ProgId");
-    if (prog_id.empty()) return false;
-    std::wstring command = registry_string(HKEY_CLASSES_ROOT, prog_id + L"\\shell\\open\\command");
-    if (command.empty()) return false;
-    const std::wstring target(url);
-    bool inserted_url = false;
-    for (const wchar_t* token : {L"%1", L"%l", L"%L", L"%*"}) {
-        if (command.find(token) == std::wstring::npos) continue;
-        replace_all(command, token, target);
-        inserted_url = true;
-    }
-    if (!inserted_url) command += L" \"" + target + L"\"";
-    STARTUPINFOW startup{sizeof(startup)};
-    PROCESS_INFORMATION process{};
-    if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) return false;
-    CloseHandle(process.hThread);
-    CloseHandle(process.hProcess);
-    return true;
-}
-
 std::wstring recording_date_metadata() {
     SYSTEMTIME time{};
     GetLocalTime(&time);
@@ -1716,22 +1676,9 @@ private:
             self->switch_tab(TabCtrl_GetCurSel(self->tab_));
             return TRUE;
         }
-        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_GITHUB_LINK && HIWORD(wparam) == STN_CLICKED) {
-            constexpr wchar_t github_url[] = L"https://github.com/XPRAMT/MMD2FFMPEG";
-            if (!open_url_directly(github_url)) {
-                SHELLEXECUTEINFOW launch{sizeof(launch)};
-                launch.fMask = SEE_MASK_ASYNCOK | SEE_MASK_FLAG_NO_UI;
-                launch.hwnd = window;
-                launch.lpVerb = L"open";
-                launch.lpFile = github_url;
-                launch.nShow = SW_SHOWNORMAL;
-                ShellExecuteExW(&launch);
-            }
-            return TRUE;
-        }
-        else if (message == WM_CTLCOLORSTATIC && self && reinterpret_cast<HWND>(lparam) == self->github_link_) {
+        else if (message == WM_CTLCOLOREDIT && self && reinterpret_cast<HWND>(lparam) == self->github_link_) {
             SetTextColor(reinterpret_cast<HDC>(wparam), RGB(0, 102, 204));
-            SetBkMode(reinterpret_cast<HDC>(wparam), TRANSPARENT);
+            SetBkColor(reinterpret_cast<HDC>(wparam), GetSysColor(COLOR_3DFACE));
             return reinterpret_cast<INT_PTR>(GetSysColorBrush(COLOR_3DFACE));
         }
         else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_REFRESH && HIWORD(wparam) == BN_CLICKED) {

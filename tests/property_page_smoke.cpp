@@ -118,6 +118,19 @@ int wmain(int argument_count, wchar_t** arguments) {
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 11;
         }
     }
+    std::array<wchar_t, 16> github_class{};
+    GetClassNameW(GetDlgItem(page_window, ID_GITHUB_LINK), github_class.data(), static_cast<int>(github_class.size()));
+    if (wcscmp(github_class.data(), L"Edit") != 0) {
+        std::wcerr << L"GitHub address must be a selectable edit control.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 13;
+    }
+    const RECT language_label = child_rect(page_window, ID_LABEL_LANGUAGE);
+    const RECT settings_info = child_rect(page_window, ID_SETTINGS_INFO);
+    const RECT github_address = child_rect(page_window, ID_GITHUB_LINK);
+    if (settings_info.top - language_label.bottom > 48 || github_address.top - settings_info.bottom > 48) {
+        std::wcerr << L"Settings controls are not tightly stacked.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 14;
+    }
     struct TabVisibility {
         int page;
         bool video;
