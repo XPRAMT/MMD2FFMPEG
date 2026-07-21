@@ -1381,9 +1381,12 @@ private:
         add_combo(ID_AUDIO_DEPTH, {L"Original", L"24bit"}, settings_.audio_bit_depth == L"24" ? 1 : 0);
         audio_help_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 16, 118, 228, 44, window_, reinterpret_cast<HMENU>(ID_AUDIO_HELP), module_instance(), nullptr);
         set_dialog_font(audio_help_);
-        settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT\r\nGitHub: github.com/XPRAMT/MMD2FFMPEG",
-                                          WS_CHILD | SS_NOTIFY, 16, 70, 228, 90, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
+        settings_info_ = CreateWindowExW(0, L"STATIC", L"MMD2FFMPEG\r\nVersion: 0.2.0\r\nAuthor: XPRAMT",
+                                          WS_CHILD, 16, 70, 228, 56, window_, reinterpret_cast<HMENU>(ID_SETTINGS_INFO), module_instance(), nullptr);
         set_dialog_font(settings_info_);
+        github_link_ = CreateWindowExW(0, L"STATIC", L"https://github.com/XPRAMT/MMD2FFMPEG", WS_CHILD | SS_NOTIFY,
+                                        16, 128, 228, 20, window_, reinterpret_cast<HMENU>(ID_GITHUB_LINK), module_instance(), nullptr);
+        set_dialog_font(github_link_);
         apply_tab_language();
         switch_tab(0);
     }
@@ -1404,6 +1407,7 @@ private:
             SetWindowPos(GetDlgItem(window_, ID_LANGUAGE), nullptr, 120, 36, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
         ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
+        ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
         active_tab_ = page;
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
@@ -1607,8 +1611,7 @@ private:
         reset_combo(ID_AUDIO_RATE, {text.original, text.hi_res}, rate);
         reset_combo(ID_AUDIO_DEPTH, {text.original, L"24bit"}, depth);
         SetWindowTextW(audio_help_, text.hi_res_help);
-        const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" +
-            text.author + L": XPRAMT\r\n" + text.github + L": github.com/XPRAMT/MMD2FFMPEG";
+        const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" + text.author + L": XPRAMT";
         SetWindowTextW(settings_info_, info.c_str());
     }
     void apply_language() {
@@ -1713,9 +1716,14 @@ private:
             self->open_log_folder();
             return TRUE;
         }
-        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_SETTINGS_INFO && HIWORD(wparam) == STN_CLICKED) {
+        else if (message == WM_COMMAND && self && LOWORD(wparam) == ID_GITHUB_LINK && HIWORD(wparam) == STN_CLICKED) {
             ShellExecuteW(window, L"open", L"https://github.com/XPRAMT/MMD2FFMPEG", nullptr, nullptr, SW_SHOWNORMAL);
             return TRUE;
+        }
+        else if (message == WM_CTLCOLORSTATIC && self && reinterpret_cast<HWND>(lparam) == self->github_link_) {
+            SetTextColor(reinterpret_cast<HDC>(wparam), RGB(0, 102, 204));
+            SetBkMode(reinterpret_cast<HDC>(wparam), TRANSPARENT);
+            return reinterpret_cast<INT_PTR>(GetSysColorBrush(COLOR_WINDOW));
         }
         else if (message == WM_COMMAND && self && !self->updating_command_ &&
                  LOWORD(wparam) == ID_LANGUAGE && HIWORD(wparam) == CBN_SELCHANGE) {
@@ -1735,6 +1743,7 @@ private:
     HWND window_ = nullptr;
     HWND tab_ = nullptr;
     HWND settings_info_ = nullptr;
+    HWND github_link_ = nullptr;
     HWND audio_help_ = nullptr;
     std::array<HWND, 3> audio_labels_{};
     std::array<HWND, 3> audio_controls_{};
