@@ -114,7 +114,7 @@ MMDLocaleLauncher.exe /settings
 
 這是 CP932 相容啟動器，不是將 MMD 完整轉換為 UTF-8。若路徑含 CP932 無法表示的字元，仍可能受 MMD 本身限制。
 
-設定視窗採用 Per-Monitor V2 DPI 感知的深色主題。視窗圖示與註冊後的 `.pmm` 檔案圖示會直接讀取所選 `MikuMikuDance.exe`。
+設定視窗採用 Per-Monitor V2 DPI 感知的深色主題。launcher EXE 會內嵌本次 Release 由 MMD 抽取的圖示；視窗圖示與註冊後的 `.pmm` 檔案圖示也會直接讀取所選 `MikuMikuDance.exe`。
 
 ## 在 MMD 中使用
 
