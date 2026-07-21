@@ -1,5 +1,12 @@
 ﻿$ErrorActionPreference = 'Stop'
 
+function Wait-ForExit {
+    [void](Read-Host 'Press Enter to close this window')
+}
+
+try {
+& {
+
 $classIdBraced = '{C42D995C-3D1B-4E44-A96B-767B6C2A4646}'
 $classIdBare = 'C42D995C-3D1B-4E44-A96B-767B6C2A4646'
 $classKey = "HKCU:\Software\Classes\CLSID\$classIdBraced"
@@ -12,3 +19,8 @@ foreach ($key in @($categoryKey, $oldCategoryKey, $mediaObjectKey, $oldMediaObje
     if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
 }
 Write-Host 'Removed the per-user MMD2FFMPEG DMO registration.'
+}
+}
+finally {
+    Wait-ForExit
+}

@@ -65,7 +65,7 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 2. 將 ZIP 解壓縮到本機資料夾。
 3. 依照上方說明安裝 FFmpeg，並將其 `bin` 資料夾加入 `PATH`。
 4. 完整關閉 MMD；MMD 載入 DMO DLL 時無法替換檔案。
-5. 雙擊解壓縮資料夾內的 `install-user.ps1`。若系統將 `.ps1` 開啟為編輯器，請右鍵選擇 **使用 PowerShell 執行**。
+5. 雙擊解壓縮資料夾內的 `install-user.bat`。它會以暫時略過 PowerShell 執行原則的方式啟動安裝器，並保留視窗以便查看結果。
 6. 再次開啟 MMD。無需重新啟動 Windows、不需要系統管理員權限、Visual Studio 或 `build.ps1`。
 
 安裝器只會為目前 Windows 使用者註冊，執行檔會放在 `%LOCALAPPDATA%\MMD2FFMPEG`。
@@ -74,7 +74,9 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 | 檔案 | 功能 |
 | --- | --- |
+| `install-user.bat` | 建議使用的一鍵安裝器；啟動 `install-user.ps1`，不會變更系統的執行原則。 |
 | `install-user.ps1` | 將執行檔複製到目前使用者的本機 MMD2FFMPEG 資料夾，遷移相容設定，並為目前使用者註冊 DMO。 |
+| `uninstall-user.bat` | 建議使用的一鍵解除安裝器；啟動 `uninstall-user.ps1`，不會變更系統的執行原則。 |
 | `uninstall-user.ps1` | 移除目前使用者的 DMO 註冊。執行檔、設定與 log 會刻意保留，方便手動備份或刪除。 |
 | `mmd2ffmpeg_dmo.dll` | MMD 可見的 DirectX Media Object 編碼器；接收 MMD 影格並串流給 FFmpeg 建立 MKV。 |
 | `mmd2ffmpeg_cleanup.exe` | 僅在 MKV 成功編碼後執行，重試刪除可能仍被 MMD 鎖定的佔位 AVI，並將結果寫入輸出 log。 |
@@ -121,8 +123,8 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 ## 更新與解除安裝
 
-- **更新：** 關閉 MMD，重新執行建置命令，再執行一次 `install-user.ps1`。既有的 `config.ini` 會保留。
-- **解除安裝：** 關閉 MMD 後，執行 Release 包中的 `uninstall-user.ps1`，或從原始碼執行：
+- **更新：** 關閉 MMD，重新執行建置命令，再執行一次 `install-user.bat`。既有的 `config.ini` 會保留。
+- **解除安裝：** 關閉 MMD 後，雙擊 Release 包中的 `uninstall-user.bat`，或從原始碼執行：
 
   ```powershell
   & 'C:\APP\MMD\MMD2FFMPEG\scripts\uninstall-user.ps1'
@@ -145,7 +147,7 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 | 現象 | 請檢查 |
 | --- | --- |
-| MMD 沒有顯示編碼器 | 確認 MMD 為 x64，重新執行 `install-user.ps1`，再重新開啟 MMD。 |
+| MMD 沒有顯示編碼器 | 確認 MMD 為 x64，重新執行 `install-user.bat`，再重新開啟 MMD。 |
 | 測試編碼失敗 | 執行 `ffmpeg -version`；確認目前 FFmpeg、顯示卡與驅動支援所選硬體編碼器。 |
 | 安裝器無法替換 DLL | 關閉所有 MMD 視窗後再執行安裝器。 |
 | AVI 保留或沒有產生 MKV | 開啟 log 資料夾，查看最新 log 與 FFmpeg exit code。 |

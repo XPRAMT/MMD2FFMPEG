@@ -1,5 +1,12 @@
 ﻿$ErrorActionPreference = 'Stop'
 
+function Wait-ForExit {
+    [void](Read-Host 'Press Enter to close this window')
+}
+
+try {
+& {
+
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseDmoDll = Join-Path $PSScriptRoot 'mmd2ffmpeg_dmo.dll'
 $releaseCleanupExe = Join-Path $PSScriptRoot 'mmd2ffmpeg_cleanup.exe'
@@ -81,3 +88,8 @@ New-Item -Path $categoryKey -Force | Out-Null
 Write-Host "Installed x64 DMO encoder: $installedDmoDll"
 Write-Host "Configuration: $config"
 Write-Host 'Restart MMD if it was already open; no Windows reboot is required.'
+}
+}
+finally {
+    Wait-ForExit
+}

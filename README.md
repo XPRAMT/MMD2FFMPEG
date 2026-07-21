@@ -65,7 +65,7 @@ MMD2FFMPEG runs `ffmpeg.exe` from `PATH`; do not configure a hard-coded FFmpeg p
 2. Extract the ZIP to a local folder.
 3. Install FFmpeg and add its `bin` folder to `PATH` as described above.
 4. Close MMD completely. The DMO DLL cannot be replaced while MMD has it loaded.
-5. Double-click `install-user.ps1` in the extracted folder. If `.ps1` files open in an editor on the system, right-click it and choose **Run with PowerShell**.
+5. Double-click `install-user.bat` in the extracted folder. It starts the installer with the required temporary PowerShell execution-policy bypass and keeps the window open so that you can read the result.
 6. Start MMD again. No Windows restart, administrator permission, Visual Studio, or `build.ps1` is required.
 
 The installer registers only for the current Windows user and places the runtime files in `%LOCALAPPDATA%\MMD2FFMPEG`.
@@ -74,7 +74,9 @@ The installer registers only for the current Windows user and places the runtime
 
 | File | Purpose |
 | --- | --- |
+| `install-user.bat` | Recommended one-click installer. Starts `install-user.ps1` without changing the system execution policy. |
 | `install-user.ps1` | Copies the runtime files to the current user's local MMD2FFMPEG folder, migrates compatible configuration, and registers the DMO for the current user. |
+| `uninstall-user.bat` | Recommended one-click uninstaller. Starts `uninstall-user.ps1` without changing the system execution policy. |
 | `uninstall-user.ps1` | Removes the current user's DMO registration. Runtime files, configuration, and logs are deliberately retained for manual backup or removal. |
 | `mmd2ffmpeg_dmo.dll` | The MMD-visible DirectX Media Object encoder. It receives MMD frames and streams them to FFmpeg to create the MKV. |
 | `mmd2ffmpeg_cleanup.exe` | Runs only after a successful MKV encode and retries deletion of MMD's temporarily locked placeholder AVI, recording the result in the export log. |
@@ -121,8 +123,8 @@ Use **Open log** in the encoder settings to open the dynamic per-user log folder
 
 ## Updating and uninstalling
 
-- **Update:** Close MMD, run the build command, then run `install-user.ps1` again. Existing `config.ini` is preserved.
-- **Uninstall:** Close MMD and run `uninstall-user.ps1` in the Release package, or run from source:
+- **Update:** Close MMD, run the build command, then run `install-user.bat` again. Existing `config.ini` is preserved.
+- **Uninstall:** Close MMD and double-click `uninstall-user.bat` in the Release package, or run from source:
 
   ```powershell
   & 'C:\APP\MMD\MMD2FFMPEG\scripts\uninstall-user.ps1'
@@ -145,7 +147,7 @@ The advanced command field exposes the editable FFmpeg video-argument section. T
 
 | Symptom | Check |
 | --- | --- |
-| Encoder is missing from MMD | Confirm that MMD is x64, rerun `install-user.ps1`, then restart MMD. |
+| Encoder is missing from MMD | Confirm that MMD is x64, rerun `install-user.bat`, then restart MMD. |
 | Test encoder fails | Run `ffmpeg -version`; ensure the selected hardware encoder is supported by the active FFmpeg, GPU, and driver. |
 | Installer cannot replace the DLL | Close every MMD window and retry the installer. |
 | AVI remains or no MKV appears | Open the log folder, inspect the latest log, and check the FFmpeg exit code. |
