@@ -114,6 +114,8 @@ MMDLocaleLauncher.exe /settings
 
 This is a CP932 compatibility launcher, not a full UTF-8 conversion of MMD. Paths containing characters that CP932 cannot represent may still be limited by MMD itself.
 
+Its setup window uses a per-monitor V2 DPI-aware dark theme. The window icon and registered `.pmm` file icon are read from the selected `MikuMikuDance.exe`.
+
 ## Use in MMD
 
 1. Select **File > AVI Output** and choose the desired AVI save path.

@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <commdlg.h>
+#include <dwmapi.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl_core.h>
@@ -25,6 +26,13 @@ constexpr int kIdBrowseMmd = 1004;
 constexpr int kIdRegisterPmm = 1005;
 constexpr int kIdSave = 1006;
 constexpr int kIdCancel = 1007;
+constexpr COLORREF kWindowBackground = RGB(18, 18, 18);
+constexpr COLORREF kControlBackground = RGB(36, 36, 36);
+constexpr COLORREF kControlBorder = RGB(82, 82, 82);
+constexpr COLORREF kTextPrimary = RGB(245, 245, 245);
+constexpr COLORREF kTextSecondary = RGB(185, 185, 185);
+constexpr COLORREF kPrimaryButton = RGB(0, 120, 212);
+constexpr COLORREF kPrimaryButtonHot = RGB(28, 151, 234);
 
 struct Config {
     std::wstring ntleas_path;
@@ -35,10 +43,63 @@ struct SetupState {
     Config config;
     bool saved = false;
     bool register_pmm = false;
+    HFONT font = nullptr;
     HWND ntleas_edit = nullptr;
     HWND mmd_edit = nullptr;
     HWND register_checkbox = nullptr;
 };
+
+bool is_existing_file(const std::wstring& path);
+
+HBRUSH window_brush() {
+    static HBRUSH brush = CreateSolidBrush(kWindowBackground);
+    return brush;
+}
+
+HBRUSH control_brush() {
+    static HBRUSH brush = CreateSolidBrush(kControlBackground);
+    return brush;
+}
+
+void enable_dark_title_bar(HWND window) {
+    const BOOL enabled = TRUE;
+    constexpr DWORD kUseImmersiveDarkMode = 20;
+    DwmSetWindowAttribute(window, kUseImmersiveDarkMode, &enabled, sizeof(enabled));
+}
+
+void apply_mmd_icon(HWND window, const std::wstring& mmd_path) {
+    if (!is_existing_file(mmd_path)) {
+        return;
+    }
+    HICON large_icon = nullptr;
+    HICON small_icon = nullptr;
+    if (ExtractIconExW(mmd_path.c_str(), 0, &large_icon, &small_icon, 1) == 0) {
+        return;
+    }
+    if (large_icon != nullptr) {
+        const auto old_icon = reinterpret_cast<HICON>(SendMessageW(window, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(large_icon)));
+        if (old_icon != nullptr && old_icon != large_icon) {
+            DestroyIcon(old_icon);
+        }
+    }
+    if (small_icon != nullptr) {
+        const auto old_icon = reinterpret_cast<HICON>(SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(small_icon)));
+        if (old_icon != nullptr && old_icon != small_icon) {
+            DestroyIcon(old_icon);
+        }
+    }
+}
+
+void release_window_icons(HWND window) {
+    const auto large_icon = reinterpret_cast<HICON>(SendMessageW(window, WM_GETICON, ICON_BIG, 0));
+    const auto small_icon = reinterpret_cast<HICON>(SendMessageW(window, WM_GETICON, ICON_SMALL, 0));
+    if (large_icon != nullptr) {
+        DestroyIcon(large_icon);
+    }
+    if (small_icon != nullptr && small_icon != large_icon) {
+        DestroyIcon(small_icon);
+    }
+}
 
 void show_error(HWND owner, const std::wstring& text) {
     MessageBoxW(owner, text.c_str(), kAppName, MB_OK | MB_ICONERROR);
@@ -183,6 +244,12 @@ std::wstring read_window_text(HWND window) {
     return value;
 }
 
+HFONT create_ui_font(HWND window) {
+    const UINT dpi = GetDpiForWindow(window);
+    return CreateFontW(-MulDiv(9, static_cast<int>(dpi == 0 ? 96 : dpi), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+}
+
 void set_default_font(HWND window) {
     SendMessageW(window, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
 }
@@ -194,9 +261,77 @@ HWND create_control(DWORD style, int id, HWND parent, const wchar_t* class_name,
     return control;
 }
 
+void draw_button(const DRAWITEMSTRUCT& item, bool primary) {
+    const bool disabled = (item.itemState & ODS_DISABLED) != 0;
+    const bool pressed = (item.itemState & ODS_SELECTED) != 0;
+    const bool focused = (item.itemState & ODS_FOCUS) != 0;
+    COLORREF background = primary ? kPrimaryButton : kControlBackground;
+    if (primary && !disabled && !pressed) {
+        background = kPrimaryButtonHot;
+    }
+    if (pressed) {
+        background = primary ? RGB(0, 94, 166) : RGB(56, 56, 56);
+    }
+    HBRUSH background_brush = CreateSolidBrush(disabled ? RGB(48, 48, 48) : background);
+    FillRect(item.hDC, &item.rcItem, background_brush);
+    DeleteObject(background_brush);
+    HBRUSH border_brush = CreateSolidBrush(focused ? RGB(117, 192, 255) : kControlBorder);
+    FrameRect(item.hDC, &item.rcItem, border_brush);
+    DeleteObject(border_brush);
+    wchar_t text[256]{};
+    GetWindowTextW(item.hwndItem, text, static_cast<int>(std::size(text)));
+    SetBkMode(item.hDC, TRANSPARENT);
+    SetTextColor(item.hDC, disabled ? RGB(120, 120, 120) : kTextPrimary);
+    RECT text_rect = item.rcItem;
+    DrawTextW(item.hDC, text, -1, &text_rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+}
+
+void draw_checkbox(const DRAWITEMSTRUCT& item, bool checked) {
+    FillRect(item.hDC, &item.rcItem, window_brush());
+    const int dpi = GetDpiForWindow(item.hwndItem);
+    const int box_size = MulDiv(16, static_cast<int>(dpi == 0 ? 96 : dpi), 96);
+    const int left = item.rcItem.left;
+    const int top = item.rcItem.top + (item.rcItem.bottom - item.rcItem.top - box_size) / 2;
+    RECT box{left, top, left + box_size, top + box_size};
+    HBRUSH box_brush = CreateSolidBrush(checked ? kPrimaryButton : kControlBackground);
+    FillRect(item.hDC, &box, box_brush);
+    DeleteObject(box_brush);
+    HBRUSH border_brush = CreateSolidBrush((item.itemState & ODS_FOCUS) ? RGB(117, 192, 255) : kControlBorder);
+    FrameRect(item.hDC, &box, border_brush);
+    DeleteObject(border_brush);
+    if (checked) {
+        HPEN pen = CreatePen(PS_SOLID, std::max(1, MulDiv(2, static_cast<int>(dpi == 0 ? 96 : dpi), 96)), kTextPrimary);
+        HGDIOBJ old_pen = SelectObject(item.hDC, pen);
+        POINT points[3]{
+            {box.left + box_size / 5, box.top + box_size / 2},
+            {box.left + box_size / 2 - 1, box.bottom - box_size / 4},
+            {box.right - box_size / 6, box.top + box_size / 4}
+        };
+        Polyline(item.hDC, points, static_cast<int>(std::size(points)));
+        SelectObject(item.hDC, old_pen);
+        DeleteObject(pen);
+    }
+    wchar_t text[512]{};
+    GetWindowTextW(item.hwndItem, text, static_cast<int>(std::size(text)));
+    RECT text_rect{box.right + MulDiv(8, static_cast<int>(dpi == 0 ? 96 : dpi), 96), item.rcItem.top, item.rcItem.right, item.rcItem.bottom};
+    SetBkMode(item.hDC, TRANSPARENT);
+    SetTextColor(item.hDC, kTextPrimary);
+    DrawTextW(item.hDC, text, -1, &text_rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+}
+
 int scale_for(HWND window, int value) {
     const UINT dpi = GetDpiForWindow(window);
     return MulDiv(value, static_cast<int>(dpi == 0 ? 96 : dpi), 96);
+}
+
+void apply_ui_font(HWND window, SetupState* state) {
+    if (state->font != nullptr) {
+        DeleteObject(state->font);
+    }
+    state->font = create_ui_font(window);
+    for (const int id : {1100, 1101, kIdNtleaEdit, kIdBrowseNtlea, 1102, kIdMmdEdit, kIdBrowseMmd, kIdRegisterPmm, 1103, kIdSave, kIdCancel}) {
+        SendMessageW(GetDlgItem(window, id), WM_SETFONT, reinterpret_cast<WPARAM>(state->font), TRUE);
+    }
 }
 
 void layout_setup_window(HWND window, SetupState* state) {
@@ -278,7 +413,7 @@ bool set_registry_empty_value(HKEY root, const std::wstring& subkey, const std::
     return written == ERROR_SUCCESS;
 }
 
-bool register_pmm_open_with(std::wstring& error) {
+bool register_pmm_open_with(const Config& config, std::wstring& error) {
     const std::wstring launcher = get_module_path();
     if (launcher.empty()) {
         error = L"無法取得 MMDLocaleLauncher.exe 的位置。";
@@ -288,7 +423,7 @@ bool register_pmm_open_with(std::wstring& error) {
     const std::wstring command = L"\"" + launcher + L"\" \"%1\"";
     const bool ok =
         set_registry_string(HKEY_CURRENT_USER, classes + kProgId, nullptr, L"MMD Locale Launcher PMM Project") &&
-        set_registry_string(HKEY_CURRENT_USER, classes + kProgId + L"\\DefaultIcon", nullptr, launcher + L",0") &&
+        set_registry_string(HKEY_CURRENT_USER, classes + kProgId + L"\\DefaultIcon", nullptr, config.mmd_path + L",0") &&
         set_registry_string(HKEY_CURRENT_USER, classes + kProgId + L"\\shell\\open", nullptr, L"使用 MMD Locale Launcher 開啟") &&
         set_registry_string(HKEY_CURRENT_USER, classes + kProgId + L"\\shell\\open\\command", nullptr, command) &&
         set_registry_empty_value(HKEY_CURRENT_USER, classes + L".pmm\\OpenWithProgids", kProgId) &&
@@ -340,17 +475,20 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
     }
     case WM_CREATE: {
         state = reinterpret_cast<SetupState*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+        enable_dark_title_bar(window);
+        apply_mmd_icon(window, state->config.mmd_path);
         create_control(SS_LEFT, 1100, window, L"STATIC", L"請設定 NTLEA 與 MikuMikuDance 的執行檔。儲存後，直接雙擊本程式即可開啟 MMD。");
         create_control(SS_LEFT, 1101, window, L"STATIC", L"NTLEA 執行檔（ntleas.exe）");
         state->ntleas_edit = create_control(WS_BORDER | ES_AUTOHSCROLL, kIdNtleaEdit, window, L"EDIT", state->config.ntleas_path.c_str());
-        create_control(BS_PUSHBUTTON, kIdBrowseNtlea, window, L"BUTTON", L"瀏覽…");
+        create_control(BS_OWNERDRAW, kIdBrowseNtlea, window, L"BUTTON", L"瀏覽…");
         create_control(SS_LEFT, 1102, window, L"STATIC", L"MikuMikuDance 執行檔（MikuMikuDance.exe）");
         state->mmd_edit = create_control(WS_BORDER | ES_AUTOHSCROLL, kIdMmdEdit, window, L"EDIT", state->config.mmd_path.c_str());
-        create_control(BS_PUSHBUTTON, kIdBrowseMmd, window, L"BUTTON", L"瀏覽…");
-        state->register_checkbox = create_control(BS_AUTOCHECKBOX, kIdRegisterPmm, window, L"BUTTON", L"註冊並設定為 .pmm 的預設開啟程式");
+        create_control(BS_OWNERDRAW, kIdBrowseMmd, window, L"BUTTON", L"瀏覽…");
+        state->register_checkbox = create_control(BS_OWNERDRAW, kIdRegisterPmm, window, L"BUTTON", L"註冊並設定為 .pmm 的預設開啟程式");
         create_control(SS_LEFT, 1103, window, L"STATIC", L"Windows 會顯示預設應用程式畫面，必須由你確認，不會在背景強制修改預設值。");
-        create_control(BS_DEFPUSHBUTTON, kIdSave, window, L"BUTTON", L"儲存");
-        create_control(BS_PUSHBUTTON, kIdCancel, window, L"BUTTON", L"取消");
+        create_control(BS_OWNERDRAW, kIdSave, window, L"BUTTON", L"儲存");
+        create_control(BS_OWNERDRAW, kIdCancel, window, L"BUTTON", L"取消");
+        apply_ui_font(window, state);
         layout_setup_window(window, state);
         return 0;
     }
@@ -359,6 +497,16 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
             layout_setup_window(window, state);
         }
         return 0;
+    case WM_DPICHANGED: {
+        const auto* suggested = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window, nullptr, suggested->left, suggested->top, suggested->right - suggested->left,
+            suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        if (state != nullptr) {
+            apply_ui_font(window, state);
+            layout_setup_window(window, state);
+        }
+        return 0;
+    }
     case WM_COMMAND:
         if (state == nullptr) {
             return 0;
@@ -375,9 +523,16 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
             const auto chosen = choose_executable(window, L"選擇 MikuMikuDance.exe");
             if (chosen) {
                 SetWindowTextW(state->mmd_edit, chosen->c_str());
+                apply_mmd_icon(window, *chosen);
             }
             return 0;
         }
+        case kIdRegisterPmm:
+            if (HIWORD(wparam) == BN_CLICKED) {
+                state->register_pmm = !state->register_pmm;
+                InvalidateRect(state->register_checkbox, nullptr, TRUE);
+            }
+            return 0;
         case kIdSave: {
             Config config{read_window_text(state->ntleas_edit), read_window_text(state->mmd_edit)};
             if (!validate_config(config, window)) {
@@ -389,7 +544,6 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
                 return 0;
             }
             state->config = std::move(config);
-            state->register_pmm = SendMessageW(state->register_checkbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
             state->saved = true;
             DestroyWindow(window);
             return 0;
@@ -400,10 +554,38 @@ LRESULT CALLBACK setup_window_proc(HWND window, UINT message, WPARAM wparam, LPA
         default:
             return 0;
         }
+    case WM_DRAWITEM: {
+        const auto* item = reinterpret_cast<DRAWITEMSTRUCT*>(lparam);
+        if (item == nullptr) {
+            return FALSE;
+        }
+        if (item->CtlID == kIdRegisterPmm) {
+            draw_checkbox(*item, state != nullptr && state->register_pmm);
+            return TRUE;
+        }
+        if (item->CtlID == kIdBrowseNtlea || item->CtlID == kIdBrowseMmd || item->CtlID == kIdSave || item->CtlID == kIdCancel) {
+            draw_button(*item, item->CtlID == kIdSave);
+            return TRUE;
+        }
+        return FALSE;
+    }
+    case WM_CTLCOLORSTATIC:
+        SetTextColor(reinterpret_cast<HDC>(wparam), kTextSecondary);
+        SetBkMode(reinterpret_cast<HDC>(wparam), TRANSPARENT);
+        return reinterpret_cast<LRESULT>(window_brush());
+    case WM_CTLCOLOREDIT:
+        SetTextColor(reinterpret_cast<HDC>(wparam), kTextPrimary);
+        SetBkColor(reinterpret_cast<HDC>(wparam), kControlBackground);
+        return reinterpret_cast<LRESULT>(control_brush());
     case WM_CLOSE:
         DestroyWindow(window);
         return 0;
     case WM_DESTROY:
+        release_window_icons(window);
+        if (state != nullptr && state->font != nullptr) {
+            DeleteObject(state->font);
+            state->font = nullptr;
+        }
         PostQuitMessage(0);
         return 0;
     default:
@@ -439,7 +621,7 @@ bool show_setup_window(Config& config, bool& register_pmm) {
     window_class.lpfnWndProc = setup_window_proc;
     window_class.hInstance = GetModuleHandleW(nullptr);
     window_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    window_class.hbrBackground = window_brush();
     window_class.lpszClassName = kWindowClass;
     if (GetClassInfoW(window_class.hInstance, kWindowClass, &window_class) == FALSE) {
         if (RegisterClassW(&window_class) == 0) {
@@ -559,7 +741,7 @@ bool has_option(const std::vector<std::wstring>& arguments, std::wstring_view op
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
-    SetProcessDPIAware();
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const HRESULT com_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
     int argc = 0;
@@ -589,7 +771,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
     if (register_pmm) {
         std::wstring error;
-        if (!register_pmm_open_with(error)) {
+        if (!register_pmm_open_with(config, error)) {
             show_error(nullptr, error);
         } else {
             open_default_apps_ui(nullptr);

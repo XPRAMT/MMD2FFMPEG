@@ -26,7 +26,7 @@ add_executable(MMDLocaleLauncher WIN32 src/mmd_locale_launcher.cpp)
 target_compile_features(MMDLocaleLauncher PRIVATE cxx_std_20)
 target_compile_definitions(MMDLocaleLauncher PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(MMDLocaleLauncher PRIVATE /W4 /permissive- /utf-8)
-target_link_libraries(MMDLocaleLauncher PRIVATE ole32 shell32 comdlg32)
+target_link_libraries(MMDLocaleLauncher PRIVATE ole32 shell32 comdlg32 dwmapi)
 
 add_executable(dmo_smoke tests/dmo_smoke.cpp)
 target_compile_features(dmo_smoke PRIVATE cxx_std_20)
