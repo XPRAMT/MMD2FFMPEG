@@ -23,17 +23,6 @@ target_compile_definitions(mmd2ffmpeg_cleanup PRIVATE UNICODE _UNICODE WIN32_LEA
 target_compile_options(mmd2ffmpeg_cleanup PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(mmd2ffmpeg_cleanup PRIVATE shell32)
 
-add_executable(MMDLocaleLauncher WIN32
-    src/mmd_locale_launcher.cpp
-    src/mmd_locale_launcher.rc
-)
-target_compile_features(MMDLocaleLauncher PRIVATE cxx_std_20)
-target_compile_definitions(MMDLocaleLauncher PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_compile_options(MMDLocaleLauncher PRIVATE /W4 /permissive- /utf-8)
-target_compile_options(MMDLocaleLauncher PRIVATE $<$<CONFIG:Release>:/O1> $<$<CONFIG:Release>:/Ob1> $<$<CONFIG:Release>:/Gy> $<$<CONFIG:Release>:/Gw>)
-target_link_options(MMDLocaleLauncher PRIVATE $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
-target_link_libraries(MMDLocaleLauncher PRIVATE ole32 shell32 comdlg32 dwmapi)
-
 add_executable(dmo_smoke tests/dmo_smoke.cpp)
 target_compile_features(dmo_smoke PRIVATE cxx_std_20)
 target_compile_definitions(dmo_smoke PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
