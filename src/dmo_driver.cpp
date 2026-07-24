@@ -168,6 +168,8 @@ struct UiStrings {
     const wchar_t* log_title;
     const wchar_t* required_message;
     const wchar_t* required_title;
+    const wchar_t* ffmpeg_missing;
+    const wchar_t* nvencc_missing;
 };
 
 struct UiOptions {
@@ -322,7 +324,9 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟log",
         L"無法開啟編碼 log 資料夾。", L"MMD2FFMPEG log",
         L"請先測試目前的編碼指令。\n\n通過測試後才能儲存或套用設定。",
-        L"需要測試 MMD2FFMPEG 編碼器"};
+        L"需要測試 MMD2FFMPEG 編碼器",
+        L"\x26A0 找不到 ffmpeg，請前往 https://ffmpeg.org/download.html 安裝",
+        L"\x26A0 找不到 NVEncC，請前往 https://github.com/rigaya/NVEnc/releases 下載"};
     static constexpr UiStrings simplified{
         L"MMD2FFMPEG 编码器设置", L"语言", L"编码核心数", L"编码器", L"编码格式", L"位深度", L"编码预设",
         L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"GOP / I 帧间隔", L"B 帧间隔", L"帧结构", L"FFmpeg 命令（中间参数可编辑）",
@@ -331,7 +335,9 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"测试通过后才能保存或应用。", L"测试编码", L"打开日志",
         L"无法打开编码日志文件夹。", L"MMD2FFMPEG 日志",
         L"请先测试当前的编码命令。\n\n测试通过后才能保存或应用设置。",
-        L"需要测试 MMD2FFMPEG 编码器"};
+        L"需要测试 MMD2FFMPEG 编码器",
+        L"\x26A0 找不到 ffmpeg，请前往 https://ffmpeg.org/download.html 安装",
+        L"\x26A0 找不到 NVEncC，请前往 https://github.com/rigaya/NVEnc/releases 下载"};
     static constexpr UiStrings japanese{
         L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコード CPU スレッド", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
         L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"GOP / I フレーム間隔", L"B フレーム間隔", L"フレーム構造", L"FFmpeg コマンド（中央の引数は編集可能）",
@@ -340,7 +346,9 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログを開く",
         L"エンコードログのフォルダーを開けません。", L"MMD2FFMPEG ログ",
         L"現在のエンコーダーコマンドを先にテストしてください。\n\nテストに合格するまで設定を保存または適用できません。",
-        L"MMD2FFMPEG エンコーダーのテストが必要です"};
+        L"MMD2FFMPEG エンコーダーのテストが必要です",
+        L"\x26A0 ffmpeg が見つかりません。https://ffmpeg.org/download.html からインストールしてください",
+        L"\x26A0 NVEncC が見つかりません。https://github.com/rigaya/NVEnc/releases からダウンロードしてください"};
     static constexpr UiStrings english{
         L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoding CPU threads", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
         L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"GOP / I-frame interval", L"B-frame interval", L"Frame structure", L"FFmpeg command (middle arguments are editable)",
@@ -349,7 +357,9 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"Test must pass before saving or applying.", L"Test encoder", L"Open log",
         L"Could not open the encoding log folder.", L"MMD2FFMPEG Log",
         L"Test the current encoder command first.\n\nSettings can only be saved or applied after the test passes.",
-        L"MMD2FFMPEG Encoder Test Required"};
+        L"MMD2FFMPEG Encoder Test Required",
+        L"\x26A0 ffmpeg not found. Install from https://ffmpeg.org/download.html",
+        L"\x26A0 NVEncC not found. Download from https://github.com/rigaya/NVEnc/releases"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -2233,6 +2243,7 @@ private:
             reset_combo(ID_RATE, {L"QVBR", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         }
         updating_command_ = false;
+        check_missing_executables();
     }
     void start_probe(bool force = false) {
         if (probe_running_) return;
@@ -2310,7 +2321,36 @@ private:
             compatibility_prefix_tooltip_active_ = false;
         }
     }
-    void update_probe_countdown() {
+
+    void check_missing_executables() {
+        if (!window_) return;
+        const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
+        const bool ffmpeg_present = !ffmpeg_path.empty() && !ffmpeg_path.wstring().empty();
+        const int backend = combo_index(ID_BACKEND);
+        const bool nvencc_selected = backend == 2;
+        std::wstring message;
+        if (!ffmpeg_present)
+            message = current_text().ffmpeg_missing;
+        else if (nvencc_selected) {
+            const auto ffmpeg_dir = ffmpeg_path.parent_path();
+            const auto nvenc_sibling = ffmpeg_dir / L"NVEncC.exe";
+            const auto nvenc_sibling64 = ffmpeg_dir / L"NVEncC64.exe";
+            std::error_code error;
+            const bool sibling_found = std::filesystem::exists(nvenc_sibling, error) ||
+                                       std::filesystem::exists(nvenc_sibling64, error);
+            if (!sibling_found) {
+                const auto path_nvenc = resolve_executable(L"NVEncC.exe");
+                const auto path_nvenc64 = resolve_executable(L"NVEncC64.exe");
+                if (path_nvenc.empty() && path_nvenc64.empty())
+                    message = current_text().nvencc_missing;
+            }
+        }
+        if (!message.empty())
+            SetWindowTextW(GetDlgItem(window_, ID_STATUS), message.c_str());
+    }
+
+    void update_probe_countdown()
+ {
         if (!probe_running_ || !window_) return;
         const ULONGLONG now = GetTickCount64();
         const int remaining = now >= probe_deadline_ ? 0 : static_cast<int>((probe_deadline_ - now + 999) / 1000);
@@ -2320,6 +2360,7 @@ private:
     }
     void update_controls() {
         update_compatibility_warning();
+        check_missing_executables();
     }
     int combo_index(int id) const { return static_cast<int>(ComboBox_GetCurSel(GetDlgItem(window_, id))); }
     std::wstring combo_text(int id) const {
