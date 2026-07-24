@@ -1815,8 +1815,8 @@ private:
         restore_cached_probe();
     }
     void switch_tab(int page) {
-        const std::array<int, 10> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
-                                                ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_COMPAT_WARNING, ID_VIDEO_TAB};
+        const std::array<int, 9> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
+                                               ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_VIDEO_TAB};
         for (const int id : video_bottom) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
@@ -1830,6 +1830,7 @@ private:
         active_tab_ = page;
         ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
         update_video_subtab_visibility();
+        update_compatibility_warning();
         rebuild_layout();
     }
     void switch_video_tab(int page) {
@@ -1846,6 +1847,7 @@ private:
         current_command_tested_ = true;
         tested_signature_ = cached.signature;
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_text().test_passed);
+        update_compatibility_warning();
         return true;
     }
     void update_video_subtab_visibility() {
@@ -1933,6 +1935,7 @@ private:
             MessageBoxW(window_, text.open_log_failed_message, text.log_title, MB_OK | MB_ICONERROR);
     }
     bool has_potential_compatibility_warning() const {
+        if (current_command_tested_) return false;
         const auto& capability = codec_capability_from_index(combo_index(ID_CODEC));
         if (capability.cpu_only && combo_index(ID_BACKEND) != 0) return true;
         if (!capability.supports_10bit && combo_index(ID_DEPTH) == 1) return true;
@@ -1946,7 +1949,7 @@ private:
     }
     void update_compatibility_warning() {
         if (!window_) return;
-        ShowWindow(GetDlgItem(window_, ID_COMPAT_WARNING), has_potential_compatibility_warning() ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_COMPAT_WARNING), active_tab_ == 0 && has_potential_compatibility_warning() ? SW_SHOW : SW_HIDE);
     }
     void update_probe_countdown() {
         if (!probe_running_ || !window_) return;
@@ -2352,6 +2355,7 @@ private:
             else status = std::wstring(text.test_failed) + result->message;
             if (status.size() > 180) status.resize(180);
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
+            self->update_compatibility_warning();
             EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
             delete result;
             return TRUE;
