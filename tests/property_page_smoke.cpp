@@ -192,7 +192,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     RECT client{};
     GetClientRect(page_window, &client);
     const int ids[] = {ID_TAB, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
-                       ID_STATUS, ID_REFRESH, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND, ID_COMMAND_SUFFIX,
+                       ID_STATUS, ID_LABEL_STATUS, ID_REFRESH, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND, ID_COMMAND_SUFFIX,
                        ID_TEST_REQUIREMENT, ID_LABEL_BACKEND, ID_LABEL_CODEC,
                        ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE,
                        ID_COMMAND_HEADING};
@@ -261,9 +261,18 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Editable FFmpeg command must be a four-line word-wrapping edit control.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 39;
     }
-    if (initial_status_bounds.bottom - initial_status_bounds.top < (command_heading.bottom - command_heading.top) * 2) {
-        std::wcerr << L"Encoder status does not reserve two lines.\n";
+    std::array<wchar_t, 16> status_class{};
+    GetClassNameW(GetDlgItem(page_window, ID_STATUS), status_class.data(), static_cast<int>(status_class.size()));
+    const LONG_PTR status_style = GetWindowLongPtrW(GetDlgItem(page_window, ID_STATUS), GWL_STYLE);
+    if (wcscmp(status_class.data(), L"Edit") != 0 || (status_style & ES_MULTILINE) == 0 ||
+        (status_style & ES_READONLY) == 0 || (status_style & WS_VSCROLL) == 0 ||
+        initial_status_bounds.bottom - initial_status_bounds.top < (quality.bottom - quality.top) * 2) {
+        std::wcerr << L"Encoder status must be a two-line, read-only, scrollable edit control.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 29;
+    }
+    if (child_rect(page_window, ID_LABEL_STATUS).bottom > initial_status_bounds.top) {
+        std::wcerr << L"Encoder status label overlaps the status text box.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 46;
     }
     const RECT command_before_color = child_rect(page_window, ID_COMMAND);
     TabCtrl_SetCurSel(video_tab, 1);
@@ -339,6 +348,10 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND gop_edit = GetDlgItem(page_window, ID_GOP);
     HWND bframes_edit = GetDlgItem(page_window, ID_BFRAMES);
     HWND cpu_threads_combo = GetDlgItem(page_window, ID_CPU_THREADS);
+    HWND vsr_enabled_combo = GetDlgItem(page_window, ID_VSR_ENABLED);
+    SendMessageW(vsr_enabled_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(vsr_enabled_combo));
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
     SendMessageW(codec_combo, CB_SETCURSEL, 0, 0);
@@ -535,8 +548,8 @@ int wmain(int argument_count, wchar_t** arguments) {
     const wchar_t* language_labels[]{L"語言", L"語言", L"语言", L"言語", L"Language"};
     const wchar_t* button_labels[]{L"測試編碼", L"測試編碼", L"测试编码", L"エンコーダーをテスト", L"Test encoder"};
     const wchar_t* open_log_labels[]{L"開啟log", L"開啟log", L"打开日志", L"ログを開く", L"Open log"};
-    const wchar_t* not_tested_labels[]{L"編碼器狀態：尚未測試", L"編碼器狀態：尚未測試", L"编码器状态：尚未测试",
-                                       L"エンコーダー状態：未テスト", L"Encoder status: not tested"};
+    const wchar_t* status_heading_labels[]{L"編碼器狀態", L"編碼器狀態", L"编码器状态", L"エンコーダー状態", L"Encoder status"};
+    const wchar_t* not_tested_labels[]{L"尚未測試", L"尚未測試", L"尚未测试", L"未テスト", L"Not tested"};
     if (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH))) {
         std::wcerr << L"The property page started an encoder test automatically.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 8;
@@ -558,6 +571,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         if (window_text(GetDlgItem(page_window, ID_LABEL_LANGUAGE)) != language_labels[text_index] ||
             window_text(GetDlgItem(page_window, ID_REFRESH)) != button_labels[text_index] ||
             window_text(GetDlgItem(page_window, ID_OPEN_LOG)) != open_log_labels[text_index] ||
+            window_text(GetDlgItem(page_window, ID_LABEL_STATUS)) != status_heading_labels[text_index] ||
             window_text(status_control) != not_tested_labels[text_index]) {
             std::wcerr << L"Language switch failed for index " << language << L".\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 9;
@@ -572,7 +586,14 @@ int wmain(int argument_count, wchar_t** arguments) {
             requirement_bounds.top < 0 || requirement_bounds.bottom > client.bottom ||
             test_bounds.top < 0 || test_bounds.bottom > client.bottom ||
             log_bounds.top < 0 || log_bounds.bottom > client.bottom || test_bounds.right >= log_bounds.left) {
-            std::wcerr << L"Localized action row is clipped, spaced too far from status, or overlaps.\n";
+            std::wcerr << L"Localized action row is clipped, spaced too far from status, or overlaps. status="
+                       << status_bounds.left << L"," << status_bounds.top << L"," << status_bounds.right << L","
+                       << status_bounds.bottom << L" requirement=" << requirement_bounds.left << L","
+                       << requirement_bounds.top << L"," << requirement_bounds.right << L"," << requirement_bounds.bottom
+                       << L" test=" << test_bounds.left << L"," << test_bounds.top << L"," << test_bounds.right << L","
+                       << test_bounds.bottom << L" log=" << log_bounds.left << L"," << log_bounds.top << L","
+                       << log_bounds.right << L"," << log_bounds.bottom << L" client=" << client.right << L","
+                       << client.bottom << L"\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 21;
         }
     }

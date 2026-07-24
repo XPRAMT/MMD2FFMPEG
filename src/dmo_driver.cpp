@@ -140,6 +140,7 @@ struct UiStrings {
     const wchar_t* b_frames;
     const wchar_t* frame_structure_mode;
     const wchar_t* command_heading;
+    const wchar_t* status_heading;
     const wchar_t* not_tested;
     const wchar_t* testing;
     const wchar_t* test_passed;
@@ -291,8 +292,8 @@ const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings traditional{
         L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼核心數", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
         L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"輸出範圍", L"GOP / I 幀間隔", L"B 幀間隔", L"幀結構", L"完整 FFmpeg 指令（中間區段可編輯）",
-        L"編碼器狀態：尚未測試", L"編碼器狀態：測試中…", L"編碼器狀態：測試通過",
-        L"編碼器狀態：設定已變更，請重新測試", L"編碼器狀態：測試失敗 - ",
+        L"編碼器狀態", L"尚未測試", L"測試中…", L"測試通過",
+        L"設定已變更，請重新測試", L"測試失敗 - ",
         L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟log",
         L"無法開啟編碼 log 資料夾。", L"MMD2FFMPEG log",
         L"請先測試目前的編碼指令。\n\n通過測試後才能儲存或套用設定。",
@@ -300,8 +301,8 @@ const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings simplified{
         L"MMD2FFMPEG 编码器设置", L"语言", L"编码核心数", L"编码器", L"编码格式", L"位深度", L"编码预设",
         L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"GOP / I 帧间隔", L"B 帧间隔", L"帧结构", L"完整 FFmpeg 命令（中间部分可编辑）",
-        L"编码器状态：尚未测试", L"编码器状态：测试中…", L"编码器状态：测试通过",
-        L"编码器状态：设置已更改，请重新测试", L"编码器状态：测试失败 - ",
+        L"编码器状态", L"尚未测试", L"测试中…", L"测试通过",
+        L"设置已更改，请重新测试", L"测试失败 - ",
         L"测试通过后才能保存或应用。", L"测试编码", L"打开日志",
         L"无法打开编码日志文件夹。", L"MMD2FFMPEG 日志",
         L"请先测试当前的编码命令。\n\n测试通过后才能保存或应用设置。",
@@ -309,8 +310,8 @@ const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings japanese{
         L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコード CPU スレッド", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
         L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"GOP / I フレーム間隔", L"B フレーム間隔", L"フレーム構造", L"完全な FFmpeg コマンド（中央部分は編集可能）",
-        L"エンコーダー状態：未テスト", L"エンコーダー状態：テスト中…", L"エンコーダー状態：テスト合格",
-        L"エンコーダー状態：設定が変更されました。再テストしてください", L"エンコーダー状態：テスト失敗 - ",
+        L"エンコーダー状態", L"未テスト", L"テスト中…", L"テスト合格",
+        L"設定が変更されました。再テストしてください", L"テスト失敗 - ",
         L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログを開く",
         L"エンコードログのフォルダーを開けません。", L"MMD2FFMPEG ログ",
         L"現在のエンコーダーコマンドを先にテストしてください。\n\nテストに合格するまで設定を保存または適用できません。",
@@ -318,8 +319,8 @@ const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings english{
         L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoding CPU threads", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
         L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"GOP / I-frame interval", L"B-frame interval", L"Frame structure", L"Complete FFmpeg command (middle section is editable)",
-        L"Encoder status: not tested", L"Encoder status: testing...", L"Encoder status: test passed",
-        L"Encoder status: settings changed; test again", L"Encoder status: test failed - ",
+        L"Encoder status", L"Not tested", L"Testing...", L"Test passed",
+        L"Settings changed; test again", L"Test failed - ",
         L"Test must pass before saving or applying.", L"Test encoder", L"Open log",
         L"Could not open the encoding log folder.", L"MMD2FFMPEG Log",
         L"Test the current encoder command first.\n\nSettings can only be saved or applied after the test passes.",
@@ -2015,8 +2016,8 @@ private:
         restore_cached_probe();
     }
     void switch_tab(int page) {
-        const std::array<int, 9> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
-                                               ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_VIDEO_TAB};
+        const std::array<int, 10> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
+                                                ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_LABEL_STATUS, ID_VIDEO_TAB};
         for (const int id : video_bottom) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
@@ -2370,9 +2371,11 @@ private:
             const int suffix_height = text_height(ID_COMMAND_SUFFIX, full_width, dlu_y(12));
             add_layout(ID_COMMAND_SUFFIX, margin_x, y, full_width, suffix_height);
             y += suffix_height + dlu_y(1);
-            const int status_height = label_height * 2;
+            add_layout(ID_LABEL_STATUS, margin_x, y, full_width, label_height);
+            y += label_height + dlu_y(1);
+            const int status_height = edit_height * 2;
             add_layout(ID_STATUS, margin_x, y, full_width, status_height);
-            y += status_height;
+            y += status_height + dlu_y(1);
             const int open_log_width = text_width(ID_OPEN_LOG, dlu_x(58));
             const int test_width = text_width(ID_REFRESH, dlu_x(54));
             const int open_log_left = right - open_log_width;
@@ -2522,6 +2525,7 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_BFRAMES), text.b_frames);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRAME_MODE), text.frame_structure_mode);
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_HEADING), text.command_heading);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_STATUS), text.status_heading);
         SetWindowTextW(GetDlgItem(window_, ID_TEST_REQUIREMENT), text.test_required);
         SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
         SetWindowTextW(GetDlgItem(window_, ID_OPEN_LOG), text.open_log_button);
@@ -2591,8 +2595,9 @@ private:
             if (self->current_command_tested_) status = text.test_passed;
             else if (result->signature != command_test_signature(current)) status = text.settings_changed;
             else status = std::wstring(text.test_failed) + result->message;
-            if (status.size() > 180) status.resize(180);
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
+            SendMessageW(GetDlgItem(window, ID_STATUS), EM_SETSEL, 0, 0);
+            SendMessageW(GetDlgItem(window, ID_STATUS), EM_SCROLLCARET, 0, 0);
             self->update_compatibility_warning();
             EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
             delete result;

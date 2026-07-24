@@ -1,7 +1,7 @@
 #include <windows.h>
 #include "resource.h"
 
-IDD_ENCODER_SETTINGS DIALOGEX 0, 0, 260, 252
+IDD_ENCODER_SETTINGS DIALOGEX 0, 0, 260, 272
 STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN | WS_CLIPSIBLINGS
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "Segoe UI", 400, 0, 0x1
@@ -51,7 +51,8 @@ BEGIN
     LTEXT           "", ID_COMMAND_PREFIX, 0, 0, 1, 1, SS_LEFT
     EDITTEXT        ID_COMMAND, 0, 0, 1, 1, ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL | WS_TABSTOP
     LTEXT           "", ID_COMMAND_SUFFIX, 0, 0, 1, 1, SS_LEFT
-    LTEXT           "Encoder status: not tested", ID_STATUS, 0, 0, 1, 1, SS_LEFT
+    LTEXT           "Encoder status", ID_LABEL_STATUS, 0, 0, 1, 1
+    EDITTEXT        ID_STATUS, 0, 0, 1, 1, ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Test must pass before saving or applying.", ID_TEST_REQUIREMENT, 0, 0, 1, 1
     DEFPUSHBUTTON   "Test encoder", ID_REFRESH, 0, 0, 1, 1, WS_TABSTOP
     PUSHBUTTON      "Open log", ID_OPEN_LOG, 0, 0, 1, 1, WS_TABSTOP
