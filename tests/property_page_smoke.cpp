@@ -149,6 +149,11 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Video page does not expose Encoding and Color sub-tabs.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 22;
     }
+    const RECT video_tab_bounds = child_rect(page_window, ID_VIDEO_TAB);
+    if (video_tab_bounds.top > tab_bounds.bottom) {
+        std::wcerr << L"Video sub-tabs are separated from the main tabs by a vertical gap.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 26;
+    }
     const RECT quality = child_rect(page_window, ID_QP);
     const RECT bitrate = child_rect(page_window, ID_BITRATE);
     const RECT command_heading = child_rect(page_window, ID_COMMAND_HEADING);

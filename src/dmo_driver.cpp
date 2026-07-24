@@ -1714,7 +1714,7 @@ private:
         const int gap = dlu_y(2);
         const int field_gap = dlu_x(4);
         add_layout(ID_TAB, margin_x, margin_y, full_width, tab_height, false);
-        int y = margin_y + tab_height + gap;
+        int y = margin_y + tab_height;
 
         const auto add_form_row = [&](int label, int control, int label_width, int& row_y) {
             const int field_left = margin_x + label_width + field_gap;
