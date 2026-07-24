@@ -190,6 +190,23 @@ int wmain(int argument_count, wchar_t** arguments) {
     TabCtrl_SetCurSel(video_tab, 0);
     video_tab_change.code = TCN_SELCHANGE;
     SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
+    HWND codec_combo = GetDlgItem(page_window, ID_CODEC);
+    HWND depth_combo = GetDlgItem(page_window, ID_DEPTH);
+    HWND alpha_combo = GetDlgItem(page_window, ID_ALPHA);
+    SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
+    SendMessageW(codec_combo, CB_SETCURSEL, 3, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CODEC, CBN_SELCHANGE), reinterpret_cast<LPARAM>(codec_combo));
+    if (!IsWindowEnabled(depth_combo)) {
+        std::wcerr << L"VP9 must expose the 10-bit depth option.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 27;
+    }
+    SendMessageW(depth_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_DEPTH, CBN_SELCHANGE), reinterpret_cast<LPARAM>(depth_combo));
+    if (SendMessageW(depth_combo, CB_GETCURSEL, 0, 0) != 1) {
+        std::wcerr << L"VP9 10-bit selection was not retained.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 28;
+    }
     std::array<wchar_t, 16> github_class{};
     GetClassNameW(GetDlgItem(page_window, ID_GITHUB_LINK), github_class.data(), static_cast<int>(github_class.size()));
     if (wcscmp(github_class.data(), L"Edit") != 0) {

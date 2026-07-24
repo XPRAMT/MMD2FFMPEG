@@ -18,6 +18,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -66,6 +67,56 @@ struct Settings {
     std::wstring language = L"system";
     std::wstring command_template;
 };
+
+struct CodecCapability {
+    const wchar_t* key;
+    const wchar_t* label;
+    bool cpu_only;
+    bool supports_10bit;
+    bool forces_10bit;
+    bool supports_rgba;
+    bool rgba_supports_10bit;
+    bool supports_rate_control;
+    bool forces_444_for_rgba;
+};
+
+constexpr std::array<CodecCapability, 5> kCodecCapabilities{{
+    {L"avc", L"AVC (H.264)", false, false, false, false, false, true, false},
+    {L"hevc", L"HEVC (H.265)", false, true, false, false, false, true, false},
+    {L"av1", L"AV1", false, true, false, false, false, true, false},
+    {L"vp9", L"VP9", true, true, false, true, false, true, false},
+    {L"prores", L"ProRes (prores_ks)", true, true, true, true, true, false, true},
+}};
+
+const CodecCapability& codec_capability(std::wstring_view key) {
+    for (const auto& capability : kCodecCapabilities) {
+        if (key == capability.key) return capability;
+    }
+    return kCodecCapabilities[1];
+}
+
+const CodecCapability& codec_capability_from_index(int index) {
+    return kCodecCapabilities[std::clamp(index, 0, static_cast<int>(kCodecCapabilities.size()) - 1)];
+}
+
+int codec_index(std::wstring_view key) {
+    for (int index = 0; index < static_cast<int>(kCodecCapabilities.size()); ++index) {
+        if (key == kCodecCapabilities[index].key) return index;
+    }
+    return 1;
+}
+
+void normalize_codec_settings(Settings& settings) {
+    const auto& capability = codec_capability(settings.codec);
+    settings.codec = capability.key;
+    if (capability.cpu_only) settings.backend = L"cpu";
+    if (capability.forces_10bit) settings.bit_depth = 10;
+    else if (!capability.supports_10bit) settings.bit_depth = 8;
+    if (settings.alpha_mode == L"rgba" && !capability.supports_rgba) settings.alpha_mode = L"mask";
+    if (settings.alpha_mode == L"rgba" && !capability.rgba_supports_10bit) settings.bit_depth = 8;
+    if (settings.alpha_mode == L"rgba" && capability.forces_444_for_rgba) settings.chroma = L"444";
+    if (!capability.supports_rate_control) settings.rate_control = L"crf";
+}
 
 enum class UiLanguage { TraditionalChinese, SimplifiedChinese, Japanese, English };
 
@@ -332,9 +383,7 @@ Settings load_settings() {
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
-    if (settings.codec == L"avc" || settings.codec == L"vp9") settings.bit_depth = 8;
-    if (settings.codec == L"prores") settings.bit_depth = 10;
-    if (settings.alpha_mode == L"rgba" && settings.codec != L"vp9" && settings.codec != L"prores") settings.alpha_mode = L"mask";
+    normalize_codec_settings(settings);
     if (_wcsicmp(settings.ffmpeg.c_str(), L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe") == 0)
         settings.ffmpeg = L"ffmpeg.exe";
     if (settings.video_args.empty() && !settings.command_template.empty()) {
@@ -434,7 +483,8 @@ std::filesystem::path current_output_avi() {
 }
 
 std::wstring encoding_arguments(const Settings& settings) {
-    const bool ten_bit = settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9";
+    const auto& capability = codec_capability(settings.codec);
+    const bool ten_bit = settings.bit_depth == 10 && capability.supports_10bit;
     const std::wstring codec_name = settings.codec == L"avc" ? L"h264" : settings.codec;
     std::wstring encoder;
     if (settings.backend == L"cpu")
@@ -484,9 +534,10 @@ std::wstring encoding_arguments(const Settings& settings) {
 
 const wchar_t* output_pixel_format(const Settings& settings) {
     if (settings.alpha_mode == L"rgba") return settings.codec == L"prores" ? L"yuva444p10le" : L"yuva420p";
-    if (settings.chroma == L"444") return settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9" ? L"yuv444p10le" : L"yuv444p";
-    if (settings.chroma == L"422") return settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9" ? L"yuv422p10le" : L"yuv422p";
-    return settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9" ? L"yuv420p10le" : L"yuv420p";
+    const bool ten_bit = settings.bit_depth == 10 && codec_capability(settings.codec).supports_10bit;
+    if (settings.chroma == L"444") return ten_bit ? L"yuv444p10le" : L"yuv444p";
+    if (settings.chroma == L"422") return ten_bit ? L"yuv422p10le" : L"yuv422p";
+    return ten_bit ? L"yuv420p10le" : L"yuv420p";
 }
 
 std::wstring recording_date_metadata();
@@ -1386,9 +1437,8 @@ public:
         if (!window_) return E_UNEXPECTED;
         Settings candidate = settings_;
         candidate.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
-        candidate.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" : combo_text(ID_CODEC) == L"AV1" ? L"av1" :
-                          combo_text(ID_CODEC) == L"VP9" ? L"vp9" : combo_text(ID_CODEC) == L"ProRes (prores_ks)" ? L"prores" : L"hevc";
-        candidate.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && candidate.codec != L"avc" && candidate.codec != L"vp9" ? 10 : 8;
+        candidate.codec = codec_capability_from_index(combo_index(ID_CODEC)).key;
+        candidate.bit_depth = combo_text(ID_DEPTH) == L"10-bit" ? 10 : 8;
         candidate.chroma = combo_index(ID_CHROMA) == 1 ? L"422" : combo_index(ID_CHROMA) == 2 ? L"444" : L"420";
         candidate.alpha_mode = combo_index(ID_ALPHA) == 1 ? L"rgba" : combo_index(ID_ALPHA) == 2 ? L"mask" : L"none";
         candidate.mask_output = combo_index(ID_MASK_OUTPUT) == 1 ? L"separate" : L"stacked";
@@ -1402,6 +1452,7 @@ public:
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         candidate.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         candidate.audio_bit_depth = candidate.audio_sample_rate == L"hires" ? L"24" : L"original";
+        normalize_codec_settings(candidate);
         const auto signature = command_test_signature(candidate);
         if (!current_command_tested_ || tested_signature_ != signature) {
             const auto& text = current_text();
@@ -1464,8 +1515,7 @@ private:
         updating_command_ = true;
         add_combo(ID_LANGUAGE, {L"系統預設", L"繁體中文", L"簡體中文", L"日本語", L"English"}, language_index(settings_.language));
         add_combo(ID_BACKEND, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
-        add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes (prores_ks)"},
-                  settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : settings_.codec == L"vp9" ? 3 : settings_.codec == L"prores" ? 4 : 1);
+        add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes (prores_ks)"}, codec_index(settings_.codec));
         add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
         add_combo(ID_PRESET, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
         add_combo(ID_RATE, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
@@ -1486,6 +1536,7 @@ private:
         updating_command_ = false;
         apply_language();
         switch_tab(0);
+        restore_cached_probe();
     }
     void switch_tab(int page) {
         const std::array<int, 9> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
@@ -1507,6 +1558,16 @@ private:
         active_video_tab_ = std::clamp(page, 0, 1);
         update_video_subtab_visibility();
         rebuild_layout();
+    }
+    void restore_cached_probe() {
+        sync_structured_settings();
+        Settings candidate = settings_;
+        candidate.video_args = edit_text(ID_COMMAND);
+        ProbeResult cached{};
+        if (!load_cached_probe(candidate, cached) || !cached.success) return;
+        current_command_tested_ = true;
+        tested_signature_ = cached.signature;
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_text().test_passed);
     }
     void update_video_subtab_visibility() {
         const bool video_visible = active_tab_ == 0;
@@ -1592,25 +1653,23 @@ private:
             MessageBoxW(window_, text.open_log_failed_message, text.log_title, MB_OK | MB_ICONERROR);
     }
     void update_controls() {
-        const int codec = combo_index(ID_CODEC);
-        const bool avc = codec == 0;
-        const bool vp9 = codec == 3;
-        const bool prores = codec == 4;
-        if (avc || vp9) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
-        if (prores) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 1);
-        if (vp9 || prores) ComboBox_SetCurSel(GetDlgItem(window_, ID_BACKEND), 0);
-        EnableWindow(GetDlgItem(window_, ID_BACKEND), !vp9 && !prores);
-        EnableWindow(GetDlgItem(window_, ID_DEPTH), !avc && !vp9);
+        const auto& capability = codec_capability_from_index(combo_index(ID_CODEC));
+        if (capability.forces_10bit) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 1);
+        else if (!capability.supports_10bit || (combo_index(ID_ALPHA) == 1 && !capability.rgba_supports_10bit))
+            ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
+        if (capability.cpu_only) ComboBox_SetCurSel(GetDlgItem(window_, ID_BACKEND), 0);
+        EnableWindow(GetDlgItem(window_, ID_BACKEND), !capability.cpu_only);
+        EnableWindow(GetDlgItem(window_, ID_DEPTH), capability.supports_10bit && !capability.forces_10bit &&
+                                                   !(combo_index(ID_ALPHA) == 1 && !capability.rgba_supports_10bit));
         const bool bitrate = combo_index(ID_RATE) == 2;
-        EnableWindow(GetDlgItem(window_, ID_RATE), !prores);
-        EnableWindow(GetDlgItem(window_, ID_QP), !bitrate && !prores);
-        EnableWindow(GetDlgItem(window_, ID_BITRATE), bitrate && !prores);
-        const bool rgba_supported = vp9 || prores;
-        if (!rgba_supported && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_ALPHA), 2);
+        EnableWindow(GetDlgItem(window_, ID_RATE), capability.supports_rate_control);
+        EnableWindow(GetDlgItem(window_, ID_QP), !bitrate && capability.supports_rate_control);
+        EnableWindow(GetDlgItem(window_, ID_BITRATE), bitrate && capability.supports_rate_control);
+        if (!capability.supports_rgba && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_ALPHA), 2);
         const bool mask = combo_index(ID_ALPHA) == 2;
         EnableWindow(GetDlgItem(window_, ID_MASK_OUTPUT), mask);
-        if (prores && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_CHROMA), 2);
-        EnableWindow(GetDlgItem(window_, ID_CHROMA), !(prores && combo_index(ID_ALPHA) == 1));
+        if (capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_CHROMA), 2);
+        EnableWindow(GetDlgItem(window_, ID_CHROMA), !(capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1));
     }
     int combo_index(int id) const { return static_cast<int>(ComboBox_GetCurSel(GetDlgItem(window_, id))); }
     std::wstring combo_text(int id) const {
@@ -1629,8 +1688,8 @@ private:
     }
     void sync_structured_settings() {
         settings_.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
-        settings_.codec = combo_index(ID_CODEC) == 0 ? L"avc" : combo_index(ID_CODEC) == 2 ? L"av1" : combo_index(ID_CODEC) == 3 ? L"vp9" : combo_index(ID_CODEC) == 4 ? L"prores" : L"hevc";
-        settings_.bit_depth = combo_index(ID_DEPTH) == 1 && settings_.codec != L"avc" && settings_.codec != L"vp9" ? 10 : 8;
+        settings_.codec = codec_capability_from_index(combo_index(ID_CODEC)).key;
+        settings_.bit_depth = combo_index(ID_DEPTH) == 1 ? 10 : 8;
         settings_.chroma = combo_index(ID_CHROMA) == 1 ? L"422" : combo_index(ID_CHROMA) == 2 ? L"444" : L"420";
         settings_.alpha_mode = combo_index(ID_ALPHA) == 1 ? L"rgba" : combo_index(ID_ALPHA) == 2 ? L"mask" : L"none";
         settings_.mask_output = combo_index(ID_MASK_OUTPUT) == 1 ? L"separate" : L"stacked";
@@ -1643,6 +1702,7 @@ private:
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
+        normalize_codec_settings(settings_);
     }
     void update_command_display() {
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
@@ -1929,8 +1989,8 @@ private:
             current_command_tested_ = false;
             tested_signature_.clear();
         }
-        if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
         update_controls();
+        if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
         if (id != ID_COMMAND) {
             sync_structured_settings();
             updating_command_ = true;
