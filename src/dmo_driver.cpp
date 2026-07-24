@@ -2543,14 +2543,14 @@ private:
                 y += full_requirement_height + gap;
                 add_layout(ID_REFRESH, test_left, y, test_width, button_height);
                 add_layout(ID_OPEN_LOG, open_log_left, y, open_log_width, button_height);
-                y += button_height + margin_y;
+                y += button_height + gap;
             } else {
                 const int action_height = std::max(button_height, requirement_height);
                 add_layout(ID_TEST_REQUIREMENT, margin_x, y + (action_height - requirement_height) / 2,
                            requirement_width, requirement_height);
                 add_layout(ID_REFRESH, test_left, y + (action_height - button_height) / 2, test_width, button_height);
                 add_layout(ID_OPEN_LOG, open_log_left, y + (action_height - button_height) / 2, open_log_width, button_height);
-                y += action_height + margin_y;
+                y += action_height + gap;
             }
         } else if (active_tab_ == 1) {
             const int intro_height = text_height(ID_AUDIO_INTRO, full_width, dlu_y(12));
