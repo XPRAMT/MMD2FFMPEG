@@ -102,7 +102,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 43) {
+        tooltip_count != 49) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -168,8 +168,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 17;
     }
     HWND video_tab = GetDlgItem(page_window, ID_VIDEO_TAB);
-    if (!video_tab || TabCtrl_GetItemCount(video_tab) != 3) {
-        std::wcerr << L"Video page does not expose Encoding, Color, and Frame structure sub-tabs.\n";
+    if (!video_tab || TabCtrl_GetItemCount(video_tab) != 4) {
+        std::wcerr << L"Video page does not expose Encoding, Color, Frame structure, and Super resolution sub-tabs.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 22;
     }
     const RECT video_tab_bounds = child_rect(page_window, ID_VIDEO_TAB);
@@ -243,6 +243,21 @@ int wmain(int argument_count, wchar_t** arguments) {
     if (command_before_color.top != command_on_frame_structure.top || command_before_color.bottom != command_on_frame_structure.bottom) {
         std::wcerr << L"FFmpeg command area did not remain fixed below the Frame structure sub-tab.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 33;
+    }
+    TabCtrl_SetCurSel(video_tab, 3);
+    SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
+    const int vsr_ids[]{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
+                        ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY};
+    for (const int id : vsr_ids) {
+        if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(child_rect(page_window, id))) {
+            std::wcerr << L"Super resolution sub-tab control is unavailable: " << id << L"\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 40;
+        }
+    }
+    const RECT command_on_vsr = child_rect(page_window, ID_COMMAND);
+    if (command_before_color.top != command_on_vsr.top || command_before_color.bottom != command_on_vsr.bottom) {
+        std::wcerr << L"FFmpeg command area did not remain fixed below the Super resolution sub-tab.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 41;
     }
     TabCtrl_SetCurSel(video_tab, 0);
     video_tab_change.code = TCN_SELCHANGE;

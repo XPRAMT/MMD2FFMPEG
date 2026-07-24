@@ -68,6 +68,9 @@ struct Settings {
     std::wstring audio_format = L"flac";
     std::wstring audio_sample_rate = L"original";
     std::wstring audio_bit_depth = L"original";
+    bool vsr_enabled = false;
+    double vsr_scale = 2.0;
+    int vsr_quality = 2;
     std::wstring language = L"system";
     std::wstring command_template;
 };
@@ -242,6 +245,45 @@ const TabUiStrings& tab_ui_strings(UiLanguage language) {
     case UiLanguage::SimplifiedChinese: return simplified;
     case UiLanguage::Japanese: return japanese;
     default: return english;
+    }
+}
+
+const wchar_t* super_resolution_label(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return L"超分";
+    case UiLanguage::SimplifiedChinese: return L"超分";
+    case UiLanguage::Japanese: return L"超解像";
+    default: return L"Super resolution";
+    }
+}
+
+const std::array<const wchar_t*, 3> vsr_labels(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return {L"RTX VSR", L"放大倍率", L"VSR 處理等級"};
+    case UiLanguage::SimplifiedChinese: return {L"RTX VSR", L"放大倍率", L"VSR 处理等级"};
+    case UiLanguage::Japanese: return {L"RTX VSR", L"拡大倍率", L"VSR 品質レベル"};
+    default: return {L"RTX VSR", L"Scale factor", L"VSR quality level"};
+    }
+}
+
+const std::array<const wchar_t*, 3> vsr_tooltips(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese:
+        return {L"啟用 NVIDIA RTX Video Super Resolution。啟用後使用 FFmpeg 將 MMD RGB 封裝為 RGBA/NUT，再由 NVEncC --avsw 接收並執行 NGX VSR。",
+                L"設定輸出相對於 MMD 原始尺寸的放大倍率，可輸入 1.00 到 4.00；預設為 2.00。",
+                L"設定 NVEncC ngx-vsr 的處理等級 0 到 4。等級越高通常需要更多 GPU 運算。"};
+    case UiLanguage::SimplifiedChinese:
+        return {L"启用 NVIDIA RTX Video Super Resolution。启用后使用 FFmpeg 将 MMD RGB 封装为 RGBA/NUT，再由 NVEncC --avsw 接收并执行 NGX VSR。",
+                L"设置输出相对于 MMD 原始尺寸的放大倍率，可输入 1.00 到 4.00；默认为 2.00。",
+                L"设置 NVEncC ngx-vsr 的处理等级 0 到 4。等级越高通常需要更多 GPU 运算。"};
+    case UiLanguage::Japanese:
+        return {L"NVIDIA RTX Video Super Resolution を有効にします。FFmpeg が MMD RGB を RGBA/NUT に封入し、NVEncC --avsw が NGX VSR を実行します。",
+                L"MMD の元解像度に対する倍率を 1.00～4.00 で指定します。既定値は 2.00 です。",
+                L"NVEncC ngx-vsr の品質レベルを 0～4 で指定します。高いレベルほど通常は GPU 負荷が増えます。"};
+    default:
+        return {L"Enable NVIDIA RTX Video Super Resolution. FFmpeg packages MMD RGB as RGBA/NUT and NVEncC --avsw applies NGX VSR.",
+                L"Set the output scale relative to the original MMD size from 1.00 to 4.00. The default is 2.00.",
+                L"Set NVEncC ngx-vsr quality from 0 to 4. Higher levels usually require more GPU processing."};
     }
 }
 
@@ -561,6 +603,9 @@ Settings load_settings() {
         else if (key == L"audio_format" && (value == L"flac" || value == L"wav" || value == L"none")) settings.audio_format = value;
         else if (key == L"audio_sample_rate" && (value == L"original" || value == L"hires")) settings.audio_sample_rate = value;
         else if (key == L"audio_bit_depth" && (value == L"original" || value == L"24")) settings.audio_bit_depth = value;
+        else if (key == L"vsr_enabled") settings.vsr_enabled = value == L"1";
+        else if (key == L"vsr_scale") { try { settings.vsr_scale = std::clamp(std::stod(value), 1.0, 4.0); } catch (...) {} }
+        else if (key == L"vsr_quality") { try { settings.vsr_quality = std::clamp(std::stoi(value), 0, 4); } catch (...) {} }
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
@@ -608,7 +653,10 @@ void save_settings(const Settings& settings) {
          << L"cpu_threads=" << settings.cpu_threads << L"\n"
          << L"audio_format=" << settings.audio_format << L"\n"
          << L"audio_sample_rate=" << settings.audio_sample_rate << L"\n"
-         << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n";
+         << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n"
+         << L"vsr_enabled=" << (settings.vsr_enabled ? 1 : 0) << L"\n"
+         << L"vsr_scale=" << settings.vsr_scale << L"\n"
+         << L"vsr_quality=" << settings.vsr_quality << L"\n";
     file << L"language=" << settings.language << L"\n";
     std::wstring video_args = settings.video_args;
     std::replace_if(video_args.begin(), video_args.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
@@ -839,6 +887,50 @@ std::filesystem::path resolve_executable(const std::wstring& executable) {
     return resolved;
 }
 
+std::filesystem::path resolve_nvenc(const std::filesystem::path& ffmpeg_path) {
+    const auto sibling = ffmpeg_path.parent_path() / L"NVEncC.exe";
+    std::error_code error;
+    if (std::filesystem::exists(sibling, error)) return sibling;
+    const auto sibling64 = ffmpeg_path.parent_path() / L"NVEncC64.exe";
+    if (std::filesystem::exists(sibling64, error)) return sibling64;
+    auto path = resolve_executable(L"NVEncC.exe");
+    if (!path.empty()) return path;
+    return resolve_executable(L"NVEncC64.exe");
+}
+
+std::wstring build_vsr_command(const Settings& settings, int width, int height, int bits,
+                               const std::filesystem::path& ffmpeg_path,
+                               const std::filesystem::path& nvenc_path,
+                               const std::filesystem::path& bridge_path,
+                               const std::wstring& output_path, bool probe = false) {
+    std::wostringstream command;
+    command << quote(bridge_path.wstring())
+            << L" --ffmpeg " << quote(ffmpeg_path.wstring())
+            << L" --nvenc " << quote(nvenc_path.wstring())
+            << L" --output " << quote(output_path)
+            << L" --width " << width << L" --height " << height << L" --fps " << settings.fps
+            << L" --input-format " << (bits == 24 ? L"bgr24" : L"bgra")
+            << L" --scale " << std::fixed << std::setprecision(3) << settings.vsr_scale
+            << L" --quality " << settings.vsr_quality
+            << L" --depth " << settings.bit_depth
+            << L" --output-csp yuv" << settings.chroma
+            << L" --preset p" << std::clamp(settings.preset, 1, 7)
+            << L" --rate " << settings.rate_control
+            << L" --qp " << settings.qp
+            << L" --bitrate " << settings.bitrate_kbps
+            << L" --frame-mode " << settings.frame_structure_mode
+            << L" --gop " << settings.gop << L" --bframes " << settings.b_frames;
+    if (settings.alpha_mode == L"rgba") command << L" --alpha";
+    if (settings.vsr_enabled) command << L" --vsr";
+    if (probe) command << L" --probe";
+    return command.str();
+}
+
+bool uses_nvenc_bridge(const Settings& settings) {
+    return settings.vsr_enabled ||
+           (settings.backend == L"nvenc" && settings.codec == L"hevc" && settings.alpha_mode == L"rgba");
+}
+
 void write_log_line(HANDLE file, const std::wstring& text) {
     if (!file) return;
     const int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
@@ -919,9 +1011,37 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         error_message = L"FFmpeg was not found in the system PATH:\n" + settings.ffmpeg;
         return false;
     }
-    const auto arguments = settings.video_args.empty() ? editable_arguments(settings) : settings.video_args;
+    std::filesystem::path executable = ffmpeg_path;
+    std::filesystem::path probe_output;
     std::wstring command;
-    if (settings.alpha_mode == L"mask") {
+    if (uses_nvenc_bridge(settings)) {
+        if (settings.alpha_mode == L"mask") {
+            error_message = L"RTX VSR does not support the black/white mask output mode.";
+            return false;
+        }
+        if (settings.vsr_enabled && settings.alpha_mode == L"rgba") {
+            error_message = L"NVEncC cannot combine NGX VSR and HEVC alpha in the same pass.";
+            return false;
+        }
+        const auto nvenc_path = resolve_nvenc(ffmpeg_path);
+        const auto bridge_path = local_data_dir() / L"mmd2ffmpeg_vsr_bridge.exe";
+        if (nvenc_path.empty()) {
+            error_message = L"NVEncC.exe was not found beside FFmpeg or in PATH.";
+            return false;
+        }
+        std::error_code bridge_error;
+        if (!std::filesystem::exists(bridge_path, bridge_error)) {
+            error_message = L"mmd2ffmpeg_vsr_bridge.exe is not installed.";
+            return false;
+        }
+        probe_output = local_data_dir() / L"vsr-probe.mkv";
+        std::filesystem::remove(probe_output, bridge_error);
+        executable = bridge_path;
+        command = build_vsr_command(settings, 320, 180, 32, ffmpeg_path, nvenc_path, bridge_path,
+                                    probe_output.wstring(), true);
+    }
+    const auto arguments = settings.video_args.empty() ? editable_arguments(settings) : settings.video_args;
+    if (!uses_nvenc_bridge(settings) && settings.alpha_mode == L"mask") {
         command = L"\"" + settings.ffmpeg +
             L"\" -hide_banner -loglevel error -f lavfi -i color=c=black@0.5:s=1920x1080:r=1,format=bgra -frames:v 1 "
             + arguments;
@@ -930,7 +1050,7 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         } else {
             command += L" -frames:v 1 -f null - -map \"[mask]\" -c:v ffv1 -pix_fmt gray -frames:v 1 -f null -";
         }
-    } else {
+    } else if (!uses_nvenc_bridge(settings)) {
         command = L"\"" + settings.ffmpeg +
             L"\" -hide_banner -loglevel error -f lavfi -i color=c=black@0.5:s=1920x1080:r=1 -frames:v 1 "
             + arguments + L" -f null -";
@@ -952,12 +1072,12 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     startup.hStdOutput = output_write;
     startup.hStdError = output_write;
     PROCESS_INFORMATION process{};
-    const BOOL created = CreateProcessW(ffmpeg_path.c_str(), mutable_command.data(), nullptr, nullptr,
+    const BOOL created = CreateProcessW(executable.c_str(), mutable_command.data(), nullptr, nullptr,
                                         TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
     close_handle(output_write);
     if (!created) {
         close_handle(output_read);
-        error_message = L"Could not start FFmpeg (Windows error " + std::to_wstring(GetLastError()) + L").";
+        error_message = L"Could not start the encoder test (Windows error " + std::to_wstring(GetLastError()) + L").";
         return false;
     }
 
@@ -976,6 +1096,10 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     close_handle(output_read);
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
+    if (!probe_output.empty()) {
+        std::error_code remove_error;
+        std::filesystem::remove(probe_output, remove_error);
+    }
     if (wait_result == WAIT_TIMEOUT) {
         error_message = L"Encoder test timed out after 10 seconds.";
         return false;
@@ -1027,9 +1151,21 @@ std::wstring command_test_signature(const Settings& settings) {
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
     const auto arguments = normalize_rate_values(settings.video_args.empty() ? editable_arguments(settings) : settings.video_args);
-    return L"v9-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+    std::wstring bridge_signature;
+    if (uses_nvenc_bridge(settings)) {
+        const auto nvenc_path = resolve_nvenc(ffmpeg_path);
+        const auto bridge_path = local_data_dir() / L"mmd2ffmpeg_vsr_bridge.exe";
+        const auto nvenc_stamp = std::filesystem::last_write_time(nvenc_path, error).time_since_epoch().count();
+        const auto bridge_stamp = std::filesystem::last_write_time(bridge_path, error).time_since_epoch().count();
+        bridge_signature = L"|" + nvenc_path.wstring() + L"|" + std::to_wstring(nvenc_stamp) +
+                           L"|" + bridge_path.wstring() + L"|" + std::to_wstring(bridge_stamp);
+    }
+    return L"v10-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + bridge_signature +
+           L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
-           L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments;
+           L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments +
+           L"|vsr=" + std::to_wstring(settings.vsr_enabled ? 1 : 0) + L"|" + std::to_wstring(settings.vsr_scale) +
+           L"|" + std::to_wstring(settings.vsr_quality);
 }
 
 std::wstring capability_key(const Settings& settings) {
@@ -1406,6 +1542,18 @@ private:
         avi.replace_extension(L".mkv");
         const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
         if (ffmpeg_path.empty()) return false;
+        std::filesystem::path launch_path = ffmpeg_path;
+        std::filesystem::path nvenc_path;
+        std::filesystem::path bridge_path;
+        if (uses_nvenc_bridge(settings_)) {
+            if (settings_.alpha_mode == L"mask") return false;
+            if (settings_.vsr_enabled && settings_.alpha_mode == L"rgba") return false;
+            nvenc_path = resolve_nvenc(ffmpeg_path);
+            bridge_path = local_data_dir() / L"mmd2ffmpeg_vsr_bridge.exe";
+            std::error_code bridge_error;
+            if (nvenc_path.empty() || !std::filesystem::exists(bridge_path, bridge_error)) return false;
+            launch_path = bridge_path;
+        }
         final_output_ = avi;
         partial_output_ = final_output_.parent_path() /
             (final_output_.stem().wstring() + L".mmd2ffmpeg-partial-" + std::to_wstring(GetCurrentProcessId()) + final_output_.extension().wstring());
@@ -1431,7 +1579,10 @@ private:
         HANDLE read_pipe = nullptr;
         if (!CreatePipe(&read_pipe, &stdin_write_, &security, 1024 * 1024)) return false;
         SetHandleInformation(stdin_write_, HANDLE_FLAG_INHERIT, 0);
-        auto command = build_ffmpeg_command(settings_, width_, height_, bits_, partial_output_.wstring(), partial_mask_output_.wstring());
+        auto command = uses_nvenc_bridge(settings_)
+            ? build_vsr_command(settings_, width_, height_, bits_, ffmpeg_path, nvenc_path, bridge_path,
+                                partial_output_.wstring())
+            : build_ffmpeg_command(settings_, width_, height_, bits_, partial_output_.wstring(), partial_mask_output_.wstring());
         std::wostringstream header;
         header << L"MMD2FFMPEG output diagnostics\r\n"
                << L"Started: " << format_local_time() << L"\r\n"
@@ -1446,11 +1597,11 @@ private:
         startup.hStdOutput = log_file_ ? log_file_ : GetStdHandle(STD_OUTPUT_HANDLE);
         startup.hStdError = log_file_ ? log_file_ : GetStdHandle(STD_ERROR_HANDLE);
         PROCESS_INFORMATION process{};
-        const BOOL created = CreateProcessW(ffmpeg_path.c_str(), mutable_command.data(), nullptr, nullptr,
+        const BOOL created = CreateProcessW(launch_path.c_str(), mutable_command.data(), nullptr, nullptr,
                                              TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
         CloseHandle(read_pipe);
         if (!created) {
-            write_log_line(log_file_, L"\r\n[MMD2FFMPEG] FFmpeg could not be started (Windows error " +
+            write_log_line(log_file_, L"\r\n[MMD2FFMPEG] Encoder process could not be started (Windows error " +
                                       std::to_wstring(GetLastError()) + L").\r\n");
             close_handle(stdin_write_); close_handle(log_file_); return false;
         }
@@ -1663,10 +1814,14 @@ public:
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
-        candidate.video_args = edit_text(ID_COMMAND);
+        if (!uses_nvenc_bridge(candidate)) candidate.video_args = edit_text(ID_COMMAND);
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         candidate.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         candidate.audio_bit_depth = candidate.audio_sample_rate == L"hires" ? L"24" : L"original";
+        candidate.vsr_enabled = combo_index(ID_VSR_ENABLED) == 1;
+        candidate.vsr_scale = std::clamp(edit_double(ID_VSR_SCALE, 2.0), 1.0, 4.0);
+        candidate.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY), 0, 4);
+        if (uses_nvenc_bridge(candidate)) candidate.video_args = settings_.video_args;
         normalize_codec_settings(candidate);
         const auto signature = command_test_signature(candidate);
         if (!current_command_tested_ || tested_signature_ != signature) {
@@ -1758,6 +1913,13 @@ private:
             {ID_REFRESH, tip.test_encoder}, {ID_OPEN_LOG, tip.open_log}, {ID_GITHUB_LINK, tip.github},
         }};
         for (const auto& item : items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
+        const auto vsr_tip = vsr_tooltips(ui_language(settings_.language));
+        const std::array<std::pair<int, const wchar_t*>, 6> vsr_items{{
+            {ID_LABEL_VSR_ENABLED, vsr_tip[0]}, {ID_VSR_ENABLED, vsr_tip[0]},
+            {ID_LABEL_VSR_SCALE, vsr_tip[1]}, {ID_VSR_SCALE, vsr_tip[1]},
+            {ID_LABEL_VSR_QUALITY, vsr_tip[2]}, {ID_VSR_QUALITY, vsr_tip[2]},
+        }};
+        for (const auto& item : vsr_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         tooltips_initialized_ = true;
     }
     void create_controls() {
@@ -1780,6 +1942,7 @@ private:
         item.pszText = const_cast<wchar_t*>(L"Encoding"); TabCtrl_InsertItem(video_tab_, 0, &item);
         item.pszText = const_cast<wchar_t*>(L"Color"); TabCtrl_InsertItem(video_tab_, 1, &item);
         item.pszText = const_cast<wchar_t*>(L"Frame structure"); TabCtrl_InsertItem(video_tab_, 2, &item);
+        item.pszText = const_cast<wchar_t*>(L"Super resolution"); TabCtrl_InsertItem(video_tab_, 3, &item);
         TabCtrl_SetCurSel(video_tab_, 0);
 
         updating_command_ = true;
@@ -1793,6 +1956,8 @@ private:
         add_combo(ID_PRESET, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
         add_combo(ID_RATE, {L"CRF", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         add_combo(ID_FRAME_MODE, {L"Automatic", L"Manual"}, settings_.frame_structure_mode == L"manual" ? 1 : 0);
+        add_combo(ID_VSR_ENABLED, {L"Off", L"On"}, settings_.vsr_enabled ? 1 : 0);
+        add_combo(ID_VSR_QUALITY, {L"0", L"1", L"2", L"3", L"4"}, settings_.vsr_quality);
         add_combo(ID_ALPHA, {L"None", L"4-channel", L"Black/white mask"}, settings_.alpha_mode == L"rgba" ? 1 : settings_.alpha_mode == L"mask" ? 2 : 0);
         add_combo(ID_MASK_OUTPUT, {L"Stack x2", L"Separate"}, settings_.mask_output == L"separate" ? 1 : 0);
         add_combo(ID_CHROMA, {L"4:2:0", L"4:2:2", L"4:4:4"}, settings_.chroma == L"422" ? 1 : settings_.chroma == L"444" ? 2 : 0);
@@ -1804,9 +1969,12 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_BITRATE), std::to_wstring(settings_.bitrate_kbps).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_GOP), std::to_wstring(settings_.gop).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_BFRAMES), std::to_wstring(settings_.b_frames).c_str());
+        std::wostringstream scale_value; scale_value << std::fixed << std::setprecision(2) << settings_.vsr_scale;
+        SetWindowTextW(GetDlgItem(window_, ID_VSR_SCALE), scale_value.str().c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND), (settings_.video_args.empty() ? editable_arguments(settings_) : settings_.video_args).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
+        update_command_display();
         rebuild_backend_options();
         update_controls();
         updating_command_ = false;
@@ -1834,14 +2002,14 @@ private:
         rebuild_layout();
     }
     void switch_video_tab(int page) {
-        active_video_tab_ = std::clamp(page, 0, 2);
+        active_video_tab_ = std::clamp(page, 0, 3);
         update_video_subtab_visibility();
         rebuild_layout();
     }
     bool restore_cached_probe() {
         sync_structured_settings();
         Settings candidate = settings_;
-        candidate.video_args = edit_text(ID_COMMAND);
+        if (!uses_nvenc_bridge(candidate)) candidate.video_args = edit_text(ID_COMMAND);
         ProbeResult cached{};
         if (!load_cached_probe(candidate, cached) || !cached.success) return false;
         current_command_tested_ = true;
@@ -1858,10 +2026,13 @@ private:
         const std::array<int, 10> color{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE, ID_COLOR_RANGE,
                                          ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE, ID_LABEL_COLOR_RANGE};
         const std::array<int, 6> frame_structure{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES};
+        const std::array<int, 6> super_resolution{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
+                                                  ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY};
         for (const int id : encoding) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
         for (const int id : encoding_more) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
         for (const int id : color) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 1 ? SW_SHOW : SW_HIDE);
         for (const int id : frame_structure) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 2 ? SW_SHOW : SW_HIDE);
+        for (const int id : super_resolution) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 3 ? SW_SHOW : SW_HIDE);
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1902,7 +2073,7 @@ private:
         if (probe_thread_.joinable()) probe_thread_.join();
         sync_structured_settings();
         Settings candidate = settings_;
-        candidate.video_args = edit_text(ID_COMMAND);
+        if (!uses_nvenc_bridge(candidate)) candidate.video_args = edit_text(ID_COMMAND);
         ProbeResult cached{};
         if (!force && load_cached_probe(candidate, cached)) {
             auto* result = new ProbeResult(std::move(cached));
@@ -1936,6 +2107,8 @@ private:
     }
     bool has_potential_compatibility_warning() const {
         if (current_command_tested_) return false;
+        if (combo_index(ID_VSR_ENABLED) == 1 &&
+            (combo_index(ID_ALPHA) == 2 || combo_index(ID_CODEC) != 1 || combo_index(ID_BACKEND) != 1)) return true;
         const auto& capability = codec_capability_from_index(combo_index(ID_CODEC));
         if (capability.cpu_only && combo_index(ID_BACKEND) != 0) return true;
         if (!capability.supports_10bit && combo_index(ID_DEPTH) == 1) return true;
@@ -1970,6 +2143,10 @@ private:
         wchar_t text[32]{}; GetWindowTextW(GetDlgItem(window_, id), text, static_cast<int>(std::size(text)));
         try { return std::stoi(text); } catch (...) { return fallback; }
     }
+    double edit_double(int id, double fallback) const {
+        wchar_t text[32]{}; GetWindowTextW(GetDlgItem(window_, id), text, static_cast<int>(std::size(text)));
+        try { return std::stod(text); } catch (...) { return fallback; }
+    }
     std::wstring edit_text(int id) const {
         const HWND edit = GetDlgItem(window_, id);
         const int length = GetWindowTextLengthW(edit);
@@ -1997,10 +2174,29 @@ private:
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
+        settings_.vsr_enabled = combo_index(ID_VSR_ENABLED) == 1;
+        settings_.vsr_scale = std::clamp(edit_double(ID_VSR_SCALE, 2.0), 1.0, 4.0);
+        settings_.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY), 0, 4);
         normalize_codec_settings(settings_);
     }
     void update_command_display() {
+        if (uses_nvenc_bridge(settings_)) {
+            const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
+            const auto nvenc_path = resolve_nvenc(ffmpeg_path);
+            const auto bridge_path = local_data_dir() / L"mmd2ffmpeg_vsr_bridge.exe";
+            SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), L"");
+            auto display = build_vsr_command(settings_, 1920, 1080, 32, ffmpeg_path, nvenc_path, bridge_path,
+                                             L"{output}");
+            replace_all(display, L"--width 1920 --height 1080", L"--width {width} --height {height}");
+            SetWindowTextW(GetDlgItem(window_, ID_COMMAND), display.c_str());
+            SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), L"");
+            SendMessageW(GetDlgItem(window_, ID_COMMAND), EM_SETREADONLY, TRUE, 0);
+            return;
+        }
+        SendMessageW(GetDlgItem(window_, ID_COMMAND), EM_SETREADONLY, FALSE, 0);
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND),
+                       (settings_.video_args.empty() ? editable_arguments(settings_) : settings_.video_args).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
     }
     struct LayoutItem {
@@ -2099,7 +2295,8 @@ private:
                 const int label_width = std::min(text_width(label, dlu_x(42)), std::max(1, (column_right - left) / 2));
                 const int field_left = left + label_width + field_gap;
                 add_layout(label, left, row_y + dlu_y(1), label_width, label_height);
-                const int control_height = control == ID_QP || control == ID_BITRATE || control == ID_GOP || control == ID_BFRAMES ? edit_height : combo_height;
+                const int control_height = control == ID_QP || control == ID_BITRATE || control == ID_GOP ||
+                                           control == ID_BFRAMES || control == ID_VSR_SCALE ? edit_height : combo_height;
                 add_layout(control, field_left, row_y, std::max(1, column_right - field_left), control_height);
             };
             const auto add_video_pair = [&](int left_label, int left_control, int right_label, int right_control, int& row_y) {
@@ -2117,10 +2314,14 @@ private:
                     add_video_pair(ID_LABEL_ALPHA, ID_ALPHA, ID_LABEL_MASK_OUTPUT, ID_MASK_OUTPUT, inner_y);
                     add_video_pair(ID_LABEL_CHROMA, ID_CHROMA, ID_LABEL_COLORSPACE, ID_COLORSPACE, inner_y);
                     add_video_field(ID_LABEL_COLOR_RANGE, ID_COLOR_RANGE, margin_x, right, inner_y);
-                } else {
+                } else if (active_video_tab_ == 2) {
                     add_video_field(ID_LABEL_FRAME_MODE, ID_FRAME_MODE, margin_x, right, inner_y);
                     inner_y += inner_row_height;
                     add_video_pair(ID_LABEL_GOP, ID_GOP, ID_LABEL_BFRAMES, ID_BFRAMES, inner_y);
+                } else {
+                    add_video_field(ID_LABEL_VSR_ENABLED, ID_VSR_ENABLED, margin_x, right, inner_y);
+                    inner_y += inner_row_height;
+                    add_video_pair(ID_LABEL_VSR_SCALE, ID_VSR_SCALE, ID_LABEL_VSR_QUALITY, ID_VSR_QUALITY, inner_y);
                 }
             }
             y += inner_height + inner_gap;
@@ -2239,8 +2440,9 @@ private:
         for (int index = 0; index < 3; ++index) {
             TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(tabs[index]); TabCtrl_SetItem(tab_, index, &item);
         }
-        const wchar_t* video_tabs[] = {text.encoding, text.color, text.frame_structure};
-        for (int index = 0; index < 3; ++index) {
+        const wchar_t* video_tabs[] = {text.encoding, text.color, text.frame_structure,
+                                       super_resolution_label(ui_language(settings_.language))};
+        for (int index = 0; index < 4; ++index) {
             TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(video_tabs[index]); TabCtrl_SetItem(video_tab_, index, &item);
         }
         SetWindowTextW(audio_labels_[0], text.audio_format);
@@ -2250,6 +2452,10 @@ private:
         reset_combo(ID_AUDIO_RATE, {text.original, text.hi_res}, rate);
         SetWindowTextW(audio_intro_, text.audio_intro);
         SetWindowTextW(audio_help_, text.hi_res_help);
+        const auto labels = vsr_labels(ui_language(settings_.language));
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_ENABLED), labels[0]);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_SCALE), labels[1]);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_QUALITY), labels[2]);
         const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" + text.author + L": XPRAMT";
         SetWindowTextW(settings_info_, info.c_str());
     }
@@ -2314,8 +2520,8 @@ private:
         if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
         if (id != ID_COMMAND) {
             sync_structured_settings();
+            if (!uses_nvenc_bridge(settings_)) settings_.video_args.clear();
             updating_command_ = true;
-            SetWindowTextW(GetDlgItem(window_, ID_COMMAND), editable_arguments(settings_).c_str());
             update_command_display();
             updating_command_ = false;
         }
@@ -2345,7 +2551,7 @@ private:
             self->probe_seconds_remaining_ = -1;
             self->sync_structured_settings();
             Settings current = self->settings_;
-            current.video_args = self->edit_text(ID_COMMAND);
+            if (!uses_nvenc_bridge(current)) current.video_args = self->edit_text(ID_COMMAND);
             self->current_command_tested_ = result->success && result->signature == command_test_signature(current);
             self->tested_signature_ = self->current_command_tested_ ? result->signature : L"";
             std::wstring status;

@@ -12,23 +12,31 @@ try {
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseDmoDll = Join-Path $PSScriptRoot 'mmd2ffmpeg_dmo.dll'
 $releaseCleanupExe = Join-Path $PSScriptRoot 'mmd2ffmpeg_cleanup.exe'
+$releaseVsrBridgeExe = Join-Path $PSScriptRoot 'mmd2ffmpeg_vsr_bridge.exe'
 $buildDmoDll = Join-Path $projectRoot 'build\mmd2ffmpeg_dmo.dll'
 $buildCleanupExe = Join-Path $projectRoot 'build\mmd2ffmpeg_cleanup.exe'
+$buildVsrBridgeExe = Join-Path $projectRoot 'build\mmd2ffmpeg_vsr_bridge.exe'
 $dmoDll = if (Test-Path -LiteralPath $releaseDmoDll) { $releaseDmoDll } else { $buildDmoDll }
 $cleanupExe = if (Test-Path -LiteralPath $releaseCleanupExe) { $releaseCleanupExe } else { $buildCleanupExe }
+$vsrBridgeExe = if (Test-Path -LiteralPath $releaseVsrBridgeExe) { $releaseVsrBridgeExe } else { $buildVsrBridgeExe }
 if (-not (Test-Path -LiteralPath $dmoDll)) {
     throw "DMO build output does not exist: $dmoDll"
 }
 if (-not (Test-Path -LiteralPath $cleanupExe)) {
     throw "Cleanup helper does not exist: $cleanupExe"
 }
+if (-not (Test-Path -LiteralPath $vsrBridgeExe)) {
+    throw "VSR bridge does not exist: $vsrBridgeExe"
+}
 $installDir = Join-Path $env:LOCALAPPDATA 'MMD2FFMPEG'
 $installedDmoDll = Join-Path $installDir 'mmd2ffmpeg_dmo.dll'
 $installedCleanupExe = Join-Path $installDir 'mmd2ffmpeg_cleanup.exe'
+$installedVsrBridgeExe = Join-Path $installDir 'mmd2ffmpeg_vsr_bridge.exe'
 $config = Join-Path $installDir 'config.ini'
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Copy-Item -LiteralPath $dmoDll -Destination $installedDmoDll -Force
 Copy-Item -LiteralPath $cleanupExe -Destination $installedCleanupExe -Force
+Copy-Item -LiteralPath $vsrBridgeExe -Destination $installedVsrBridgeExe -Force
 if (-not (Test-Path -LiteralPath $config)) {
     $defaultConfig = @"
 ffmpeg=ffmpeg.exe
@@ -40,6 +48,9 @@ preset=6
 rate_control=crf
 qp=18
 bitrate_kbps=20000
+vsr_enabled=0
+vsr_scale=2
+vsr_quality=2
 language=system
 video_args=-c:v libx265 -profile:v main10 -preset medium -crf 18
 "@
