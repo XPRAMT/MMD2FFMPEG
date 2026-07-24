@@ -37,6 +37,15 @@ std::wstring window_text(HWND window) {
     value.resize(static_cast<std::size_t>(length));
     return value;
 }
+
+std::wstring combo_item_text(HWND combo, int index) {
+    const LRESULT length = SendMessageW(combo, CB_GETLBTEXTLEN, index, 0);
+    if (length < 0) return {};
+    std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
+    SendMessageW(combo, CB_GETLBTEXT, index, reinterpret_cast<LPARAM>(value.data()));
+    value.resize(static_cast<std::size_t>(length));
+    return value;
+}
 }
 
 int wmain(int argument_count, wchar_t** arguments) {
@@ -104,7 +113,7 @@ int wmain(int argument_count, wchar_t** arguments) {
             SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(id, CBN_SELCHANGE),
                          reinterpret_cast<LPARAM>(control));
         };
-        select_combo(ID_BACKEND, 1);
+        select_combo(ID_BACKEND, 2);
         select_combo(ID_CODEC, 1);
         select_combo(ID_ALPHA, 0);
         select_combo(ID_VSR_ENABLED, 1);
@@ -349,6 +358,56 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND bframes_edit = GetDlgItem(page_window, ID_BFRAMES);
     HWND cpu_threads_combo = GetDlgItem(page_window, ID_CPU_THREADS);
     HWND vsr_enabled_combo = GetDlgItem(page_window, ID_VSR_ENABLED);
+    if (SendMessageW(backend_combo, CB_GETCOUNT, 0, 0) != 5 ||
+        combo_item_text(backend_combo, 1) != L"NVENC" ||
+        combo_item_text(backend_combo, 2) != L"NVEncC (NVIDIA)") {
+        std::wcerr << L"Encoder list must distinguish FFmpeg NVENC from NVIDIA NVEncC. count="
+                   << SendMessageW(backend_combo, CB_GETCOUNT, 0, 0) << L" item1=\""
+                   << combo_item_text(backend_combo, 1) << L"\" item2=\""
+                   << combo_item_text(backend_combo, 2) << L"\"\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 47;
+    }
+    SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
+    SendMessageW(codec_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CODEC, CBN_SELCHANGE), reinterpret_cast<LPARAM>(codec_combo));
+    SendMessageW(backend_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BACKEND, CBN_SELCHANGE), reinterpret_cast<LPARAM>(backend_combo));
+    SendMessageW(vsr_enabled_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(vsr_enabled_combo));
+    if (!has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING)) ||
+        window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"hevc_nvenc") == std::wstring::npos ||
+        !has_visible_style(GetDlgItem(page_window, ID_COMMAND_PREFIX))) {
+        std::wcerr << L"FFmpeg NVENC with VSR must remain an FFmpeg command and show an unavailable warning.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 48;
+    }
+    SendMessageW(backend_combo, CB_SETCURSEL, 2, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BACKEND, CBN_SELCHANGE), reinterpret_cast<LPARAM>(backend_combo));
+    const std::wstring nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    const LONG_PTR nvencc_command_style = GetWindowLongPtrW(GetDlgItem(page_window, ID_COMMAND), GWL_STYLE);
+    const RECT nvencc_heading_bounds = child_rect(page_window, ID_COMMAND_HEADING);
+    const RECT nvencc_command_bounds = child_rect(page_window, ID_COMMAND);
+    if ((nvencc_command_style & ES_READONLY) != 0 ||
+        has_visible_style(GetDlgItem(page_window, ID_COMMAND_PREFIX)) ||
+        has_visible_style(GetDlgItem(page_window, ID_COMMAND_SUFFIX)) ||
+        nvencc_command.find(L"mmd2ffmpeg_vsr_bridge.exe") == std::wstring::npos ||
+        nvencc_command.find(L"{width}") == std::wstring::npos ||
+        nvencc_command.find(L"{height}") == std::wstring::npos ||
+        nvencc_command.find(L"{input_pixel_format}") == std::wstring::npos ||
+        nvencc_command.find(L"{output}") == std::wstring::npos ||
+        nvencc_command_bounds.top - nvencc_heading_bounds.bottom > 32) {
+        std::wcerr << L"NVEncC must use the editable command box without empty prefix or suffix space.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 49;
+    }
+    const std::wstring edited_nvencc_command = nvencc_command + L" --ui-edit-smoke";
+    SetWindowTextW(GetDlgItem(page_window, ID_COMMAND), edited_nvencc_command.c_str());
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_COMMAND, EN_CHANGE),
+                 reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_COMMAND)));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)) != edited_nvencc_command) {
+        std::wcerr << L"NVEncC command edits were not retained.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 50;
+    }
     SendMessageW(vsr_enabled_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_ENABLED, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(vsr_enabled_combo));
