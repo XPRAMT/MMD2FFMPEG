@@ -62,7 +62,7 @@ struct Settings {
     int qp = 18;
     int bitrate_kbps = 20000;
     std::wstring frame_structure_mode = L"auto";
-    int gop = 300;
+    int gop = 120;
     int b_frames = 3;
     std::wstring audio_format = L"flac";
     std::wstring audio_sample_rate = L"original";
@@ -1939,7 +1939,7 @@ private:
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
         settings_.frame_structure_mode = combo_index(ID_FRAME_MODE) == 1 ? L"manual" : L"auto";
-        settings_.gop = std::clamp(edit_number(ID_GOP, 300), 1, 10000);
+        settings_.gop = std::clamp(edit_number(ID_GOP, 120), 1, 10000);
         settings_.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
