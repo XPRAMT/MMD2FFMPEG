@@ -89,14 +89,18 @@ int wmain(int argc, wchar_t** argv) {
 
     const HANDLE log = GetStdHandle(STD_ERROR_HANDLE);
     std::wstring nvenc_command = quote(nvenc.wstring()) + L" --avsw -i - -o " + quote(output.wstring()) +
-        L" --codec hevc";
+        L" --codec " + argument(args, L"--codec", L"hevc");
     if (vsr)
         nvenc_command += L" --output-res " + std::to_wstring(output_width) + L"x" + std::to_wstring(output_height) +
                          L" --vpp-resize algo=ngx-vsr,vsr-quality=" + std::to_wstring(quality);
     nvenc_command +=
         L" --output-csp " + (alpha ? L"yuva420" : argument(args, L"--output-csp", L"yuv420")) +
         L" --output-depth " + (alpha ? L"8" : argument(args, L"--depth", L"10")) +
-        L" --preset " + argument(args, L"--preset", L"p6");
+        L" --preset " + argument(args, L"--preset", L"p6") +
+        L" --colorrange " + argument(args, L"--colorrange", L"limited") +
+        L" --colormatrix " + argument(args, L"--colormatrix", L"bt709") +
+        L" --colorprim " + argument(args, L"--colorprim", L"bt709") +
+        L" --transfer " + argument(args, L"--transfer", L"bt709");
     const auto rate = argument(args, L"--rate", L"qp");
     if (rate == L"vbr") nvenc_command += L" --vbr " + argument(args, L"--bitrate", L"20000");
     else if (rate == L"crf") nvenc_command += L" --qvbr " + argument(args, L"--qp", L"18");

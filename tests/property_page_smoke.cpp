@@ -429,11 +429,15 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_command.find(L" --quality ") == std::wstring::npos ||
         nvencc_command.find(L"--metadata date_recorded=") == std::wstring::npos ||
         nvencc_command.find(L"--frame-mode auto") == std::wstring::npos ||
+        nvencc_command.find(L"--colorrange ") == std::wstring::npos ||
+        nvencc_command.find(L"--colormatrix ") == std::wstring::npos ||
+        nvencc_command.find(L"--colorprim ") == std::wstring::npos ||
+        nvencc_command.find(L"--transfer ") == std::wstring::npos ||
         nvencc_command.find(L"NVEncC.exe") != std::wstring::npos ||
         nvencc_command.find(L"{output}") != std::wstring::npos ||
         nvencc_command.find(L"{width}") != std::wstring::npos ||
         nvencc_command.find(L"{input_pixel_format}") != std::wstring::npos ||
-        nvencc_command.find(L"--gop ") != std::wstring::npos ||
+        nvencc_command.find(L"--gop-len ") != std::wstring::npos ||
         nvencc_command.find(L"--bframes ") != std::wstring::npos ||
         nvencc_command_bounds.top - nvencc_prefix_bounds.bottom > 32) {
         std::wcerr << L"NVEncC must show a fixed compact prefix and only editable middle arguments.\n";
@@ -448,7 +452,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BFRAMES, EN_CHANGE), reinterpret_cast<LPARAM>(bframes_edit));
     const std::wstring manual_nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
     if (manual_nvencc_command.find(L"--frame-mode manual") == std::wstring::npos ||
-        manual_nvencc_command.find(L"--gop 120") == std::wstring::npos ||
+        manual_nvencc_command.find(L"--gop-len 120") == std::wstring::npos ||
         manual_nvencc_command.find(L"--bframes 2") == std::wstring::npos) {
         std::wcerr << L"NVEncC manual mode must include the selected GOP and B-frame options.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 51;
@@ -457,7 +461,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(frame_mode_combo));
     const std::wstring restored_auto_nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
-    if (restored_auto_nvencc_command.find(L"--gop ") != std::wstring::npos ||
+    if (restored_auto_nvencc_command.find(L"--gop-len ") != std::wstring::npos ||
         restored_auto_nvencc_command.find(L"--bframes ") != std::wstring::npos) {
         std::wcerr << L"Switching NVEncC back to automatic mode must remove GOP and B-frame options.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 52;
@@ -475,6 +479,8 @@ int wmain(int argument_count, wchar_t** arguments) {
                  reinterpret_cast<LPARAM>(vsr_enabled_combo));
     const std::wstring nvencc_without_vsr = window_text(GetDlgItem(page_window, ID_COMMAND));
     if (nvencc_without_vsr.find(L"--vsr") != std::wstring::npos ||
+        nvencc_without_vsr.find(L"--depth ") == std::wstring::npos ||
+        nvencc_without_vsr.find(L"--output-csp ") == std::wstring::npos ||
         nvencc_without_vsr.find(L"--scale ") != std::wstring::npos ||
         nvencc_without_vsr.find(L"--quality ") != std::wstring::npos ||
         nvencc_without_vsr.rfind(L"--depth ", 0) != 0) {

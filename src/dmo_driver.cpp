@@ -993,16 +993,26 @@ std::wstring default_nvenc_args(const Settings& settings) {
     if (settings.vsr_enabled)
         command << L"--vsr --scale " << std::fixed << std::setprecision(3) << settings.vsr_scale
                 << L" --quality " << settings.vsr_quality << L" ";
-    command << L"--depth " << settings.bit_depth
-            << L" --output-csp yuv" << settings.chroma
+    if (settings.alpha_mode == L"rgba")
+        command << L"--depth 8 --output-csp yuva420";
+    else
+        command << L"--depth " << settings.bit_depth
+                << L" --output-csp yuv" << settings.chroma;
+    const auto nv_color = color_space_spec(settings);
+    command << L" --codec "
+            << (settings.codec == L"avc" ? L"h264" : settings.codec == L"av1" ? L"av1" : L"hevc")
             << L" --preset p" << std::clamp(settings.preset, 1, 7)
+            << L" --colorrange " << (settings.color_range == L"pc" ? L"full" : L"limited")
+            << L" --colormatrix " << nv_color.matrix
+            << L" --colorprim " << nv_color.primaries
+            << L" --transfer " << nv_color.transfer
             << L" --rate " << settings.rate_control
             << L" --qp " << settings.qp
             << L" --bitrate " << settings.bitrate_kbps
             << L" --frame-mode " << settings.frame_structure_mode
             << L" --metadata date_recorded=" << recording_date_metadata();
     if (settings.frame_structure_mode == L"manual")
-        command << L" --gop " << settings.gop << L" --bframes " << settings.b_frames;
+        command << L" --gop-len " << settings.gop << L" --bframes " << settings.b_frames;
     if (settings.alpha_mode == L"rgba") command << L" --alpha";
     return command.str();
 }
@@ -2290,7 +2300,7 @@ private:
         const int alpha = combo_index(ID_ALPHA);
         if (combo_index(ID_VSR_ENABLED) == 1 &&
             (alpha != 0 || codec != 1 || backend != 2)) return true;
-        if (backend == 2 && (codec != 1 || alpha == 2)) return true;
+        if (backend == 2 && alpha == 2) return true;
         const auto& capability = codec_capability_from_index(codec);
         if (capability.cpu_only && backend != 0) return true;
         if (!capability.supports_10bit && combo_index(ID_DEPTH) == 1) return true;
