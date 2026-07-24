@@ -1027,6 +1027,10 @@ std::wstring materialize_vsr_command(const Settings& settings, int width, int he
                                      const std::filesystem::path& bridge_path,
                                      const std::wstring& output_path, bool probe = false) {
     std::wstring arguments = settings.nvenc_args.empty() ? default_nvenc_args(settings) : settings.nvenc_args;
+    if (settings.vsr_enabled) {
+        remove_command_option(arguments, L"--output-res");
+        remove_command_option(arguments, L"--vpp-resize");
+    }
     if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(arguments);
     std::wstring nvenc_full_args;
     if (settings.vsr_enabled) {
