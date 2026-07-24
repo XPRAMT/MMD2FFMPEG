@@ -413,7 +413,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_prefix.find(L"--input-format {input_pixel_format}") == std::wstring::npos ||
         nvencc_prefix.find(L"mmd2ffmpeg_vsr_bridge.exe") != std::wstring::npos ||
         nvencc_prefix.find(L"--ffmpeg ") != std::wstring::npos ||
-        nvencc_command.find(L"--scale ") == std::wstring::npos ||
+        nvencc_command.rfind(L"--vsr --scale ", 0) != 0 ||
+        nvencc_command.find(L" --quality ") == std::wstring::npos ||
         nvencc_command.find(L"--metadata date_recorded=") == std::wstring::npos ||
         nvencc_command.find(L"--frame-mode auto") == std::wstring::npos ||
         nvencc_command.find(L"NVEncC.exe") != std::wstring::npos ||
@@ -460,6 +461,14 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(vsr_enabled_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_ENABLED, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(vsr_enabled_combo));
+    const std::wstring nvencc_without_vsr = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (nvencc_without_vsr.find(L"--vsr") != std::wstring::npos ||
+        nvencc_without_vsr.find(L"--scale ") != std::wstring::npos ||
+        nvencc_without_vsr.find(L"--quality ") != std::wstring::npos ||
+        nvencc_without_vsr.rfind(L"--depth ", 0) != 0) {
+        std::wcerr << L"Disabled VSR must omit its flag, scale, and quality from the NVEncC command.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 54;
+    }
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
     SendMessageW(codec_combo, CB_SETCURSEL, 0, 0);

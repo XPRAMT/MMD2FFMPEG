@@ -980,9 +980,10 @@ std::wstring nvenc_display_prefix() {
 
 std::wstring default_nvenc_args(const Settings& settings) {
     std::wostringstream command;
-    command << L"--scale " << std::fixed << std::setprecision(3) << settings.vsr_scale
-            << L" --quality " << settings.vsr_quality
-            << L" --depth " << settings.bit_depth
+    if (settings.vsr_enabled)
+        command << L"--vsr --scale " << std::fixed << std::setprecision(3) << settings.vsr_scale
+                << L" --quality " << settings.vsr_quality << L" ";
+    command << L"--depth " << settings.bit_depth
             << L" --output-csp yuv" << settings.chroma
             << L" --preset p" << std::clamp(settings.preset, 1, 7)
             << L" --rate " << settings.rate_control
@@ -993,7 +994,6 @@ std::wstring default_nvenc_args(const Settings& settings) {
     if (settings.frame_structure_mode == L"manual")
         command << L" --gop " << settings.gop << L" --bframes " << settings.b_frames;
     if (settings.alpha_mode == L"rgba") command << L" --alpha";
-    if (settings.vsr_enabled) command << L" --vsr";
     return command.str();
 }
 
