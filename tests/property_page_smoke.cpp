@@ -279,9 +279,8 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(frame_mode_combo));
     const std::wstring automatic_frame_command = window_text(GetDlgItem(page_window, ID_COMMAND));
-    if (automatic_frame_command.find(L"-g ") != std::wstring::npos || automatic_frame_command.find(L"-bf ") != std::wstring::npos ||
-        IsWindowEnabled(gop_edit) || IsWindowEnabled(bframes_edit)) {
-        std::wcerr << L"Automatic frame structure must omit FFmpeg frame arguments and disable manual fields.\n";
+    if (automatic_frame_command.find(L"-g ") != std::wstring::npos || automatic_frame_command.find(L"-bf ") != std::wstring::npos) {
+        std::wcerr << L"Automatic frame structure must omit FFmpeg frame arguments.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 36;
     }
     const std::wstring command_prefix = window_text(GetDlgItem(page_window, ID_COMMAND_PREFIX));
@@ -318,7 +317,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 1, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(frame_mode_combo));
     if (!IsWindowEnabled(gop_edit) || !IsWindowEnabled(bframes_edit)) {
-        std::wcerr << L"Manual frame structure must enable GOP and B-frame fields for AVC.\n";
+        std::wcerr << L"Frame structure controls must remain enabled in manual mode.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 37;
     }
     SetWindowTextW(gop_edit, L"120");
@@ -342,8 +341,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"VP9 10-bit selection was not retained.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 28;
     }
-    if (IsWindowEnabled(bframes_edit)) {
-        std::wcerr << L"VP9 must disable the unsupported B-frame control.\n";
+    if (!IsWindowEnabled(bframes_edit) || !has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING))) {
+        std::wcerr << L"Potentially unsupported VP9 B-frames must keep the control enabled and show a warning.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 35;
     }
     std::array<wchar_t, 16> github_class{};

@@ -112,15 +112,7 @@ int codec_index(std::wstring_view key) {
 }
 
 void normalize_codec_settings(Settings& settings) {
-    const auto& capability = codec_capability(settings.codec);
-    settings.codec = capability.key;
-    if (capability.cpu_only) settings.backend = L"cpu";
-    if (capability.forces_10bit) settings.bit_depth = 10;
-    else if (!capability.supports_10bit) settings.bit_depth = 8;
-    if (settings.alpha_mode == L"rgba" && !capability.supports_rgba) settings.alpha_mode = L"mask";
-    if (settings.alpha_mode == L"rgba" && !capability.rgba_supports_10bit) settings.bit_depth = 8;
-    if (settings.alpha_mode == L"rgba" && capability.forces_444_for_rgba) settings.chroma = L"444";
-    if (!capability.supports_rate_control) settings.rate_control = L"crf";
+    (void)settings;
 }
 
 enum class UiLanguage { TraditionalChinese, SimplifiedChinese, Japanese, English };
@@ -674,8 +666,7 @@ std::filesystem::path current_output_avi() {
 }
 
 std::wstring encoding_arguments(const Settings& settings) {
-    const auto& capability = codec_capability(settings.codec);
-    const bool ten_bit = settings.bit_depth == 10 && capability.supports_10bit;
+    const bool ten_bit = settings.bit_depth == 10;
     const std::wstring codec_name = settings.codec == L"avc" ? L"h264" : settings.codec;
     std::wstring encoder;
     if (settings.backend == L"cpu")
@@ -726,14 +717,17 @@ std::wstring encoding_arguments(const Settings& settings) {
     }
     if (settings.frame_structure_mode == L"manual") {
         args << L" -g " << std::clamp(settings.gop, 1, 10000);
-        if (capability.supports_b_frames) args << L" -bf " << std::clamp(settings.b_frames, 0, 16);
+        args << L" -bf " << std::clamp(settings.b_frames, 0, 16);
     }
     return args.str();
 }
 
 const wchar_t* output_pixel_format(const Settings& settings) {
-    if (settings.alpha_mode == L"rgba") return settings.codec == L"prores" ? L"yuva444p10le" : L"yuva420p";
-    const bool ten_bit = settings.bit_depth == 10 && codec_capability(settings.codec).supports_10bit;
+    if (settings.alpha_mode == L"rgba") {
+        if (settings.codec == L"prores") return L"yuva444p10le";
+        return settings.bit_depth == 10 ? L"yuva420p10le" : L"yuva420p";
+    }
+    const bool ten_bit = settings.bit_depth == 10;
     if (settings.chroma == L"444") return ten_bit ? L"yuv444p10le" : L"yuv444p";
     if (settings.chroma == L"422") return ten_bit ? L"yuv422p10le" : L"yuv422p";
     return ten_bit ? L"yuv420p10le" : L"yuv420p";
@@ -967,10 +961,10 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         return false;
     }
 
-    const DWORD wait_result = WaitForSingleObject(process.hProcess, 30000);
+    const DWORD wait_result = WaitForSingleObject(process.hProcess, 10000);
     if (wait_result == WAIT_TIMEOUT) {
         TerminateProcess(process.hProcess, 1);
-        WaitForSingleObject(process.hProcess, 5000);
+        WaitForSingleObject(process.hProcess, 1000);
     }
     std::vector<char> output;
     std::array<char, 4096> buffer{};
@@ -983,7 +977,7 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
     if (wait_result == WAIT_TIMEOUT) {
-        error_message = L"Encoder test timed out after 30 seconds.";
+        error_message = L"Encoder test timed out after 10 seconds.";
         return false;
     }
     if (wait_result != WAIT_OBJECT_0 || exit_code != 0) {
@@ -1033,7 +1027,7 @@ std::wstring command_test_signature(const Settings& settings) {
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
     const auto arguments = normalize_rate_values(settings.video_args.empty() ? editable_arguments(settings) : settings.video_args);
-    return L"v8-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+    return L"v9-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments;
 }
@@ -1820,8 +1814,8 @@ private:
         restore_cached_probe();
     }
     void switch_tab(int page) {
-        const std::array<int, 9> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
-                                               ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_VIDEO_TAB};
+        const std::array<int, 10> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
+                                                ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_COMPAT_WARNING, ID_VIDEO_TAB};
         for (const int id : video_bottom) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
@@ -1912,9 +1906,12 @@ private:
             PostMessageW(window_, WM_APP + 42, 0, reinterpret_cast<LPARAM>(result));
             return;
         }
-        SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_text().testing);
-        EnableWindow(GetDlgItem(window_, ID_REFRESH), FALSE);
         probe_running_ = true;
+        probe_deadline_ = GetTickCount64() + 10000;
+        probe_seconds_remaining_ = -1;
+        update_probe_countdown();
+        SetTimer(window_, kProbeTimer, 100, nullptr);
+        EnableWindow(GetDlgItem(window_, ID_REFRESH), FALSE);
         const HWND target = window_;
         probe_thread_ = std::thread([this, target, candidate]() {
             std::wstring message;
@@ -1934,28 +1931,32 @@ private:
         if (result <= 32)
             MessageBoxW(window_, text.open_log_failed_message, text.log_title, MB_OK | MB_ICONERROR);
     }
-    void update_controls() {
+    bool has_potential_compatibility_warning() const {
         const auto& capability = codec_capability_from_index(combo_index(ID_CODEC));
-        if (capability.forces_10bit) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 1);
-        else if (!capability.supports_10bit || (combo_index(ID_ALPHA) == 1 && !capability.rgba_supports_10bit))
-            ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
-        if (capability.cpu_only) ComboBox_SetCurSel(GetDlgItem(window_, ID_BACKEND), 0);
-        EnableWindow(GetDlgItem(window_, ID_BACKEND), !capability.cpu_only);
-        EnableWindow(GetDlgItem(window_, ID_DEPTH), capability.supports_10bit && !capability.forces_10bit &&
-                                                   !(combo_index(ID_ALPHA) == 1 && !capability.rgba_supports_10bit));
-        const bool bitrate = combo_index(ID_RATE) == 2;
-        EnableWindow(GetDlgItem(window_, ID_RATE), capability.supports_rate_control);
-        EnableWindow(GetDlgItem(window_, ID_QP), !bitrate && capability.supports_rate_control);
-        EnableWindow(GetDlgItem(window_, ID_BITRATE), bitrate && capability.supports_rate_control);
-        if (!capability.supports_rgba && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_ALPHA), 2);
-        const bool mask = combo_index(ID_ALPHA) == 2;
-        EnableWindow(GetDlgItem(window_, ID_MASK_OUTPUT), mask);
-        if (capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_CHROMA), 2);
-        EnableWindow(GetDlgItem(window_, ID_CHROMA), !(capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1));
-        EnableWindow(GetDlgItem(window_, ID_CPU_THREADS), combo_index(ID_BACKEND) == 0);
-        const bool manual_frame_structure = combo_index(ID_FRAME_MODE) == 1;
-        EnableWindow(GetDlgItem(window_, ID_GOP), manual_frame_structure && wcscmp(capability.key, L"prores") != 0);
-        EnableWindow(GetDlgItem(window_, ID_BFRAMES), manual_frame_structure && capability.supports_b_frames);
+        if (capability.cpu_only && combo_index(ID_BACKEND) != 0) return true;
+        if (!capability.supports_10bit && combo_index(ID_DEPTH) == 1) return true;
+        if (capability.forces_10bit && combo_index(ID_DEPTH) != 1) return true;
+        if (combo_index(ID_ALPHA) == 1 && !capability.supports_rgba) return true;
+        if (combo_index(ID_ALPHA) == 1 && !capability.rgba_supports_10bit && combo_index(ID_DEPTH) == 1) return true;
+        if (combo_index(ID_ALPHA) == 1 && capability.forces_444_for_rgba && combo_index(ID_CHROMA) != 2) return true;
+        if (!capability.supports_rate_control && combo_index(ID_RATE) != 0) return true;
+        if (combo_index(ID_FRAME_MODE) == 1 && !capability.supports_b_frames && edit_number(ID_BFRAMES, 0) > 0) return true;
+        return false;
+    }
+    void update_compatibility_warning() {
+        if (!window_) return;
+        ShowWindow(GetDlgItem(window_, ID_COMPAT_WARNING), has_potential_compatibility_warning() ? SW_SHOW : SW_HIDE);
+    }
+    void update_probe_countdown() {
+        if (!probe_running_ || !window_) return;
+        const ULONGLONG now = GetTickCount64();
+        const int remaining = now >= probe_deadline_ ? 0 : static_cast<int>((probe_deadline_ - now + 999) / 1000);
+        if (remaining == probe_seconds_remaining_) return;
+        probe_seconds_remaining_ = remaining;
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), (std::wstring(current_text().testing) + L" " + std::to_wstring(remaining)).c_str());
+    }
+    void update_controls() {
+        update_compatibility_warning();
     }
     int combo_index(int id) const { return static_cast<int>(ComboBox_GetCurSel(GetDlgItem(window_, id))); }
     std::wstring combo_text(int id) const {
@@ -2119,7 +2120,9 @@ private:
                 }
             }
             y += inner_height + inner_gap;
-            add_layout(ID_COMMAND_HEADING, margin_x, y, full_width, label_height);
+            const int warning_width = dlu_x(12);
+            add_layout(ID_COMMAND_HEADING, margin_x, y, std::max(1, full_width - warning_width), label_height);
+            add_layout(ID_COMPAT_WARNING, right - warning_width, y, warning_width, label_height);
             y += label_height + dlu_y(2);
             const int prefix_height = text_height(ID_COMMAND_PREFIX, full_width, dlu_y(24));
             add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, prefix_height);
@@ -2282,8 +2285,12 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_OPEN_LOG), text.open_log_button);
         apply_tab_language();
         apply_tooltips();
-        const wchar_t* status = probe_running_ ? text.testing : current_command_tested_ ? text.test_passed : text.not_tested;
-        SetWindowTextW(GetDlgItem(window_, ID_STATUS), status);
+        if (probe_running_) {
+            probe_seconds_remaining_ = -1;
+            update_probe_countdown();
+        } else {
+            SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_command_tested_ ? text.test_passed : text.not_tested);
+        }
         rebuild_layout();
     }
     void change_language() {
@@ -2309,7 +2316,12 @@ private:
             updating_command_ = false;
         }
         restore_cached_probe();
-        SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_command_tested_ ? current_text().test_passed : current_text().not_tested);
+        if (probe_running_) {
+            probe_seconds_remaining_ = -1;
+            update_probe_countdown();
+        } else {
+            SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_command_tested_ ? current_text().test_passed : current_text().not_tested);
+        }
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
     }
     static INT_PTR CALLBACK dialog_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -2324,7 +2336,9 @@ private:
         }
         else if (message == WM_APP + 42 && self) {
             auto* result = reinterpret_cast<ProbeResult*>(lparam);
+            KillTimer(window, kProbeTimer);
             self->probe_running_ = false;
+            self->probe_seconds_remaining_ = -1;
             self->sync_structured_settings();
             Settings current = self->settings_;
             current.video_args = self->edit_text(ID_COMMAND);
@@ -2339,6 +2353,10 @@ private:
             SetWindowTextW(GetDlgItem(window, ID_STATUS), status.c_str());
             EnableWindow(GetDlgItem(window, ID_REFRESH), TRUE);
             delete result;
+            return TRUE;
+        }
+        else if (message == WM_TIMER && self && wparam == kProbeTimer) {
+            self->update_probe_countdown();
             return TRUE;
         }
         else if (message == WM_SIZE && self) {
@@ -2407,6 +2425,9 @@ private:
     bool tooltips_initialized_ = false;
     std::atomic<bool> alive_{true};
     bool probe_running_ = false;
+    static constexpr UINT_PTR kProbeTimer = 71;
+    ULONGLONG probe_deadline_ = 0;
+    int probe_seconds_remaining_ = -1;
     bool current_command_tested_ = false;
     std::wstring tested_signature_;
     std::thread probe_thread_;
