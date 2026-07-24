@@ -1559,15 +1559,16 @@ private:
         update_video_subtab_visibility();
         rebuild_layout();
     }
-    void restore_cached_probe() {
+    bool restore_cached_probe() {
         sync_structured_settings();
         Settings candidate = settings_;
         candidate.video_args = edit_text(ID_COMMAND);
         ProbeResult cached{};
-        if (!load_cached_probe(candidate, cached) || !cached.success) return;
+        if (!load_cached_probe(candidate, cached) || !cached.success) return false;
         current_command_tested_ = true;
         tested_signature_ = cached.signature;
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_text().test_passed);
+        return true;
     }
     void update_video_subtab_visibility() {
         const bool video_visible = active_tab_ == 0;
@@ -1992,7 +1993,8 @@ private:
             update_command_display();
             updating_command_ = false;
         }
-        SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_text().not_tested);
+        restore_cached_probe();
+        SetWindowTextW(GetDlgItem(window_, ID_STATUS), current_command_tested_ ? current_text().test_passed : current_text().not_tested);
         if (site_) site_->OnStatusChange(PROPPAGESTATUS_DIRTY);
     }
     static INT_PTR CALLBACK dialog_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
