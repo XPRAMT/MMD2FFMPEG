@@ -55,7 +55,7 @@ int wmain(int argc, wchar_t** argv) {
     const int height = std::max(1, _wtoi(argument(args, L"--height", L"1080").c_str()));
     const int fps = std::max(1, _wtoi(argument(args, L"--fps", L"30").c_str()));
     const double scale = std::clamp(_wtof(argument(args, L"--scale", L"2").c_str()), 1.0, 4.0);
-    const int quality = std::clamp(_wtoi(argument(args, L"--quality", L"2").c_str()), 0, 4);
+    const int quality = std::clamp(_wtoi(argument(args, L"--quality", L"2").c_str()), 1, 4);
     const bool alpha = flag(args, L"--alpha");
     const bool vsr = flag(args, L"--vsr");
     const bool probe = flag(args, L"--probe");

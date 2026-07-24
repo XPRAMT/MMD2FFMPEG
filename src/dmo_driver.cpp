@@ -271,19 +271,19 @@ const std::array<const wchar_t*, 3> vsr_tooltips(UiLanguage language) {
     case UiLanguage::TraditionalChinese:
         return {L"啟用 NVIDIA RTX Video Super Resolution。啟用後使用 FFmpeg 將 MMD RGB 封裝為 RGBA/NUT，再由 NVEncC --avsw 接收並執行 NGX VSR。",
                 L"設定輸出相對於 MMD 原始尺寸的放大倍率，可輸入 1.00 到 4.00；預設為 2.00。",
-                L"設定 NVEncC ngx-vsr 的處理等級 0 到 4。等級越高通常需要更多 GPU 運算。"};
+                L"設定 NVEncC ngx-vsr 的處理等級 1 到 4。等級越高通常需要更多 GPU 運算。"};
     case UiLanguage::SimplifiedChinese:
         return {L"启用 NVIDIA RTX Video Super Resolution。启用后使用 FFmpeg 将 MMD RGB 封装为 RGBA/NUT，再由 NVEncC --avsw 接收并执行 NGX VSR。",
                 L"设置输出相对于 MMD 原始尺寸的放大倍率，可输入 1.00 到 4.00；默认为 2.00。",
-                L"设置 NVEncC ngx-vsr 的处理等级 0 到 4。等级越高通常需要更多 GPU 运算。"};
+                L"设置 NVEncC ngx-vsr 的处理等级 1 到 4。等级越高通常需要更多 GPU 运算。"};
     case UiLanguage::Japanese:
         return {L"NVIDIA RTX Video Super Resolution を有効にします。FFmpeg が MMD RGB を RGBA/NUT に封入し、NVEncC --avsw が NGX VSR を実行します。",
                 L"MMD の元解像度に対する倍率を 1.00～4.00 で指定します。既定値は 2.00 です。",
-                L"NVEncC ngx-vsr の品質レベルを 0～4 で指定します。高いレベルほど通常は GPU 負荷が増えます。"};
+                L"NVEncC ngx-vsr の品質レベルを 1～4 で指定します。高いレベルほど通常は GPU 負荷が増えます。"};
     default:
         return {L"Enable NVIDIA RTX Video Super Resolution. FFmpeg packages MMD RGB as RGBA/NUT and NVEncC --avsw applies NGX VSR.",
                 L"Set the output scale relative to the original MMD size from 1.00 to 4.00. The default is 2.00.",
-                L"Set NVEncC ngx-vsr quality from 0 to 4. Higher levels usually require more GPU processing."};
+                L"Set NVEncC ngx-vsr quality from 1 to 4. Higher levels usually require more GPU processing."};
     }
 }
 
@@ -605,7 +605,7 @@ Settings load_settings() {
         else if (key == L"audio_bit_depth" && (value == L"original" || value == L"24")) settings.audio_bit_depth = value;
         else if (key == L"vsr_enabled") settings.vsr_enabled = value == L"1";
         else if (key == L"vsr_scale") { try { settings.vsr_scale = std::clamp(std::stod(value), 1.0, 4.0); } catch (...) {} }
-        else if (key == L"vsr_quality") { try { settings.vsr_quality = std::clamp(std::stoi(value), 0, 4); } catch (...) {} }
+        else if (key == L"vsr_quality") { try { settings.vsr_quality = std::clamp(std::stoi(value), 1, 4); } catch (...) {} }
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
@@ -1820,7 +1820,7 @@ public:
         candidate.audio_bit_depth = candidate.audio_sample_rate == L"hires" ? L"24" : L"original";
         candidate.vsr_enabled = combo_index(ID_VSR_ENABLED) == 1;
         candidate.vsr_scale = std::clamp(edit_double(ID_VSR_SCALE, 2.0), 1.0, 4.0);
-        candidate.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY), 0, 4);
+        candidate.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY) + 1, 1, 4);
         if (uses_nvenc_bridge(candidate)) candidate.video_args = settings_.video_args;
         normalize_codec_settings(candidate);
         const auto signature = command_test_signature(candidate);
@@ -1957,7 +1957,7 @@ private:
         add_combo(ID_RATE, {L"CRF", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         add_combo(ID_FRAME_MODE, {L"Automatic", L"Manual"}, settings_.frame_structure_mode == L"manual" ? 1 : 0);
         add_combo(ID_VSR_ENABLED, {L"Off", L"On"}, settings_.vsr_enabled ? 1 : 0);
-        add_combo(ID_VSR_QUALITY, {L"0", L"1", L"2", L"3", L"4"}, settings_.vsr_quality);
+        add_combo(ID_VSR_QUALITY, {L"1", L"2", L"3", L"4"}, std::clamp(settings_.vsr_quality - 1, 0, 3));
         add_combo(ID_ALPHA, {L"None", L"4-channel", L"Black/white mask"}, settings_.alpha_mode == L"rgba" ? 1 : settings_.alpha_mode == L"mask" ? 2 : 0);
         add_combo(ID_MASK_OUTPUT, {L"Stack x2", L"Separate"}, settings_.mask_output == L"separate" ? 1 : 0);
         add_combo(ID_CHROMA, {L"4:2:0", L"4:2:2", L"4:4:4"}, settings_.chroma == L"422" ? 1 : settings_.chroma == L"444" ? 2 : 0);
@@ -2176,7 +2176,7 @@ private:
         settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
         settings_.vsr_enabled = combo_index(ID_VSR_ENABLED) == 1;
         settings_.vsr_scale = std::clamp(edit_double(ID_VSR_SCALE, 2.0), 1.0, 4.0);
-        settings_.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY), 0, 4);
+        settings_.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY) + 1, 1, 4);
         normalize_codec_settings(settings_);
     }
     void update_command_display() {
