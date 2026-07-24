@@ -149,6 +149,13 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Video page does not expose Encoding and Color sub-tabs.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 22;
     }
+    const RECT quality = child_rect(page_window, ID_QP);
+    const RECT bitrate = child_rect(page_window, ID_BITRATE);
+    const RECT command_heading = child_rect(page_window, ID_COMMAND_HEADING);
+    if (quality.bottom > command_heading.top || bitrate.bottom > command_heading.top) {
+        std::wcerr << L"Quality or bitrate control overlaps the FFmpeg command area.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 25;
+    }
     const RECT command_before_color = child_rect(page_window, ID_COMMAND);
     TabCtrl_SetCurSel(video_tab, 1);
     NMHDR video_tab_change{};

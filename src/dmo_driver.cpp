@@ -1711,7 +1711,7 @@ private:
         const int combo_height = dlu_y(80);
         const int edit_height = dlu_y(14);
         const int button_height = dlu_y(16);
-        const int gap = dlu_y(4);
+        const int gap = dlu_y(2);
         const int field_gap = dlu_x(4);
         add_layout(ID_TAB, margin_x, margin_y, full_width, tab_height, false);
         int y = margin_y + tab_height + gap;
@@ -1723,35 +1723,35 @@ private:
             row_y += row_height;
         };
         if (active_tab_ == 0) {
-            const int inner_height = dlu_y(92);
+            const int inner_gap = dlu_y(1);
+            const int inner_row_height = dlu_y(14);
+            const int inner_height = tab_height + inner_gap + inner_row_height * 4;
             add_layout(ID_VIDEO_TAB, margin_x, y, full_width, tab_height);
-            int inner_y = y + tab_height + gap;
+            int inner_y = y + tab_height + inner_gap;
+            const int middle = margin_x + full_width / 2;
+            const int column_gap = dlu_x(4);
+            const auto add_video_field = [&](int label, int control, int left, int column_right, int row_y) {
+                const int label_width = std::min(text_width(label, dlu_x(42)), std::max(1, (column_right - left) / 2));
+                const int field_left = left + label_width + field_gap;
+                add_layout(label, left, row_y + dlu_y(1), label_width, label_height);
+                const int control_height = control == ID_QP || control == ID_BITRATE ? edit_height : combo_height;
+                add_layout(control, field_left, row_y, std::max(1, column_right - field_left), control_height);
+            };
+            const auto add_video_pair = [&](int left_label, int left_control, int right_label, int right_control, int& row_y) {
+                add_video_field(left_label, left_control, margin_x, middle - column_gap, row_y);
+                add_video_field(right_label, right_control, middle + column_gap, right, row_y);
+                row_y += inner_row_height;
+            };
             if (active_video_tab_ == 0) {
-                const int label_width = maximum_text_width({ID_LABEL_BACKEND, ID_LABEL_CODEC, ID_LABEL_DEPTH,
-                                                            ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP}, dlu_x(52));
-                for (const auto& row : std::array<std::pair<int, int>, 5>{{
-                        {ID_LABEL_BACKEND, ID_BACKEND}, {ID_LABEL_CODEC, ID_CODEC}, {ID_LABEL_DEPTH, ID_DEPTH},
-                        {ID_LABEL_PRESET, ID_PRESET}, {ID_LABEL_RATE, ID_RATE}}}) {
-                    add_form_row(row.first, row.second, label_width, inner_y);
-                }
-                const int content_width = right - margin_x;
-                const int middle = margin_x + content_width / 2;
-                const int qp_left = margin_x + label_width + field_gap;
-                const int bitrate_label_width = text_width(ID_LABEL_BITRATE, dlu_x(52));
-                const int bitrate_left = middle + bitrate_label_width + field_gap;
-                add_layout(ID_LABEL_QP, margin_x, inner_y + dlu_y(2), label_width, label_height);
-                add_layout(ID_QP, qp_left, inner_y, std::max(1, middle - field_gap - qp_left), edit_height);
-                add_layout(ID_LABEL_BITRATE, middle, inner_y + dlu_y(2), bitrate_label_width, label_height);
-                add_layout(ID_BITRATE, bitrate_left, inner_y, std::max(1, right - bitrate_left), edit_height);
+                add_video_pair(ID_LABEL_BACKEND, ID_BACKEND, ID_LABEL_CODEC, ID_CODEC, inner_y);
+                add_video_pair(ID_LABEL_DEPTH, ID_DEPTH, ID_LABEL_PRESET, ID_PRESET, inner_y);
+                add_video_pair(ID_LABEL_RATE, ID_RATE, ID_LABEL_QP, ID_QP, inner_y);
+                add_video_field(ID_LABEL_BITRATE, ID_BITRATE, margin_x, right, inner_y);
             } else {
-                const int label_width = maximum_text_width({ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE}, dlu_x(64));
-                for (const auto& row : std::array<std::pair<int, int>, 4>{{
-                        {ID_LABEL_ALPHA, ID_ALPHA}, {ID_LABEL_MASK_OUTPUT, ID_MASK_OUTPUT},
-                        {ID_LABEL_CHROMA, ID_CHROMA}, {ID_LABEL_COLORSPACE, ID_COLORSPACE}}}) {
-                    add_form_row(row.first, row.second, label_width, inner_y);
-                }
+                add_video_pair(ID_LABEL_ALPHA, ID_ALPHA, ID_LABEL_MASK_OUTPUT, ID_MASK_OUTPUT, inner_y);
+                add_video_pair(ID_LABEL_CHROMA, ID_CHROMA, ID_LABEL_COLORSPACE, ID_COLORSPACE, inner_y);
             }
-            y += inner_height + gap;
+            y += inner_height + inner_gap;
             add_layout(ID_COMMAND_HEADING, margin_x, y, full_width, label_height);
             y += label_height + dlu_y(2);
             add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, dlu_y(24));
