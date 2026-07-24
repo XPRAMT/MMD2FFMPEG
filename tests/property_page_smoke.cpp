@@ -425,8 +425,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_prefix.find(L"--input-format {input_pixel_format}") == std::wstring::npos ||
         nvencc_prefix.find(L"mmd2ffmpeg_vsr_bridge.exe") != std::wstring::npos ||
         nvencc_prefix.find(L"--ffmpeg ") != std::wstring::npos ||
-        nvencc_command.rfind(L"--vsr --scale ", 0) != 0 ||
-        nvencc_command.find(L" --quality ") == std::wstring::npos ||
+        nvencc_command.rfind(L"--output-res ", 0) != 0 ||
+        nvencc_command.find(L"--vpp-resize ") == std::wstring::npos ||
         nvencc_command.find(L"--metadata date_recorded=") == std::wstring::npos ||
         nvencc_command.find(L"--frame-mode auto") == std::wstring::npos ||
         nvencc_command.find(L"--colorrange ") == std::wstring::npos ||
@@ -478,12 +478,11 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_ENABLED, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(vsr_enabled_combo));
     const std::wstring nvencc_without_vsr = window_text(GetDlgItem(page_window, ID_COMMAND));
-    if (nvencc_without_vsr.find(L"--vsr") != std::wstring::npos ||
-        nvencc_without_vsr.find(L"--depth ") == std::wstring::npos ||
+    if (nvencc_without_vsr.find(L"--output-res ") != std::wstring::npos ||
+        nvencc_without_vsr.find(L"--vpp-resize ") != std::wstring::npos ||
+        nvencc_without_vsr.find(L"--output-depth ") == std::wstring::npos ||
         nvencc_without_vsr.find(L"--output-csp ") == std::wstring::npos ||
-        nvencc_without_vsr.find(L"--scale ") != std::wstring::npos ||
-        nvencc_without_vsr.find(L"--quality ") != std::wstring::npos ||
-        nvencc_without_vsr.rfind(L"--depth ", 0) != 0) {
+        nvencc_without_vsr.rfind(L"--output-depth ", 0) != 0) {
         std::wcerr << L"Disabled VSR must omit its flag, scale, and quality from the NVEncC command.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 54;
     }

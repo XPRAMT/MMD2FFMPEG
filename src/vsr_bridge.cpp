@@ -75,13 +75,7 @@ int wmain(int argc, wchar_t** argv) {
     const int width = std::max(1, _wtoi(argument(args, L"--width", L"1920").c_str()));
     const int height = std::max(1, _wtoi(argument(args, L"--height", L"1080").c_str()));
     const int fps = std::max(1, _wtoi(argument(args, L"--fps", L"30").c_str()));
-    const double scale = std::clamp(_wtof(argument(args, L"--scale", L"2").c_str()), 1.0, 4.0);
-    const int quality = std::clamp(_wtoi(argument(args, L"--quality", L"2").c_str()), 1, 4);
-    const bool alpha = flag(args, L"--alpha");
-    const bool vsr = flag(args, L"--vsr");
     const bool probe = flag(args, L"--probe");
-    const int output_width = std::max(1, static_cast<int>(width * scale + 0.5));
-    const int output_height = std::max(1, static_cast<int>(height * scale + 0.5));
 
     SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
     HANDLE nut_read = nullptr, nut_write = nullptr;
@@ -89,27 +83,7 @@ int wmain(int argc, wchar_t** argv) {
 
     const HANDLE log = GetStdHandle(STD_ERROR_HANDLE);
     std::wstring nvenc_command = quote(nvenc.wstring()) + L" --avsw -i - -o " + quote(output.wstring()) +
-        L" --codec " + argument(args, L"--codec", L"hevc");
-    if (vsr)
-        nvenc_command += L" --output-res " + std::to_wstring(output_width) + L"x" + std::to_wstring(output_height) +
-                         L" --vpp-resize algo=ngx-vsr,vsr-quality=" + std::to_wstring(quality);
-    nvenc_command +=
-        L" --output-csp " + (alpha ? L"yuva420" : argument(args, L"--output-csp", L"yuv420")) +
-        L" --output-depth " + (alpha ? L"8" : argument(args, L"--depth", L"10")) +
-        L" --preset " + argument(args, L"--preset", L"p6") +
-        L" --colorrange " + argument(args, L"--colorrange", L"limited") +
-        L" --colormatrix " + argument(args, L"--colormatrix", L"bt709") +
-        L" --colorprim " + argument(args, L"--colorprim", L"bt709") +
-        L" --transfer " + argument(args, L"--transfer", L"bt709");
-    const auto rate = argument(args, L"--rate", L"qp");
-    if (rate == L"vbr") nvenc_command += L" --vbr " + argument(args, L"--bitrate", L"20000");
-    else if (rate == L"crf") nvenc_command += L" --qvbr " + argument(args, L"--qp", L"18");
-    else nvenc_command += L" --cqp " + argument(args, L"--qp", L"18");
-    if (argument(args, L"--frame-mode") == L"manual")
-        nvenc_command += L" --gop-len " + argument(args, L"--gop", L"120") +
-                         L" --bframes " + argument(args, L"--bframes", L"3");
-    const auto metadata = argument(args, L"--metadata");
-    if (!metadata.empty()) nvenc_command += L" --metadata " + quote(metadata);
+        L" " + argument(args, L"--nvenc-args");
 
     PROCESS_INFORMATION nvenc_process{};
     SetHandleInformation(nut_write, HANDLE_FLAG_INHERIT, 0);

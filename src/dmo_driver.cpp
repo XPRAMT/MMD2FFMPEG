@@ -990,13 +990,16 @@ std::wstring nvenc_display_prefix() {
 
 std::wstring default_nvenc_args(const Settings& settings) {
     std::wostringstream command;
-    if (settings.vsr_enabled)
-        command << L"--vsr --scale " << std::fixed << std::setprecision(3) << settings.vsr_scale
-                << L" --quality " << settings.vsr_quality << L" ";
+    if (settings.vsr_enabled) {
+        const int out_w = std::max(1, static_cast<int>(1920 * settings.vsr_scale + 0.5));
+        const int out_h = std::max(1, static_cast<int>(1080 * settings.vsr_scale + 0.5));
+        command << L"--output-res " << out_w << L"x" << out_h
+                << L" --vpp-resize algo=ngx-vsr,vsr-quality=" << settings.vsr_quality << L" ";
+    }
     if (settings.alpha_mode == L"rgba")
-        command << L"--depth 8 --output-csp yuva420";
+        command << L"--output-depth 8 --output-csp yuva420";
     else
-        command << L"--depth " << settings.bit_depth
+        command << L"--output-depth " << settings.bit_depth
                 << L" --output-csp yuv" << settings.chroma;
     const auto nv_color = color_space_spec(settings);
     command << L" --codec "
@@ -1024,6 +1027,14 @@ std::wstring materialize_vsr_command(const Settings& settings, int width, int he
                                      const std::wstring& output_path, bool probe = false) {
     std::wstring arguments = settings.nvenc_args.empty() ? default_nvenc_args(settings) : settings.nvenc_args;
     if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(arguments);
+    std::wstring nvenc_full_args;
+    if (settings.vsr_enabled) {
+        const int out_w = std::max(1, static_cast<int>(width * settings.vsr_scale + 0.5));
+        const int out_h = std::max(1, static_cast<int>(height * settings.vsr_scale + 0.5));
+        nvenc_full_args = L"--output-res " + std::to_wstring(out_w) + L"x" + std::to_wstring(out_h) +
+                          L" --vpp-resize algo=ngx-vsr,vsr-quality=" + std::to_wstring(settings.vsr_quality) + L" ";
+    }
+    nvenc_full_args += arguments;
     std::wstring command = quote(bridge_path.wstring()) +
         L" --ffmpeg " + quote(ffmpeg_path.wstring()) +
         L" --nvenc " + quote(nvenc_path.wstring()) +
@@ -1031,9 +1042,9 @@ std::wstring materialize_vsr_command(const Settings& settings, int width, int he
         L" --width " + std::to_wstring(width) +
         L" --height " + std::to_wstring(height) +
         L" --fps " + std::to_wstring(settings.fps) +
-        L" --input-format " + std::wstring(bits == 24 ? L"bgr24" : L"bgra");
-    if (!arguments.empty()) command += L" " + arguments;
-    if (probe && command.find(L" --probe") == std::wstring::npos) command += L" --probe";
+        L" --input-format " + std::wstring(bits == 24 ? L"bgr24" : L"bgra") +
+        L" --nvenc-args " + quote(nvenc_full_args);
+    if (probe) command += L" --probe";
     return command;
 }
 
