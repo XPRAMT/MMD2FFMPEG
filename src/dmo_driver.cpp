@@ -990,12 +990,6 @@ std::wstring nvenc_display_prefix() {
 
 std::wstring default_nvenc_args(const Settings& settings) {
     std::wostringstream command;
-    if (settings.vsr_enabled) {
-        const int out_w = std::max(1, static_cast<int>(1920 * settings.vsr_scale + 0.5));
-        const int out_h = std::max(1, static_cast<int>(1080 * settings.vsr_scale + 0.5));
-        command << L"--output-res " << out_w << L"x" << out_h
-                << L" --vpp-resize algo=ngx-vsr,vsr-quality=" << settings.vsr_quality << L" ";
-    }
     if (settings.alpha_mode == L"rgba")
         command << L"--output-depth 8 --output-csp yuva420";
     else

@@ -425,8 +425,6 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_prefix.find(L"--input-format {input_pixel_format}") == std::wstring::npos ||
         nvencc_prefix.find(L"mmd2ffmpeg_vsr_bridge.exe") != std::wstring::npos ||
         nvencc_prefix.find(L"--ffmpeg ") != std::wstring::npos ||
-        nvencc_command.rfind(L"--output-res ", 0) != 0 ||
-        nvencc_command.find(L"--vpp-resize ") == std::wstring::npos ||
         nvencc_command.find(L"--metadata date_recorded=") == std::wstring::npos ||
         nvencc_command.find(L"--gop-len ") != std::wstring::npos ||
         nvencc_command.find(L"--colorrange ") == std::wstring::npos ||
