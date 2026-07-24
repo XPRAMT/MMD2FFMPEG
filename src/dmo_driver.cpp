@@ -988,7 +988,8 @@ std::wstring default_nvenc_args(const Settings& settings) {
             << L" --rate " << settings.rate_control
             << L" --qp " << settings.qp
             << L" --bitrate " << settings.bitrate_kbps
-            << L" --frame-mode " << settings.frame_structure_mode;
+            << L" --frame-mode " << settings.frame_structure_mode
+            << L" --metadata date_recorded=" << recording_date_metadata();
     if (settings.frame_structure_mode == L"manual")
         command << L" --gop " << settings.gop << L" --bframes " << settings.b_frames;
     if (settings.alpha_mode == L"rgba") command << L" --alpha";

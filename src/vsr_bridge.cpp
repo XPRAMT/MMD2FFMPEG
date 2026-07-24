@@ -104,6 +104,8 @@ int wmain(int argc, wchar_t** argv) {
     if (argument(args, L"--frame-mode") == L"manual")
         nvenc_command += L" --gop-len " + argument(args, L"--gop", L"120") +
                          L" --bframes " + argument(args, L"--bframes", L"3");
+    const auto metadata = argument(args, L"--metadata");
+    if (!metadata.empty()) nvenc_command += L" --metadata " + quote(metadata);
 
     PROCESS_INFORMATION nvenc_process{};
     SetHandleInformation(nut_write, HANDLE_FLAG_INHERIT, 0);

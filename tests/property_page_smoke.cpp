@@ -414,6 +414,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_prefix.find(L"mmd2ffmpeg_vsr_bridge.exe") != std::wstring::npos ||
         nvencc_prefix.find(L"--ffmpeg ") != std::wstring::npos ||
         nvencc_command.find(L"--scale ") == std::wstring::npos ||
+        nvencc_command.find(L"--metadata date_recorded=") == std::wstring::npos ||
         nvencc_command.find(L"--frame-mode auto") == std::wstring::npos ||
         nvencc_command.find(L"NVEncC.exe") != std::wstring::npos ||
         nvencc_command.find(L"{output}") != std::wstring::npos ||
