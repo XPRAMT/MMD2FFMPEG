@@ -180,7 +180,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 50) {
+        tooltip_count != 49) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -197,18 +197,6 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Encoder tooltip text is missing.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 31;
     }
-    TOOLINFOW warning_tip = backend_tip;
-    warning_tip.uId = reinterpret_cast<UINT_PTR>(GetDlgItem(page_window, ID_COMPAT_WARNING));
-    std::array<wchar_t, 1024> warning_tip_text{};
-    warning_tip.lpszText = warning_tip_text.data();
-    SendMessageW(tooltip, TTM_GETTEXTW, 0, reinterpret_cast<LPARAM>(&warning_tip));
-    const std::wstring warning_tooltip(warning_tip_text.data());
-    if (warning_tooltip.find(L"可能") == std::wstring::npos &&
-        warning_tooltip.find(L"may") == std::wstring::npos) {
-        std::wcerr << L"Compatibility warning tooltip text is missing.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 53;
-    }
-
     RECT client{};
     GetClientRect(page_window, &client);
     const int ids[] = {ID_TAB, ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
@@ -393,11 +381,35 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"FFmpeg NVENC with VSR must remain an FFmpeg command and show an unavailable warning.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 48;
     }
+    TOOLINFOW prefix_warning_tip{};
+    prefix_warning_tip.cbSize = SendMessageW(tooltip, CCM_GETVERSION, 0, 0) < 6 ? TTTOOLINFOW_V2_SIZE : sizeof(TOOLINFOW);
+    prefix_warning_tip.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    prefix_warning_tip.hwnd = page_window;
+    prefix_warning_tip.uId = reinterpret_cast<UINT_PTR>(GetDlgItem(page_window, ID_COMMAND_PREFIX));
+    if (!SendMessageW(tooltip, TTM_GETTOOLINFOW, 0, reinterpret_cast<LPARAM>(&prefix_warning_tip))) {
+        std::wcerr << L"Unavailable combinations must attach a tooltip to the fixed command prefix.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 53;
+    }
+    std::array<wchar_t, 1024> prefix_warning_text{};
+    prefix_warning_tip.lpszText = prefix_warning_text.data();
+    SendMessageW(tooltip, TTM_GETTEXTW, 0, reinterpret_cast<LPARAM>(&prefix_warning_tip));
+    const std::wstring compatibility_text(prefix_warning_text.data());
+    if (compatibility_text.find(L"可能") == std::wstring::npos &&
+        compatibility_text.find(L"may") == std::wstring::npos) {
+        std::wcerr << L"Fixed command prefix compatibility tooltip text is missing.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 55;
+    }
     SendMessageW(backend_combo, CB_SETCURSEL, 2, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BACKEND, CBN_SELCHANGE), reinterpret_cast<LPARAM>(backend_combo));
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(frame_mode_combo));
+    TOOLINFOW removed_prefix_tip = prefix_warning_tip;
+    removed_prefix_tip.lpszText = nullptr;
+    if (SendMessageW(tooltip, TTM_GETTOOLINFOW, 0, reinterpret_cast<LPARAM>(&removed_prefix_tip))) {
+        std::wcerr << L"Available combinations must remove the fixed command prefix warning tooltip.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 56;
+    }
     const std::wstring nvencc_prefix = window_text(GetDlgItem(page_window, ID_COMMAND_PREFIX));
     const std::wstring nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
     const LONG_PTR nvencc_command_style = GetWindowLongPtrW(GetDlgItem(page_window, ID_COMMAND), GWL_STYLE);

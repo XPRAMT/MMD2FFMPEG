@@ -2026,6 +2026,16 @@ private:
         info.lpszText = const_cast<wchar_t*>(text);
         SendMessageW(tooltip_, add ? TTM_ADDTOOLW : TTM_UPDATETIPTEXTW, 0, reinterpret_cast<LPARAM>(&info));
     }
+    void remove_tooltip(int id) {
+        const HWND control = GetDlgItem(window_, id);
+        if (!tooltip_ || !control) return;
+        TOOLINFOW info{};
+        info.cbSize = tooltip_info_size();
+        info.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+        info.hwnd = window_;
+        info.uId = reinterpret_cast<UINT_PTR>(control);
+        SendMessageW(tooltip_, TTM_DELTOOLW, 0, reinterpret_cast<LPARAM>(&info));
+    }
     void apply_tooltips() {
         if (!window_) return;
         if (!tooltip_) {
@@ -2039,7 +2049,7 @@ private:
             SetPropW(window_, L"MMD2FFMPEG.TooltipWindow", tooltip_);
         }
         const auto& tip = ui_tooltips(ui_language(settings_.language));
-        const std::array<std::pair<int, const wchar_t*>, 44> items{{
+        const std::array<std::pair<int, const wchar_t*>, 43> items{{
             {ID_LABEL_LANGUAGE, tip.language}, {ID_LANGUAGE, tip.language},
             {ID_LABEL_CPU_THREADS, tip.cpu_threads}, {ID_CPU_THREADS, tip.cpu_threads},
             {ID_LABEL_BACKEND, tip.backend}, {ID_BACKEND, tip.backend},
@@ -2061,7 +2071,6 @@ private:
             {ID_LABEL_AUDIO_RATE, tip.audio_rate}, {ID_AUDIO_RATE, tip.audio_rate},
             {ID_COMMAND_HEADING, tip.command}, {ID_COMMAND, tip.command},
             {ID_REFRESH, tip.test_encoder}, {ID_OPEN_LOG, tip.open_log}, {ID_GITHUB_LINK, tip.github},
-            {ID_COMPAT_WARNING, tip.compatibility_warning},
         }};
         for (const auto& item : items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         const auto vsr_tip = vsr_tooltips(ui_language(settings_.language));
@@ -2072,6 +2081,7 @@ private:
         }};
         for (const auto& item : vsr_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         tooltips_initialized_ = true;
+        update_compatibility_warning();
     }
     void create_controls() {
         tab_ = GetDlgItem(window_, ID_TAB);
@@ -2082,6 +2092,9 @@ private:
         audio_controls_ = {GetDlgItem(window_, ID_AUDIO_FORMAT), GetDlgItem(window_, ID_AUDIO_RATE)};
         settings_info_ = GetDlgItem(window_, ID_SETTINGS_INFO);
         github_link_ = GetDlgItem(window_, ID_GITHUB_LINK);
+        const HWND command_prefix_control = GetDlgItem(window_, ID_COMMAND_PREFIX);
+        SetWindowLongPtrW(command_prefix_control, GWL_STYLE,
+                          GetWindowLongPtrW(command_prefix_control, GWL_STYLE) | SS_NOTIFY);
         SetWindowTextW(GetDlgItem(window_, ID_COMPAT_WARNING), L"\x26A0");
 
         TCITEMW item{};
@@ -2284,7 +2297,18 @@ private:
     }
     void update_compatibility_warning() {
         if (!window_) return;
-        ShowWindow(GetDlgItem(window_, ID_COMPAT_WARNING), active_tab_ == 0 && has_potential_compatibility_warning() ? SW_SHOW : SW_HIDE);
+        const bool warning = active_tab_ == 0 && has_potential_compatibility_warning();
+        ShowWindow(GetDlgItem(window_, ID_COMPAT_WARNING), warning ? SW_SHOW : SW_HIDE);
+        if (!tooltip_) return;
+        if (warning) {
+            update_tooltip(ID_COMMAND_PREFIX,
+                           ui_tooltips(ui_language(settings_.language)).compatibility_warning,
+                           !compatibility_prefix_tooltip_active_);
+            compatibility_prefix_tooltip_active_ = true;
+        } else if (compatibility_prefix_tooltip_active_) {
+            remove_tooltip(ID_COMMAND_PREFIX);
+            compatibility_prefix_tooltip_active_ = false;
+        }
     }
     void update_probe_countdown() {
         if (!probe_running_ || !window_) return;
@@ -2805,6 +2829,7 @@ private:
     bool dirty_ = false;
     bool updating_command_ = false;
     bool tooltips_initialized_ = false;
+    bool compatibility_prefix_tooltip_active_ = false;
     std::atomic<bool> alive_{true};
     bool probe_running_ = false;
     static constexpr UINT_PTR kProbeTimer = 71;
