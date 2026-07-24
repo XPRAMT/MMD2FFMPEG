@@ -933,7 +933,7 @@ bool uses_nvenc_bridge(const Settings& settings) {
 
 DWORD encoder_test_timeout_ms(const Settings& settings) {
     static_cast<void>(settings);
-    return 10000u;
+    return 20000u;
 }
 
 void write_log_line(HANDLE file, const std::wstring& text) {
