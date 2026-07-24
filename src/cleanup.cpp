@@ -38,10 +38,17 @@ bool run_ffmpeg(const std::filesystem::path& ffmpeg, const std::wstring& command
     return exit_code == 0;
 }
 
-int probe_audio_rate(const std::filesystem::path& ffmpeg, const std::filesystem::path& avi) {
+struct AudioProbe {
+    bool input_detected = false;
+    bool has_audio = false;
+    int sample_rate = 0;
+};
+
+AudioProbe probe_avi_audio(const std::filesystem::path& ffmpeg, const std::filesystem::path& avi) {
+    AudioProbe result{};
     SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
     HANDLE read_pipe = nullptr, write_pipe = nullptr;
-    if (!CreatePipe(&read_pipe, &write_pipe, &security, 65536)) return 0;
+    if (!CreatePipe(&read_pipe, &write_pipe, &security, 65536)) return result;
     SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0);
     std::wstring command = L"\"" + ffmpeg.wstring() + L"\" -hide_banner -i \"" + avi.wstring() + L"\"";
     std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
@@ -49,17 +56,20 @@ int probe_audio_rate(const std::filesystem::path& ffmpeg, const std::filesystem:
     startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE); startup.hStdOutput = write_pipe; startup.hStdError = write_pipe;
     PROCESS_INFORMATION process{};
     if (!CreateProcessW(ffmpeg.c_str(), mutable_command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
-        CloseHandle(read_pipe); CloseHandle(write_pipe); return 0;
+        CloseHandle(read_pipe); CloseHandle(write_pipe); return result;
     }
     CloseHandle(write_pipe); std::string output; std::array<char, 4096> buffer{}; DWORD read = 0;
     while (output.size() < 65536 && ReadFile(read_pipe, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) && read)
         output.append(buffer.data(), read);
     CloseHandle(read_pipe); WaitForSingleObject(process.hProcess, 5000); CloseHandle(process.hThread); CloseHandle(process.hProcess);
+    result.input_detected = output.find("Input #") != std::string::npos;
     const auto audio = output.find("Audio:"); const auto hz = output.find(" Hz", audio);
-    if (audio == std::string::npos || hz == std::string::npos) return 0;
+    result.has_audio = audio != std::string::npos;
+    if (!result.has_audio || hz == std::string::npos) return result;
     std::size_t begin = hz;
     while (begin > audio && output[begin - 1] >= '0' && output[begin - 1] <= '9') --begin;
-    try { return std::stoi(output.substr(begin, hz - begin)); } catch (...) { return 0; }
+    try { result.sample_rate = std::stoi(output.substr(begin, hz - begin)); } catch (...) {}
+    return result;
 }
 
 }
@@ -82,12 +92,21 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         if (DeleteFileW(avi.c_str()) || GetLastError() == ERROR_FILE_NOT_FOUND) { log_line(log, L"Placeholder AVI deleted: " + avi.wstring()); return 0; }
         log_line(log, L"Could not delete placeholder AVI: " + avi.wstring()); return 1;
     }
+    const AudioProbe audio_probe = probe_avi_audio(ffmpeg, avi);
+    if (audio_probe.input_detected && !audio_probe.has_audio) {
+        if (DeleteFileW(avi.c_str()) || GetLastError() == ERROR_FILE_NOT_FOUND) {
+            log_line(log, L"AVI has no audio stream; placeholder AVI deleted without audio merge: " + avi.wstring());
+            return 0;
+        }
+        log_line(log, L"AVI has no audio stream, but placeholder AVI could not be deleted: " + avi.wstring());
+        return 1;
+    }
     const auto temporary = mkv.parent_path() / (mkv.stem().wstring() + L".mmd2ffmpeg-audio-partial" + mkv.extension().wstring());
     std::error_code error; std::filesystem::remove(temporary, error);
     std::wstring audio = format == L"flac" ? L"-c:a flac" : depth == L"24" ? L"-c:a pcm_s24le" : L"-c:a copy";
     if (depth == L"24" && format == L"flac") audio += L" -sample_fmt s32";
     if (rate == L"hires") {
-        const int source_rate = probe_audio_rate(ffmpeg, avi);
+        const int source_rate = audio_probe.sample_rate;
         if (source_rate > 0 && source_rate < 48000) audio += L" -ar " + std::to_wstring(std::max(48000, source_rate * 2));
     }
     const std::wstring command = L"\"" + ffmpeg.wstring() + L"\" -hide_banner -loglevel warning -y -i \"" + mkv.wstring() +
