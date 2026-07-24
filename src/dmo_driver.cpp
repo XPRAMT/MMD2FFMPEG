@@ -1009,10 +1009,11 @@ std::wstring default_nvenc_args(const Settings& settings) {
             << L" --colormatrix " << nv_color.matrix
             << L" --colorprim " << nv_color.primaries
             << L" --transfer " << nv_color.transfer
-            << L" --rate " << settings.rate_control
-            << L" --qp " << settings.qp
-            << L" --bitrate " << settings.bitrate_kbps
-            << L" --frame-mode " << settings.frame_structure_mode
+            << (settings.rate_control == L"vbr"
+                ? (std::wostringstream() << L" --vbr " << settings.bitrate_kbps).str()
+                : settings.rate_control == L"crf"
+                  ? (std::wostringstream() << L" --qvbr " << settings.qp).str()
+                  : (std::wostringstream() << L" --cqp " << settings.qp).str())
             << L" --metadata date_recorded=" << recording_date_metadata();
     if (settings.frame_structure_mode == L"manual")
         command << L" --gop-len " << settings.gop << L" --bframes " << settings.b_frames;

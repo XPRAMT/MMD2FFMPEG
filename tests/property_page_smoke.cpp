@@ -428,7 +428,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_command.rfind(L"--output-res ", 0) != 0 ||
         nvencc_command.find(L"--vpp-resize ") == std::wstring::npos ||
         nvencc_command.find(L"--metadata date_recorded=") == std::wstring::npos ||
-        nvencc_command.find(L"--frame-mode auto") == std::wstring::npos ||
+        nvencc_command.find(L"--gop-len ") != std::wstring::npos ||
         nvencc_command.find(L"--colorrange ") == std::wstring::npos ||
         nvencc_command.find(L"--colormatrix ") == std::wstring::npos ||
         nvencc_command.find(L"--colorprim ") == std::wstring::npos ||
@@ -451,7 +451,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     SetWindowTextW(bframes_edit, L"2");
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BFRAMES, EN_CHANGE), reinterpret_cast<LPARAM>(bframes_edit));
     const std::wstring manual_nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
-    if (manual_nvencc_command.find(L"--frame-mode manual") == std::wstring::npos ||
+    if (
         manual_nvencc_command.find(L"--gop-len 120") == std::wstring::npos ||
         manual_nvencc_command.find(L"--bframes 2") == std::wstring::npos) {
         std::wcerr << L"NVEncC manual mode must include the selected GOP and B-frame options.\n";
