@@ -931,6 +931,10 @@ bool uses_nvenc_bridge(const Settings& settings) {
            (settings.backend == L"nvenc" && settings.codec == L"hevc" && settings.alpha_mode == L"rgba");
 }
 
+DWORD encoder_test_timeout_ms(const Settings& settings) {
+    return uses_nvenc_bridge(settings) ? 30000u : 10000u;
+}
+
 void write_log_line(HANDLE file, const std::wstring& text) {
     if (!file) return;
     const int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
@@ -1081,7 +1085,8 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         return false;
     }
 
-    const DWORD wait_result = WaitForSingleObject(process.hProcess, 10000);
+    const DWORD timeout_ms = encoder_test_timeout_ms(settings);
+    const DWORD wait_result = WaitForSingleObject(process.hProcess, timeout_ms);
     if (wait_result == WAIT_TIMEOUT) {
         TerminateProcess(process.hProcess, 1);
         WaitForSingleObject(process.hProcess, 1000);
@@ -1101,7 +1106,7 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         std::filesystem::remove(probe_output, remove_error);
     }
     if (wait_result == WAIT_TIMEOUT) {
-        error_message = L"Encoder test timed out after 10 seconds.";
+        error_message = L"Encoder test timed out after " + std::to_wstring(timeout_ms / 1000) + L" seconds.";
         return false;
     }
     if (wait_result != WAIT_OBJECT_0 || exit_code != 0) {
@@ -2081,7 +2086,7 @@ private:
             return;
         }
         probe_running_ = true;
-        probe_deadline_ = GetTickCount64() + 10000;
+        probe_deadline_ = GetTickCount64() + encoder_test_timeout_ms(candidate);
         probe_seconds_remaining_ = -1;
         update_probe_countdown();
         SetTimer(window_, kProbeTimer, 100, nullptr);
