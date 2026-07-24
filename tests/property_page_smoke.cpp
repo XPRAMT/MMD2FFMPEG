@@ -384,6 +384,9 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     SendMessageW(backend_combo, CB_SETCURSEL, 2, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BACKEND, CBN_SELCHANGE), reinterpret_cast<LPARAM>(backend_combo));
+    SendMessageW(frame_mode_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(frame_mode_combo));
     const std::wstring nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
     const LONG_PTR nvencc_command_style = GetWindowLongPtrW(GetDlgItem(page_window, ID_COMMAND), GWL_STYLE);
     const RECT nvencc_heading_bounds = child_rect(page_window, ID_COMMAND_HEADING);
@@ -396,11 +399,37 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_command.find(L"{height}") == std::wstring::npos ||
         nvencc_command.find(L"{input_pixel_format}") == std::wstring::npos ||
         nvencc_command.find(L"{output}") == std::wstring::npos ||
+        nvencc_command.find(L"--frame-mode auto") == std::wstring::npos ||
+        nvencc_command.find(L"--gop ") != std::wstring::npos ||
+        nvencc_command.find(L"--bframes ") != std::wstring::npos ||
         nvencc_command_bounds.top - nvencc_heading_bounds.bottom > 32) {
-        std::wcerr << L"NVEncC must use the editable command box without empty prefix or suffix space.\n";
+        std::wcerr << L"NVEncC automatic mode must use an editable command without GOP/B-frame options or empty space.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 49;
     }
-    const std::wstring edited_nvencc_command = nvencc_command + L" --ui-edit-smoke";
+    SendMessageW(frame_mode_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(frame_mode_combo));
+    SetWindowTextW(gop_edit, L"120");
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_GOP, EN_CHANGE), reinterpret_cast<LPARAM>(gop_edit));
+    SetWindowTextW(bframes_edit, L"2");
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BFRAMES, EN_CHANGE), reinterpret_cast<LPARAM>(bframes_edit));
+    const std::wstring manual_nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (manual_nvencc_command.find(L"--frame-mode manual") == std::wstring::npos ||
+        manual_nvencc_command.find(L"--gop 120") == std::wstring::npos ||
+        manual_nvencc_command.find(L"--bframes 2") == std::wstring::npos) {
+        std::wcerr << L"NVEncC manual mode must include the selected GOP and B-frame options.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 51;
+    }
+    SendMessageW(frame_mode_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(frame_mode_combo));
+    const std::wstring restored_auto_nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (restored_auto_nvencc_command.find(L"--gop ") != std::wstring::npos ||
+        restored_auto_nvencc_command.find(L"--bframes ") != std::wstring::npos) {
+        std::wcerr << L"Switching NVEncC back to automatic mode must remove GOP and B-frame options.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 52;
+    }
+    const std::wstring edited_nvencc_command = restored_auto_nvencc_command + L" --ui-edit-smoke";
     SetWindowTextW(GetDlgItem(page_window, ID_COMMAND), edited_nvencc_command.c_str());
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_COMMAND, EN_CHANGE),
                  reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_COMMAND)));

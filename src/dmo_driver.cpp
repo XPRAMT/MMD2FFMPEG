@@ -593,6 +593,41 @@ std::wstring trim(std::wstring value) {
     return value;
 }
 
+void remove_command_option(std::wstring& command, const std::wstring& option) {
+    const auto space = [](wchar_t ch) { return ch == L' ' || ch == L'\t' || ch == L'\r' || ch == L'\n'; };
+    std::size_t search_from = 0;
+    while (search_from < command.size()) {
+        const auto option_begin = command.find(option, search_from);
+        if (option_begin == std::wstring::npos) break;
+        const bool valid_left = option_begin == 0 || space(command[option_begin - 1]);
+        const auto after_option = option_begin + option.size();
+        const bool valid_right = after_option == command.size() || space(command[after_option]);
+        if (!valid_left || !valid_right) {
+            search_from = after_option;
+            continue;
+        }
+        auto value_begin = after_option;
+        while (value_begin < command.size() && space(command[value_begin])) ++value_begin;
+        auto erase_end = value_begin;
+        if (erase_end < command.size() && command[erase_end] == L'"') {
+            ++erase_end;
+            while (erase_end < command.size() && command[erase_end] != L'"') ++erase_end;
+            if (erase_end < command.size()) ++erase_end;
+        } else {
+            while (erase_end < command.size() && !space(command[erase_end])) ++erase_end;
+        }
+        while (erase_end < command.size() && space(command[erase_end])) ++erase_end;
+        const auto erase_begin = option_begin;
+        command.erase(erase_begin, erase_end - erase_begin);
+        search_from = erase_begin;
+    }
+}
+
+void remove_automatic_frame_options(std::wstring& command) {
+    remove_command_option(command, L"--gop");
+    remove_command_option(command, L"--bframes");
+}
+
 Settings load_settings() {
     Settings settings;
     std::wifstream file(config_path());
@@ -639,6 +674,7 @@ Settings load_settings() {
     if (settings.backend == L"nvenc" &&
         (settings.vsr_enabled || (settings.codec == L"hevc" && settings.alpha_mode == L"rgba")))
         settings.backend = L"nvencc";
+    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(settings.nvenc_command);
     normalize_codec_settings(settings);
     if (_wcsicmp(settings.ffmpeg.c_str(), L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe") == 0)
         settings.ffmpeg = L"ffmpeg.exe";
@@ -693,6 +729,7 @@ void save_settings(const Settings& settings) {
     if (!video_args.empty()) file << L"video_args=" << video_args << L"\n";
     std::wstring nvenc_command = settings.nvenc_command;
     std::replace_if(nvenc_command.begin(), nvenc_command.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
+    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(nvenc_command);
     if (!nvenc_command.empty()) file << L"nvenc_command=" << nvenc_command << L"\n";
 }
 
@@ -951,8 +988,9 @@ std::wstring build_vsr_command(const Settings& settings, int width, int height, 
             << L" --rate " << settings.rate_control
             << L" --qp " << settings.qp
             << L" --bitrate " << settings.bitrate_kbps
-            << L" --frame-mode " << settings.frame_structure_mode
-            << L" --gop " << settings.gop << L" --bframes " << settings.b_frames;
+            << L" --frame-mode " << settings.frame_structure_mode;
+    if (settings.frame_structure_mode == L"manual")
+        command << L" --gop " << settings.gop << L" --bframes " << settings.b_frames;
     if (settings.alpha_mode == L"rgba") command << L" --alpha";
     if (settings.vsr_enabled) command << L" --vsr";
     if (probe) command << L" --probe";
@@ -979,6 +1017,7 @@ std::wstring materialize_vsr_command(const Settings& settings, int width, int he
     std::wstring command = settings.nvenc_command.empty()
         ? default_vsr_command_template(settings, ffmpeg_path, nvenc_path, bridge_path)
         : settings.nvenc_command;
+    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(command);
     replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
     replace_all(command, L"{width}", std::to_wstring(width));
     replace_all(command, L"{height}", std::to_wstring(height));

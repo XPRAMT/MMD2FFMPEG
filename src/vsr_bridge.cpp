@@ -121,7 +121,12 @@ int wmain(int argc, wchar_t** argv) {
         ffmpeg_command += L"-f rawvideo -pixel_format " + argument(args, L"--input-format", L"bgra") +
                           L" -video_size " + std::to_wstring(width) + L"x" + std::to_wstring(height) +
                           L" -framerate " + std::to_wstring(fps) + L" -i pipe:0 ";
-    ffmpeg_command += L"-vf format=rgba -c:v rawvideo -pix_fmt rgba -f nut pipe:1";
+    // NVEncC --avsw currently reads raw RGBA/BGRA carried by NUT with red and
+    // blue reversed. Swap those channels before the handoff so the encoded
+    // result preserves MMD's original colors; alpha remains unchanged.
+    ffmpeg_command +=
+        L"-vf colorchannelmixer=rr=0:rb=1:br=1:bb=0,format=rgba "
+        L"-c:v rawvideo -pix_fmt rgba -f nut pipe:1";
 
     PROCESS_INFORMATION ffmpeg_process{};
     const HANDLE ffmpeg_input = probe ? GetStdHandle(STD_INPUT_HANDLE) : GetStdHandle(STD_INPUT_HANDLE);
