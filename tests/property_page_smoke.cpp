@@ -1,6 +1,7 @@
 ﻿#include <windows.h>
 #include <ocidl.h>
 #include <commctrl.h>
+#include <algorithm>
 #include <array>
 
 #include <filesystem>
@@ -101,7 +102,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 41) {
+        tooltip_count != 43) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -138,7 +139,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     const HFONT page_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(page_window, ID_BACKEND), WM_GETFONT, 0, 0));
     const int same_font_ids[] = {ID_TAB, ID_AUDIO_FORMAT, ID_AUDIO_RATE, ID_AUDIO_INTRO, ID_AUDIO_HELP,
-                                 ID_LANGUAGE, ID_SETTINGS_INFO, ID_GITHUB_LINK};
+                                 ID_LANGUAGE, ID_CPU_THREADS, ID_SETTINGS_INFO, ID_GITHUB_LINK};
     for (const int id : same_font_ids) {
         const HFONT control_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(page_window, id), WM_GETFONT, 0, 0));
         if (!page_font || control_font != page_font) {
@@ -247,15 +248,34 @@ int wmain(int argument_count, wchar_t** arguments) {
     video_tab_change.code = TCN_SELCHANGE;
     SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
     HWND codec_combo = GetDlgItem(page_window, ID_CODEC);
+    HWND backend_combo = GetDlgItem(page_window, ID_BACKEND);
     HWND depth_combo = GetDlgItem(page_window, ID_DEPTH);
     HWND alpha_combo = GetDlgItem(page_window, ID_ALPHA);
     HWND frame_mode_combo = GetDlgItem(page_window, ID_FRAME_MODE);
     HWND gop_edit = GetDlgItem(page_window, ID_GOP);
     HWND bframes_edit = GetDlgItem(page_window, ID_BFRAMES);
+    HWND cpu_threads_combo = GetDlgItem(page_window, ID_CPU_THREADS);
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
     SendMessageW(codec_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CODEC, CBN_SELCHANGE), reinterpret_cast<LPARAM>(codec_combo));
+    SendMessageW(backend_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BACKEND, CBN_SELCHANGE), reinterpret_cast<LPARAM>(backend_combo));
+    SendMessageW(cpu_threads_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CPU_THREADS, CBN_SELCHANGE), reinterpret_cast<LPARAM>(cpu_threads_combo));
+    DWORD processor_count = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+    if (processor_count == 0) { SYSTEM_INFO system_info{}; GetSystemInfo(&system_info); processor_count = system_info.dwNumberOfProcessors; }
+    const std::wstring all_threads_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (all_threads_command.find(L"-threads " + std::to_wstring(std::max<DWORD>(1, processor_count))) == std::wstring::npos) {
+        std::wcerr << L"All CPU threads selection was not mapped to the FFmpeg command.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 43;
+    }
+    SendMessageW(cpu_threads_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CPU_THREADS, CBN_SELCHANGE), reinterpret_cast<LPARAM>(cpu_threads_combo));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"-threads ") != std::wstring::npos) {
+        std::wcerr << L"Automatic CPU threads selection must omit the FFmpeg threads argument.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 44;
+    }
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(frame_mode_combo));
     const std::wstring automatic_frame_command = window_text(GetDlgItem(page_window, ID_COMMAND));
@@ -332,10 +352,10 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"GitHub address must be a selectable edit control.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 13;
     }
-    const RECT language_label = child_rect(page_window, ID_LABEL_LANGUAGE);
+    const RECT cpu_threads_label = child_rect(page_window, ID_LABEL_CPU_THREADS);
     const RECT settings_info = child_rect(page_window, ID_SETTINGS_INFO);
     const RECT github_address = child_rect(page_window, ID_GITHUB_LINK);
-    if (settings_info.top - language_label.bottom > 48 || github_address.top - settings_info.bottom > 48) {
+    if (settings_info.top - cpu_threads_label.bottom > 48 || github_address.top - settings_info.bottom > 48) {
         std::wcerr << L"Settings controls are not tightly stacked.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 14;
     }
@@ -357,6 +377,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         if (has_visible_style(GetDlgItem(page_window, ID_BACKEND)) != expected.video ||
             has_visible_style(GetDlgItem(page_window, ID_AUDIO_FORMAT)) != expected.audio ||
             has_visible_style(GetDlgItem(page_window, ID_LANGUAGE)) != expected.settings ||
+            has_visible_style(GetDlgItem(page_window, ID_CPU_THREADS)) != expected.settings ||
             has_visible_style(GetDlgItem(page_window, ID_SETTINGS_INFO)) != expected.settings) {
             std::wcerr << L"Tab visibility failed for page " << expected.page << L".\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 12;
@@ -365,7 +386,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         int page_id_count = 0;
         const int audio_ids[]{ID_AUDIO_INTRO, ID_LABEL_AUDIO_FORMAT, ID_AUDIO_FORMAT, ID_AUDIO_HELP,
                               ID_LABEL_AUDIO_RATE, ID_AUDIO_RATE};
-        const int settings_ids[]{ID_LABEL_LANGUAGE, ID_LANGUAGE, ID_SETTINGS_INFO, ID_GITHUB_LINK};
+        const int settings_ids[]{ID_LABEL_LANGUAGE, ID_LANGUAGE, ID_LABEL_CPU_THREADS, ID_CPU_THREADS, ID_SETTINGS_INFO, ID_GITHUB_LINK};
         if (expected.audio) { page_ids = audio_ids; page_id_count = static_cast<int>(std::size(audio_ids)); }
         if (expected.settings) { page_ids = settings_ids; page_id_count = static_cast<int>(std::size(settings_ids)); }
         GetClientRect(page_window, &client);
@@ -378,7 +399,8 @@ int wmain(int argument_count, wchar_t** arguments) {
             }
             const bool has_common_left_boundary = page_ids[index] != ID_AUDIO_FORMAT &&
                                                   page_ids[index] != ID_AUDIO_RATE &&
-                                                  page_ids[index] != ID_LANGUAGE;
+                                                  page_ids[index] != ID_LANGUAGE &&
+                                                  page_ids[index] != ID_CPU_THREADS;
             if (has_common_left_boundary && rectangle.left != child_rect(page_window, ID_TAB).left) {
                 std::wcerr << L"Visible tab control does not share the common left boundary: " << page_ids[index] << L"\n";
                 page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 20;
@@ -387,7 +409,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         const RECT active_tab = child_rect(page_window, ID_TAB);
         if ((expected.audio && (child_rect(page_window, ID_AUDIO_FORMAT).right != active_tab.right ||
                                 child_rect(page_window, ID_AUDIO_RATE).right != active_tab.right)) ||
-            (expected.settings && child_rect(page_window, ID_LANGUAGE).right != active_tab.right)) {
+            (expected.settings && (child_rect(page_window, ID_LANGUAGE).right != active_tab.right ||
+                                   child_rect(page_window, ID_CPU_THREADS).right != active_tab.right))) {
             std::wcerr << L"Visible dropdown does not share the tab right boundary.\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 19;
         }

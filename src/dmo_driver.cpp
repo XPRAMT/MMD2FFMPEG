@@ -64,6 +64,7 @@ struct Settings {
     std::wstring frame_structure_mode = L"auto";
     int gop = 120;
     int b_frames = 3;
+    std::wstring cpu_threads = L"auto";
     std::wstring audio_format = L"flac";
     std::wstring audio_sample_rate = L"original";
     std::wstring audio_bit_depth = L"original";
@@ -127,6 +128,7 @@ enum class UiLanguage { TraditionalChinese, SimplifiedChinese, Japanese, English
 struct UiStrings {
     const wchar_t* title;
     const wchar_t* language;
+    const wchar_t* cpu_threads;
     const wchar_t* encoder;
     const wchar_t* codec;
     const wchar_t* bit_depth;
@@ -170,10 +172,14 @@ struct UiOptions {
     const wchar_t* quality;
     const wchar_t* automatic;
     const wchar_t* manual;
+    const wchar_t* all_cores;
+    const wchar_t* all_cores_minus_one;
+    const wchar_t* all_cores_minus_two;
 };
 
 struct UiTooltips {
     const wchar_t* language;
+    const wchar_t* cpu_threads;
     const wchar_t* backend;
     const wchar_t* codec;
     const wchar_t* bit_depth;
@@ -249,7 +255,7 @@ const TabUiStrings& tab_ui_strings(UiLanguage language) {
 
 const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings traditional{
-        L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
+        L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼核心數", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
         L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"輸出範圍", L"GOP / I 幀間隔", L"B 幀間隔", L"幀結構", L"完整 FFmpeg 指令（中間區段可編輯）",
         L"編碼器狀態：尚未測試", L"編碼器狀態：測試中…", L"編碼器狀態：測試通過",
         L"編碼器狀態：設定已變更，請重新測試", L"編碼器狀態：測試失敗 - ",
@@ -258,7 +264,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"請先測試目前的編碼指令。\n\n通過測試後才能儲存或套用設定。",
         L"需要測試 MMD2FFMPEG 編碼器"};
     static constexpr UiStrings simplified{
-        L"MMD2FFMPEG 编码器设置", L"语言", L"编码器", L"编码格式", L"位深度", L"编码预设",
+        L"MMD2FFMPEG 编码器设置", L"语言", L"编码核心数", L"编码器", L"编码格式", L"位深度", L"编码预设",
         L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"GOP / I 帧间隔", L"B 帧间隔", L"帧结构", L"完整 FFmpeg 命令（中间部分可编辑）",
         L"编码器状态：尚未测试", L"编码器状态：测试中…", L"编码器状态：测试通过",
         L"编码器状态：设置已更改，请重新测试", L"编码器状态：测试失败 - ",
@@ -267,7 +273,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"请先测试当前的编码命令。\n\n测试通过后才能保存或应用设置。",
         L"需要测试 MMD2FFMPEG 编码器"};
     static constexpr UiStrings japanese{
-        L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
+        L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコード CPU スレッド", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
         L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"GOP / I フレーム間隔", L"B フレーム間隔", L"フレーム構造", L"完全な FFmpeg コマンド（中央部分は編集可能）",
         L"エンコーダー状態：未テスト", L"エンコーダー状態：テスト中…", L"エンコーダー状態：テスト合格",
         L"エンコーダー状態：設定が変更されました。再テストしてください", L"エンコーダー状態：テスト失敗 - ",
@@ -276,7 +282,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"現在のエンコーダーコマンドを先にテストしてください。\n\nテストに合格するまで設定を保存または適用できません。",
         L"MMD2FFMPEG エンコーダーのテストが必要です"};
     static constexpr UiStrings english{
-        L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
+        L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoding CPU threads", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
         L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"GOP / I-frame interval", L"B-frame interval", L"Frame structure", L"Complete FFmpeg command (middle section is editable)",
         L"Encoder status: not tested", L"Encoder status: testing...", L"Encoder status: test passed",
         L"Encoder status: settings changed; test again", L"Encoder status: test failed - ",
@@ -294,13 +300,13 @@ const UiStrings& ui_strings(UiLanguage language) {
 
 const UiOptions& ui_options(UiLanguage language) {
     static constexpr UiOptions traditional{L"軟體", L"最快", L"最佳品質", L"固定品質", L"固定 QP",
-                                              L"VBR 目標位元率", L"全域品質", L"速度", L"平衡", L"品質", L"自動", L"手動"};
+                                              L"VBR 目標位元率", L"全域品質", L"速度", L"平衡", L"品質", L"自動", L"手動", L"全部", L"全部 - 1", L"全部 - 2"};
     static constexpr UiOptions simplified{L"软件", L"最快", L"最佳质量", L"恒定质量", L"恒定 QP",
-                                             L"VBR 目标比特率", L"全局质量", L"速度", L"平衡", L"质量", L"自动", L"手动"};
+                                             L"VBR 目标比特率", L"全局质量", L"速度", L"平衡", L"质量", L"自动", L"手动", L"全部", L"全部 - 1", L"全部 - 2"};
     static constexpr UiOptions japanese{L"ソフトウェア", L"最速", L"最高品質", L"固定品質", L"固定 QP",
-                                          L"VBR 目標ビットレート", L"グローバル品質", L"速度", L"バランス", L"品質", L"自動", L"手動"};
+                                          L"VBR 目標ビットレート", L"グローバル品質", L"速度", L"バランス", L"品質", L"自動", L"手動", L"すべて", L"すべて - 1", L"すべて - 2"};
     static constexpr UiOptions english{L"software", L"fastest", L"best quality", L"constant quality", L"Constant QP",
-                                         L"VBR target bitrate", L"global quality", L"speed", L"balanced", L"quality", L"Automatic", L"Manual"};
+                                         L"VBR target bitrate", L"global quality", L"speed", L"balanced", L"quality", L"Automatic", L"Manual", L"All", L"All - 1", L"All - 2"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -309,9 +315,47 @@ const UiOptions& ui_options(UiLanguage language) {
     }
 }
 
+DWORD available_processor_count() {
+    const DWORD count = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+    if (count > 0) return count;
+    SYSTEM_INFO system_info{};
+    GetSystemInfo(&system_info);
+    return std::max<DWORD>(1, system_info.dwNumberOfProcessors);
+}
+
+int cpu_thread_mode_index(const std::wstring& value) {
+    if (value == L"all") return 1;
+    if (value == L"all-minus-1") return 2;
+    if (value == L"all-minus-2") return 3;
+    return 0;
+}
+
+const wchar_t* cpu_thread_mode_key(int index) {
+    static constexpr const wchar_t* values[]{L"auto", L"all", L"all-minus-1", L"all-minus-2"};
+    return values[std::clamp(index, 0, 3)];
+}
+
+std::array<std::wstring, 4> cpu_thread_options(UiLanguage language) {
+    const auto& options = ui_options(language);
+    const int all = static_cast<int>(available_processor_count());
+    return {options.automatic,
+            std::wstring(options.all_cores) + L" (" + std::to_wstring(all) + L")",
+            std::wstring(options.all_cores_minus_one) + L" (" + std::to_wstring(std::max(1, all - 1)) + L")",
+            std::wstring(options.all_cores_minus_two) + L" (" + std::to_wstring(std::max(1, all - 2)) + L")"};
+}
+
+int selected_cpu_threads(const Settings& settings) {
+    if (settings.cpu_threads == L"auto") return 0;
+    const int all = static_cast<int>(available_processor_count());
+    if (settings.cpu_threads == L"all-minus-1") return std::max(1, all - 1);
+    if (settings.cpu_threads == L"all-minus-2") return std::max(1, all - 2);
+    return std::max(1, all);
+}
+
 const UiTooltips& ui_tooltips(UiLanguage language) {
     static constexpr UiTooltips traditional{
         L"選擇設定介面的顯示語言；系統預設會跟隨 Windows。",
+        L"選擇 CPU 軟體編碼使用的執行緒數。自動不傳遞 -threads；全部、全部 - 1、全部 - 2 會依 Windows 偵測的可用邏輯處理器數計算。硬體編碼不使用這個設定。",
         L"選擇 FFmpeg 使用的軟體或硬體編碼器。VP9 與 ProRes 僅能使用 CPU。",
         L"選擇影片編碼格式。可用的位元深度、Alpha 與碼率控制會依格式自動限制。",
         L"選擇 8-bit 或 10-bit 輸出。部分編碼格式或 Alpha 模式會固定此選項。",
@@ -335,6 +379,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"開啟專案的 GitHub 網頁。"};
     static constexpr UiTooltips simplified{
         L"选择设置界面的显示语言；系统默认会跟随 Windows。",
+        L"选择 CPU 软件编码使用的线程数。自动不传递 -threads；全部、全部 - 1、全部 - 2 会依 Windows 检测的可用逻辑处理器数计算。硬件编码不使用此设置。",
         L"选择 FFmpeg 使用的软件或硬件编码器。VP9 和 ProRes 只能使用 CPU。",
         L"选择视频编码格式。可用的位深度、Alpha 和码率控制会依格式自动限制。",
         L"选择 8-bit 或 10-bit 输出。部分编码格式或 Alpha 模式会固定此选项。",
@@ -358,6 +403,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"打开项目的 GitHub 网页。"};
     static constexpr UiTooltips japanese{
         L"設定画面の表示言語を選択します。システム既定は Windows の表示言語に従います。",
+        L"CPU ソフトウェアエンコードで使用するスレッド数を選択します。自動は -threads を渡しません。すべて、すべて - 1、すべて - 2 は Windows が検出した論理プロセッサ数から計算します。ハードウェアエンコードでは使用しません。",
         L"FFmpeg で使用するソフトウェアまたはハードウェアエンコーダーを選択します。VP9 と ProRes は CPU 専用です。",
         L"動画コーデックを選択します。利用可能なビット深度、アルファ、レート制御は形式に応じて制限されます。",
         L"8-bit または 10-bit 出力を選択します。コーデックまたはアルファモードにより固定される場合があります。",
@@ -381,6 +427,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"プロジェクトの GitHub ページを開きます。"};
     static constexpr UiTooltips english{
         L"Choose the settings interface language. System default follows the Windows display language.",
+        L"Choose the thread count for CPU software encoding. Automatic passes no -threads option; All, All - 1, and All - 2 are calculated from Windows-detected logical processors. Hardware encoding does not use this setting.",
         L"Choose the FFmpeg software or hardware encoder. VP9 and ProRes are CPU-only.",
         L"Choose the video codec. Available bit depth, alpha, and rate control options are limited by the codec.",
         L"Choose 8-bit or 10-bit output. Some codecs or alpha modes lock this option.",
@@ -518,6 +565,7 @@ Settings load_settings() {
         else if (key == L"frame_structure_mode" && (value == L"auto" || value == L"manual")) settings.frame_structure_mode = value;
         else if (key == L"gop") { try { settings.gop = std::clamp(std::stoi(value), 1, 10000); } catch (...) {} }
         else if (key == L"b_frames") { try { settings.b_frames = std::clamp(std::stoi(value), 0, 16); } catch (...) {} }
+        else if (key == L"cpu_threads" && (value == L"auto" || value == L"all" || value == L"all-minus-1" || value == L"all-minus-2")) settings.cpu_threads = value;
         else if (key == L"audio_format" && (value == L"flac" || value == L"wav" || value == L"none")) settings.audio_format = value;
         else if (key == L"audio_sample_rate" && (value == L"original" || value == L"hires")) settings.audio_sample_rate = value;
         else if (key == L"audio_bit_depth" && (value == L"original" || value == L"24")) settings.audio_bit_depth = value;
@@ -565,6 +613,7 @@ void save_settings(const Settings& settings) {
          << L"frame_structure_mode=" << settings.frame_structure_mode << L"\n"
          << L"gop=" << settings.gop << L"\n"
          << L"b_frames=" << settings.b_frames << L"\n"
+         << L"cpu_threads=" << settings.cpu_threads << L"\n"
          << L"audio_format=" << settings.audio_format << L"\n"
          << L"audio_sample_rate=" << settings.audio_sample_rate << L"\n"
          << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n";
@@ -636,6 +685,10 @@ std::wstring encoding_arguments(const Settings& settings) {
         encoder = codec_name + L"_" + settings.backend;
     std::wostringstream args;
     args << L"-c:v " << encoder;
+    if (settings.backend == L"cpu") {
+        const int threads = selected_cpu_threads(settings);
+        if (threads > 0) args << L" -threads " << threads;
+    }
     if (settings.codec == L"prores") {
         args << L" -profile:v " << (settings.alpha_mode == L"rgba" || settings.chroma == L"444" ? L"4444" : L"hq");
         return args.str();
@@ -1687,8 +1740,9 @@ private:
             SetPropW(window_, L"MMD2FFMPEG.TooltipWindow", tooltip_);
         }
         const auto& tip = ui_tooltips(ui_language(settings_.language));
-        const std::array<std::pair<int, const wchar_t*>, 41> items{{
+        const std::array<std::pair<int, const wchar_t*>, 43> items{{
             {ID_LABEL_LANGUAGE, tip.language}, {ID_LANGUAGE, tip.language},
+            {ID_LABEL_CPU_THREADS, tip.cpu_threads}, {ID_CPU_THREADS, tip.cpu_threads},
             {ID_LABEL_BACKEND, tip.backend}, {ID_BACKEND, tip.backend},
             {ID_LABEL_CODEC, tip.codec}, {ID_CODEC, tip.codec},
             {ID_LABEL_DEPTH, tip.bit_depth}, {ID_DEPTH, tip.bit_depth},
@@ -1735,6 +1789,9 @@ private:
 
         updating_command_ = true;
         add_combo(ID_LANGUAGE, {L"系統預設", L"繁體中文", L"簡體中文", L"日本語", L"English"}, language_index(settings_.language));
+        const auto cpu_threads = cpu_thread_options(ui_language(settings_.language));
+        add_combo(ID_CPU_THREADS, {cpu_threads[0].c_str(), cpu_threads[1].c_str(), cpu_threads[2].c_str(), cpu_threads[3].c_str()},
+                  cpu_thread_mode_index(settings_.cpu_threads));
         add_combo(ID_BACKEND, {L"CPU", L"NVENC", L"QSV", L"AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
         add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes"}, codec_index(settings_.codec));
         add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
@@ -1772,6 +1829,8 @@ private:
         ShowWindow(audio_help_, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LABEL_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_LABEL_CPU_THREADS), page == 2 ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_CPU_THREADS), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
         active_tab_ = page;
         ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
@@ -1893,6 +1952,7 @@ private:
         EnableWindow(GetDlgItem(window_, ID_MASK_OUTPUT), mask);
         if (capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_CHROMA), 2);
         EnableWindow(GetDlgItem(window_, ID_CHROMA), !(capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1));
+        EnableWindow(GetDlgItem(window_, ID_CPU_THREADS), combo_index(ID_BACKEND) == 0);
         const bool manual_frame_structure = combo_index(ID_FRAME_MODE) == 1;
         EnableWindow(GetDlgItem(window_, ID_GOP), manual_frame_structure && wcscmp(capability.key, L"prores") != 0);
         EnableWindow(GetDlgItem(window_, ID_BFRAMES), manual_frame_structure && capability.supports_b_frames);
@@ -1928,6 +1988,7 @@ private:
         settings_.frame_structure_mode = combo_index(ID_FRAME_MODE) == 1 ? L"manual" : L"auto";
         settings_.gop = std::clamp(edit_number(ID_GOP, 120), 1, 10000);
         settings_.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
+        settings_.cpu_threads = cpu_thread_mode_key(combo_index(ID_CPU_THREADS));
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
@@ -2106,8 +2167,9 @@ private:
             add_form_row(ID_LABEL_AUDIO_RATE, ID_AUDIO_RATE, label_width, y);
             y += margin_y;
         } else {
-            const int label_width = text_width(ID_LABEL_LANGUAGE, dlu_x(82));
+            const int label_width = maximum_text_width({ID_LABEL_LANGUAGE, ID_LABEL_CPU_THREADS}, dlu_x(82));
             add_form_row(ID_LABEL_LANGUAGE, ID_LANGUAGE, label_width, y);
+            add_form_row(ID_LABEL_CPU_THREADS, ID_CPU_THREADS, label_width, y);
             const int info_height = text_height(ID_SETTINGS_INFO, full_width, dlu_y(12));
             add_layout(ID_SETTINGS_INFO, margin_x, y, full_width, info_height);
             y += info_height + gap;
@@ -2193,8 +2255,12 @@ private:
         reset_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes"}, codec);
         const int frame_structure_mode = combo_index(ID_FRAME_MODE);
         reset_combo(ID_FRAME_MODE, {options.automatic, options.manual}, frame_structure_mode);
+        const int cpu_thread_mode = combo_index(ID_CPU_THREADS);
+        const auto cpu_threads = cpu_thread_options(ui_language(settings_.language));
+        reset_combo(ID_CPU_THREADS, {cpu_threads[0].c_str(), cpu_threads[1].c_str(), cpu_threads[2].c_str(), cpu_threads[3].c_str()}, cpu_thread_mode);
         rebuild_backend_options();
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_LANGUAGE), text.language);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_CPU_THREADS), text.cpu_threads);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_BACKEND), text.encoder);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_CODEC), text.codec);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_DEPTH), text.bit_depth);
