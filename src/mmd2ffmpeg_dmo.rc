@@ -9,6 +9,7 @@ BEGIN
     CONTROL         "", ID_TAB, "SysTabControl32", WS_TABSTOP, 0, 0, 1, 1
 
     // Video tab
+    CONTROL         "", ID_VIDEO_TAB, "SysTabControl32", WS_TABSTOP, 0, 0, 1, 1
     LTEXT           "Encoder", ID_LABEL_BACKEND, 0, 0, 1, 1
     COMBOBOX        ID_BACKEND, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Codec", ID_LABEL_CODEC, 0, 0, 1, 1
@@ -19,6 +20,14 @@ BEGIN
     COMBOBOX        ID_PRESET, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Rate control", ID_LABEL_RATE, 0, 0, 1, 1
     COMBOBOX        ID_RATE, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Alpha", ID_LABEL_ALPHA, 0, 0, 1, 1
+    COMBOBOX        ID_ALPHA, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Mask output", ID_LABEL_MASK_OUTPUT, 0, 0, 1, 1
+    COMBOBOX        ID_MASK_OUTPUT, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Chroma sampling", ID_LABEL_CHROMA, 0, 0, 1, 1
+    COMBOBOX        ID_CHROMA, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Color space", ID_LABEL_COLORSPACE, 0, 0, 1, 1
+    COMBOBOX        ID_COLORSPACE, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Quality / QP", ID_LABEL_QP, 0, 0, 1, 1
     EDITTEXT        ID_QP, 0, 0, 1, 1, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "Bitrate (kbps)", ID_LABEL_BITRATE, 0, 0, 1, 1

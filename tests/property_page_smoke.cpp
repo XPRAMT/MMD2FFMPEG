@@ -144,6 +144,40 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Test encoder and open log buttons overlap.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 17;
     }
+    HWND video_tab = GetDlgItem(page_window, ID_VIDEO_TAB);
+    if (!video_tab || TabCtrl_GetItemCount(video_tab) != 2) {
+        std::wcerr << L"Video page does not expose Encoding and Color sub-tabs.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 22;
+    }
+    const RECT command_before_color = child_rect(page_window, ID_COMMAND);
+    TabCtrl_SetCurSel(video_tab, 1);
+    NMHDR video_tab_change{};
+    video_tab_change.hwndFrom = video_tab;
+    video_tab_change.idFrom = ID_VIDEO_TAB;
+    video_tab_change.code = TCN_SELCHANGE;
+    const LRESULT video_tab_result = SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
+    const int color_ids[]{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE,
+                          ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE};
+    for (const int id : color_ids) {
+        const RECT rectangle = child_rect(page_window, id);
+        if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(rectangle)) {
+            std::wcerr << L"Color sub-tab control is unavailable: " << id
+                       << L" visible_style=" << has_visible_style(GetDlgItem(page_window, id))
+                       << L" notify_result=" << video_tab_result
+                       << L" rect=" << rectangle.left << L"," << rectangle.top
+                       << L"," << rectangle.right << L"," << rectangle.bottom << L".\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 23;
+        }
+    }
+    const RECT command_on_color = child_rect(page_window, ID_COMMAND);
+    if (!has_visible_style(GetDlgItem(page_window, ID_COMMAND)) || command_before_color.top != command_on_color.top ||
+        command_before_color.bottom != command_on_color.bottom) {
+        std::wcerr << L"FFmpeg command area did not remain fixed below the video sub-tabs.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 24;
+    }
+    TabCtrl_SetCurSel(video_tab, 0);
+    video_tab_change.code = TCN_SELCHANGE;
+    SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
     std::array<wchar_t, 16> github_class{};
     GetClassNameW(GetDlgItem(page_window, ID_GITHUB_LINK), github_class.data(), static_cast<int>(github_class.size()));
     if (wcscmp(github_class.data(), L"Edit") != 0) {

@@ -51,6 +51,10 @@ struct Settings {
     std::wstring backend = L"cpu";
     std::wstring codec = L"hevc";
     int bit_depth = 10;
+    std::wstring chroma = L"420";
+    std::wstring alpha_mode = L"none";
+    std::wstring mask_output = L"stacked";
+    std::wstring color_space = L"bt709";
     int preset = 6;
     std::wstring rate_control = L"crf";
     int qp = 18;
@@ -74,6 +78,10 @@ struct UiStrings {
     const wchar_t* rate_control;
     const wchar_t* quality;
     const wchar_t* bitrate;
+    const wchar_t* alpha;
+    const wchar_t* mask_output;
+    const wchar_t* chroma;
+    const wchar_t* color_space;
     const wchar_t* command_heading;
     const wchar_t* not_tested;
     const wchar_t* testing;
@@ -115,6 +123,8 @@ struct TabUiStrings {
     const wchar_t* version;
     const wchar_t* author;
     const wchar_t* github;
+    const wchar_t* encoding;
+    const wchar_t* color;
 };
 
 UiLanguage system_ui_language() {
@@ -137,10 +147,10 @@ UiLanguage ui_language(const std::wstring& value) {
 }
 
 const TabUiStrings& tab_ui_strings(UiLanguage language) {
-    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後，自動讀取AVI內含音訊，合併進MKV檔案，花費時間取決於硬碟速度。注意：MMD必須從第0幀開始輸出，AVI中才會包含音訊檔。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，Hi-Res模式以原始取樣率2倍及24bit編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后，自动读取AVI内含音频，合并进MKV文件，耗时取决于硬盘速度。注意：MMD必须从第0帧开始输出，AVI中才会包含音频文件。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，Hi-Res模式以原始采样率2倍及24bit编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub"};
-    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を自動的に読み取り、MKV に結合します。所要時間はディスク速度に依存します。注意：AVI に音声を含めるには、MMD の出力開始フレームを 0 にしてください。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、Hi-Res モードでは元の2倍かつ24bitで再エンコードし、bilibili Hi-Res 判定に対応します。", L"バージョン", L"作者", L"GitHub"};
-    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio embedded in the AVI is automatically read and merged into the MKV. Time required depends on disk speed. Note: MMD must export from frame 0 for the AVI to contain audio.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, Hi-Res mode encodes at twice the original sample rate and 24-bit for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub"};
+    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後，自動讀取AVI內含音訊，合併進MKV檔案，花費時間取決於硬碟速度。注意：MMD必須從第0幀開始輸出，AVI中才會包含音訊檔。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，Hi-Res模式以原始取樣率2倍及24bit編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub", L"編碼", L"色彩"};
+    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后，自动读取AVI内含音频，合并进MKV文件，耗时取决于硬盘速度。注意：MMD必须从第0帧开始输出，AVI中才会包含音频文件。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，Hi-Res模式以原始采样率2倍及24bit编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub", L"编码", L"色彩"};
+    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を自動的に読み取り、MKV に結合します。所要時間はディスク速度に依存します。注意：AVI に音声を含めるには、MMD の出力開始フレームを 0 にしてください。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、Hi-Res モードでは元の2倍かつ24bitで再エンコードし、bilibili Hi-Res 判定に対応します。", L"バージョン", L"作者", L"GitHub", L"エンコード", L"カラー"};
+    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio embedded in the AVI is automatically read and merged into the MKV. Time required depends on disk speed. Note: MMD must export from frame 0 for the AVI to contain audio.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, Hi-Res mode encodes at twice the original sample rate and 24-bit for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub", L"Encoding", L"Color"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -152,7 +162,7 @@ const TabUiStrings& tab_ui_strings(UiLanguage language) {
 const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings traditional{
         L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
-        L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"完整 FFmpeg 指令（中間區段可編輯）",
+        L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"完整 FFmpeg 指令（中間區段可編輯）",
         L"編碼器狀態：尚未測試", L"編碼器狀態：測試中…", L"編碼器狀態：測試通過",
         L"編碼器狀態：設定已變更，請重新測試", L"編碼器狀態：測試失敗 - ",
         L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟log",
@@ -161,7 +171,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"需要測試 MMD2FFMPEG 編碼器"};
     static constexpr UiStrings simplified{
         L"MMD2FFMPEG 编码器设置", L"语言", L"编码器", L"编码格式", L"位深度", L"编码预设",
-        L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"完整 FFmpeg 命令（中间部分可编辑）",
+        L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"完整 FFmpeg 命令（中间部分可编辑）",
         L"编码器状态：尚未测试", L"编码器状态：测试中…", L"编码器状态：测试通过",
         L"编码器状态：设置已更改，请重新测试", L"编码器状态：测试失败 - ",
         L"测试通过后才能保存或应用。", L"测试编码", L"打开日志",
@@ -170,7 +180,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"需要测试 MMD2FFMPEG 编码器"};
     static constexpr UiStrings japanese{
         L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
-        L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"完全な FFmpeg コマンド（中央部分は編集可能）",
+        L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"完全な FFmpeg コマンド（中央部分は編集可能）",
         L"エンコーダー状態：未テスト", L"エンコーダー状態：テスト中…", L"エンコーダー状態：テスト合格",
         L"エンコーダー状態：設定が変更されました。再テストしてください", L"エンコーダー状態：テスト失敗 - ",
         L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログを開く",
@@ -179,7 +189,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"MMD2FFMPEG エンコーダーのテストが必要です"};
     static constexpr UiStrings english{
         L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
-        L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Complete FFmpeg command (middle section is editable)",
+        L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Complete FFmpeg command (middle section is editable)",
         L"Encoder status: not tested", L"Encoder status: testing...", L"Encoder status: test passed",
         L"Encoder status: settings changed; test again", L"Encoder status: test failed - ",
         L"Test must pass before saving or applying.", L"Test encoder", L"Open log",
@@ -303,8 +313,12 @@ Settings load_settings() {
             try { settings.fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {}
         }
         else if (key == L"backend" && (value == L"cpu" || value == L"nvenc" || value == L"qsv" || value == L"amf")) settings.backend = value;
-        else if (key == L"codec" && (value == L"avc" || value == L"hevc" || value == L"av1")) settings.codec = value;
+        else if (key == L"codec" && (value == L"avc" || value == L"hevc" || value == L"av1" || value == L"vp9" || value == L"prores")) settings.codec = value;
         else if (key == L"bit_depth") { try { settings.bit_depth = std::stoi(value) == 8 ? 8 : 10; } catch (...) {} }
+        else if (key == L"chroma" && (value == L"420" || value == L"422" || value == L"444")) settings.chroma = value;
+        else if (key == L"alpha_mode" && (value == L"none" || value == L"rgba" || value == L"mask")) settings.alpha_mode = value;
+        else if (key == L"mask_output" && (value == L"stacked" || value == L"separate")) settings.mask_output = value;
+        else if (key == L"color_space" && (value == L"bt601" || value == L"bt709" || value == L"bt2020")) settings.color_space = value;
         else if (key == L"preset") { try { settings.preset = std::clamp(std::stoi(value), 1, 7); } catch (...) {} }
         else if (key == L"rate_control" && (value == L"crf" || value == L"qp" || value == L"vbr")) settings.rate_control = value;
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
@@ -315,7 +329,9 @@ Settings load_settings() {
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
-    if (settings.codec == L"avc") settings.bit_depth = 8;
+    if (settings.codec == L"avc" || settings.codec == L"vp9") settings.bit_depth = 8;
+    if (settings.codec == L"prores") settings.bit_depth = 10;
+    if (settings.alpha_mode == L"rgba" && settings.codec != L"vp9" && settings.codec != L"prores") settings.alpha_mode = L"mask";
     if (_wcsicmp(settings.ffmpeg.c_str(), L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe") == 0)
         settings.ffmpeg = L"ffmpeg.exe";
     if (settings.video_args.empty() && !settings.command_template.empty()) {
@@ -348,6 +364,10 @@ void save_settings(const Settings& settings) {
          << L"backend=" << settings.backend << L"\n"
          << L"codec=" << settings.codec << L"\n"
          << L"bit_depth=" << settings.bit_depth << L"\n"
+         << L"chroma=" << settings.chroma << L"\n"
+         << L"alpha_mode=" << settings.alpha_mode << L"\n"
+         << L"mask_output=" << settings.mask_output << L"\n"
+         << L"color_space=" << settings.color_space << L"\n"
          << L"preset=" << settings.preset << L"\n"
          << L"rate_control=" << settings.rate_control << L"\n"
          << L"qp=" << settings.qp << L"\n"
@@ -410,15 +430,20 @@ std::filesystem::path current_output_avi() {
 }
 
 std::wstring encoding_arguments(const Settings& settings) {
-    const bool ten_bit = settings.bit_depth == 10 && settings.codec != L"avc";
+    const bool ten_bit = settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9";
     const std::wstring codec_name = settings.codec == L"avc" ? L"h264" : settings.codec;
     std::wstring encoder;
     if (settings.backend == L"cpu")
-        encoder = settings.codec == L"avc" ? L"libx264" : settings.codec == L"av1" ? L"libsvtav1" : L"libx265";
+        encoder = settings.codec == L"avc" ? L"libx264" : settings.codec == L"av1" ? L"libsvtav1" :
+                  settings.codec == L"vp9" ? L"libvpx-vp9" : settings.codec == L"prores" ? L"prores_ks" : L"libx265";
     else
         encoder = codec_name + L"_" + settings.backend;
     std::wostringstream args;
     args << L"-c:v " << encoder;
+    if (settings.codec == L"prores") {
+        args << L" -profile:v " << (settings.alpha_mode == L"rgba" || settings.chroma == L"444" ? L"4444" : L"hq");
+        return args.str();
+    }
     if (settings.codec == L"hevc" && ten_bit) args << L" -profile:v main10";
     else if (settings.codec == L"avc") args << L" -profile:v high";
 
@@ -427,6 +452,7 @@ std::wstring encoding_arguments(const Settings& settings) {
         static constexpr const wchar_t* software_presets[] = {L"ultrafast", L"superfast", L"veryfast", L"faster", L"fast", L"medium", L"slow"};
         static constexpr int svt_presets[] = {13, 11, 9, 8, 7, 6, 4};
         if (settings.codec == L"av1") args << L" -preset " << svt_presets[level - 1];
+        else if (settings.codec == L"vp9") args << L" -deadline good -cpu-used " << (8 - level);
         else args << L" -preset " << software_presets[level - 1];
         if (settings.rate_control == L"crf") args << L" -crf " << settings.qp;
         else if (settings.rate_control == L"qp") args << L" -qp " << settings.qp;
@@ -453,24 +479,40 @@ std::wstring encoding_arguments(const Settings& settings) {
 }
 
 const wchar_t* output_pixel_format(const Settings& settings) {
-    return settings.bit_depth == 10 && settings.codec != L"avc" ? L"p010le" : L"nv12";
+    if (settings.alpha_mode == L"rgba") return settings.codec == L"prores" ? L"yuva444p10le" : L"yuva420p";
+    if (settings.chroma == L"444") return settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9" ? L"yuv444p10le" : L"yuv444p";
+    if (settings.chroma == L"422") return settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9" ? L"yuv422p10le" : L"yuv422p";
+    return settings.bit_depth == 10 && settings.codec != L"avc" && settings.codec != L"vp9" ? L"yuv420p10le" : L"yuv420p";
 }
 
 std::wstring recording_date_metadata();
 
+struct ColorSpaceSpec { const wchar_t* matrix; const wchar_t* primaries; const wchar_t* transfer; };
+
+ColorSpaceSpec color_space_spec(const Settings& settings) {
+    if (settings.color_space == L"bt601") return {L"smpte170m", L"smpte170m", L"bt709"};
+    if (settings.color_space == L"bt2020") return {L"bt2020nc", L"bt2020", L"bt709"};
+    return {L"bt709", L"bt709", L"bt709"};
+}
+
+std::wstring color_metadata(const Settings& settings) {
+    const auto color = color_space_spec(settings);
+    return L" -colorspace " + std::wstring(color.matrix) + L" -color_primaries " + color.primaries +
+           L" -color_trc " + color.transfer + L" -metadata date_recorded=" + recording_date_metadata();
+}
+
 std::wstring command_prefix(const Settings& settings) {
     const auto pixel_format = output_pixel_format(settings);
+    const auto color = color_space_spec(settings);
     return L"\"" + settings.ffmpeg +
            L"\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {input_pixel_format} "
            L"-video_size {width}x{height} -framerate {fps} -i pipe:0 "
-           L"-vf scale=out_color_matrix=bt709:out_range=tv,format=" + pixel_format + L" ";
+           L"-vf scale=out_color_matrix=" + color.matrix + L":out_range=tv,format=" + pixel_format + L" ";
 }
 
 std::wstring command_suffix(const Settings& settings) {
     const auto pixel_format = output_pixel_format(settings);
-    return L" -pix_fmt " + std::wstring(pixel_format) +
-           L" -colorspace bt709 -color_primaries bt709 -color_trc bt709"
-           L" -metadata date_recorded=" + recording_date_metadata() + L" \"{output}\"";
+    return L" -pix_fmt " + std::wstring(pixel_format) + color_metadata(settings) + L" \"{output}\"";
 }
 
 void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
@@ -490,8 +532,32 @@ std::wstring recording_date_metadata() {
 }
 
 std::wstring build_ffmpeg_command(const Settings& settings, int width, int height, int bits,
-                                  const std::wstring& output_path) {
+                                  const std::wstring& output_path, const std::wstring& mask_path = L"") {
     const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
+    if (settings.alpha_mode == L"mask") {
+        const auto color = color_space_spec(settings);
+        Settings color_settings = settings;
+        color_settings.alpha_mode = L"none";
+        const std::wstring pixel_format = output_pixel_format(color_settings);
+        std::wstring command = L"\"" + settings.ffmpeg + L"\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {input_pixel_format} "
+            L"-video_size {width}x{height} -framerate {fps} -i pipe:0 -filter_complex \"[0:v]split=2[color][alpha];"
+            L"[color]scale=out_color_matrix=" + color.matrix + L":out_range=tv,format=" + pixel_format + L"[colorout];"
+            L"[alpha]alphaextract,format=gray[mask]";
+        if (settings.mask_output == L"stacked") {
+            command += L";[colorout][mask]vstack=inputs=2,format=" + pixel_format + L"[out]\" -map \"[out]\" " + arguments +
+                       L" -pix_fmt " + pixel_format + color_metadata(settings) + L" \"{output}\"";
+        } else {
+            command += L"\" -map \"[colorout]\" " + arguments + L" -pix_fmt " + pixel_format + color_metadata(settings) +
+                       L" \"{output}\" -map \"[mask]\" -c:v ffv1 -pix_fmt gray \"{mask_output}\"";
+        }
+        replace_all(command, L"{mask_output}", mask_path);
+        replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
+        replace_all(command, L"{width}", std::to_wstring(width));
+        replace_all(command, L"{height}", std::to_wstring(height));
+        replace_all(command, L"{fps}", std::to_wstring(settings.fps));
+        replace_all(command, L"{output}", output_path);
+        return command;
+    }
     std::wstring command = command_prefix(settings) + arguments + command_suffix(settings);
     replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
     replace_all(command, L"{width}", std::to_wstring(width));
@@ -609,10 +675,28 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     }
     const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
     const auto pixel_format = output_pixel_format(settings);
-    std::wstring command = L"\"" + settings.ffmpeg +
-        L"\" -hide_banner -loglevel error -f lavfi -i color=c=black:s=1920x1080:r=1 -frames:v 1 "
-        L"-vf format=" + pixel_format + L" " + arguments +
-        L" -pix_fmt " + pixel_format + L" -f null -";
+    std::wstring command;
+    if (settings.alpha_mode == L"mask") {
+        const auto color = color_space_spec(settings);
+        Settings color_settings = settings;
+        color_settings.alpha_mode = L"none";
+        const std::wstring color_pixel_format = output_pixel_format(color_settings);
+        command = L"\"" + settings.ffmpeg +
+            L"\" -hide_banner -loglevel error -f lavfi -i color=c=black@0.5:s=1920x1080:r=1,format=bgra -frames:v 1 "
+            L"-filter_complex \"[0:v]split=2[color][alpha];[color]scale=out_color_matrix=" + color.matrix +
+            L":out_range=tv,format=" + color_pixel_format + L"[colorout];[alpha]alphaextract,format=gray[mask]";
+        if (settings.mask_output == L"stacked") {
+            command += L";[colorout][mask]vstack=inputs=2,format=" + color_pixel_format + L"[out]\" -map \"[out]\" " +
+                       arguments + L" -pix_fmt " + color_pixel_format + L" -f null -";
+        } else {
+            command += L"\" -map \"[colorout]\" " + arguments + L" -pix_fmt " + color_pixel_format +
+                       L" -f null - -map \"[mask]\" -c:v ffv1 -pix_fmt gray -f null -";
+        }
+    } else {
+        command = L"\"" + settings.ffmpeg +
+            L"\" -hide_banner -loglevel error -f lavfi -i color=c=black@0.5:s=1920x1080:r=1 -frames:v 1 "
+            L"-vf format=" + pixel_format + L" " + arguments + L" -pix_fmt " + pixel_format + L" -f null -";
+    }
 
     SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
     HANDLE output_read = nullptr, output_write = nullptr;
@@ -670,8 +754,9 @@ std::wstring command_test_signature(const Settings& settings) {
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
     const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
-    return L"v3-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
-           settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + arguments;
+    return L"v4-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+           settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
+           L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + arguments;
 }
 
 std::wstring capability_key(const Settings& settings) {
@@ -1053,6 +1138,15 @@ private:
             (final_output_.stem().wstring() + L".mmd2ffmpeg-partial-" + std::to_wstring(GetCurrentProcessId()) + final_output_.extension().wstring());
         std::error_code error;
         std::filesystem::remove(partial_output_, error);
+        final_mask_output_.clear();
+        partial_mask_output_.clear();
+        if (settings_.alpha_mode == L"mask" && settings_.mask_output == L"separate") {
+            final_mask_output_ = final_output_.parent_path() /
+                (final_output_.stem().wstring() + L"_alpha" + final_output_.extension().wstring());
+            partial_mask_output_ = final_mask_output_.parent_path() /
+                (final_mask_output_.stem().wstring() + L".mmd2ffmpeg-partial-" + std::to_wstring(GetCurrentProcessId()) + final_mask_output_.extension().wstring());
+            std::filesystem::remove(partial_mask_output_, error);
+        }
         log_path_ = make_log_path();
         prune_logs();
         std::filesystem::create_directories(partial_output_.parent_path(), error);
@@ -1064,7 +1158,7 @@ private:
         HANDLE read_pipe = nullptr;
         if (!CreatePipe(&read_pipe, &stdin_write_, &security, 1024 * 1024)) return false;
         SetHandleInformation(stdin_write_, HANDLE_FLAG_INHERIT, 0);
-        auto command = build_ffmpeg_command(settings_, width_, height_, bits_, partial_output_.wstring());
+        auto command = build_ffmpeg_command(settings_, width_, height_, bits_, partial_output_.wstring(), partial_mask_output_.wstring());
         std::wostringstream header;
         header << L"MMD2FFMPEG output diagnostics\r\n"
                << L"Started: " << format_local_time() << L"\r\n"
@@ -1128,6 +1222,12 @@ private:
             success = MoveFileExW(partial_output_.c_str(), final_output_.c_str(),
                                   MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
         } else success = false;
+        if (success && !partial_mask_output_.empty()) {
+            const bool mask_ready = std::filesystem::exists(partial_mask_output_, error) &&
+                                    std::filesystem::file_size(partial_mask_output_, error) > 0;
+            success = mask_ready && MoveFileExW(partial_mask_output_.c_str(), final_mask_output_.c_str(),
+                                                 MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
+        }
         if (success && std::filesystem::exists(final_output_, error)) output_size = std::filesystem::file_size(final_output_, error);
         const double actual_fps = elapsed.count() > 0
             ? static_cast<double>(input_frame_count_) * 1000.0 / static_cast<double>(elapsed.count()) : 0.0;
@@ -1139,13 +1239,17 @@ private:
                 << L"Elapsed: " << elapsed.count() << L" ms\r\n"
                 << L"FFmpeg exit code: " << exit_code << L"\r\n"
                 << L"Result: " << (success ? L"success" : L"failed") << L"\r\n";
-        if (success) summary << L"Output size: " << output_size << L" bytes\r\n";
+        if (success) {
+            summary << L"Output size: " << output_size << L" bytes\r\n";
+            if (!final_mask_output_.empty()) summary << L"Alpha mask: " << final_mask_output_.wstring() << L"\r\n";
+        }
         else summary << L"Partial output size: " << partial_size << L" bytes\r\n";
         if (!success && !partial_output_.empty()) {
             const bool removed = std::filesystem::remove(partial_output_, error) ||
-                                 !std::filesystem::exists(partial_output_, error);
+                                  !std::filesystem::exists(partial_output_, error);
             summary << L"Partial output cleanup: " << (removed ? L"success" : L"failed") << L"\r\n";
         }
+        if (!success && !partial_mask_output_.empty()) std::filesystem::remove(partial_mask_output_, error);
         write_log_line(log_file_, summary.str());
         close_handle(log_file_);
         if (success && !avi_output_.empty()) {
@@ -1197,7 +1301,7 @@ private:
     DMO_MEDIA_TYPE input_type_{}; DMO_MEDIA_TYPE output_type_{};
     Settings settings_{};
     HANDLE process_ = nullptr, process_thread_ = nullptr, stdin_write_ = nullptr, job_ = nullptr, log_file_ = nullptr;
-    std::filesystem::path final_output_, partial_output_, avi_output_, log_path_;
+    std::filesystem::path final_output_, partial_output_, final_mask_output_, partial_mask_output_, avi_output_, log_path_;
     int width_ = 0, height_ = 0, bits_ = 0; LONG stride_ = 0;
     bool bottom_up_ = false, started_ = false, pending_ = false;
     std::uint64_t input_frame_count_ = 0;
@@ -1275,9 +1379,13 @@ public:
         if (!window_) return E_UNEXPECTED;
         Settings candidate = settings_;
         candidate.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
-        candidate.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" :
-                          combo_text(ID_CODEC) == L"AV1" ? L"av1" : L"hevc";
-        candidate.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && candidate.codec != L"avc" ? 10 : 8;
+        candidate.codec = combo_text(ID_CODEC) == L"AVC (H.264)" ? L"avc" : combo_text(ID_CODEC) == L"AV1" ? L"av1" :
+                          combo_text(ID_CODEC) == L"VP9" ? L"vp9" : combo_text(ID_CODEC) == L"ProRes (prores_ks)" ? L"prores" : L"hevc";
+        candidate.bit_depth = combo_text(ID_DEPTH) == L"10-bit" && candidate.codec != L"avc" && candidate.codec != L"vp9" ? 10 : 8;
+        candidate.chroma = combo_index(ID_CHROMA) == 1 ? L"422" : combo_index(ID_CHROMA) == 2 ? L"444" : L"420";
+        candidate.alpha_mode = combo_index(ID_ALPHA) == 1 ? L"rgba" : combo_index(ID_ALPHA) == 2 ? L"mask" : L"none";
+        candidate.mask_output = combo_index(ID_MASK_OUTPUT) == 1 ? L"separate" : L"stacked";
+        candidate.color_space = combo_index(ID_COLORSPACE) == 0 ? L"bt601" : combo_index(ID_COLORSPACE) == 2 ? L"bt2020" : L"bt709";
         candidate.preset = combo_index(ID_BACKEND) == 3 ? (combo_index(ID_PRESET) == 0 ? 1 : combo_index(ID_PRESET) == 1 ? 4 : 7) : combo_index(ID_PRESET) + 1;
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
@@ -1327,6 +1435,7 @@ private:
     }
     void create_controls() {
         tab_ = GetDlgItem(window_, ID_TAB);
+        video_tab_ = GetDlgItem(window_, ID_VIDEO_TAB);
         audio_intro_ = GetDlgItem(window_, ID_AUDIO_INTRO);
         audio_help_ = GetDlgItem(window_, ID_AUDIO_HELP);
         audio_labels_ = {GetDlgItem(window_, ID_LABEL_AUDIO_FORMAT), GetDlgItem(window_, ID_LABEL_AUDIO_RATE)};
@@ -1340,14 +1449,22 @@ private:
         item.pszText = const_cast<wchar_t*>(L"Audio"); TabCtrl_InsertItem(tab_, 1, &item);
         item.pszText = const_cast<wchar_t*>(L"Settings"); TabCtrl_InsertItem(tab_, 2, &item);
         TabCtrl_SetCurSel(tab_, 0);
+        item.pszText = const_cast<wchar_t*>(L"Encoding"); TabCtrl_InsertItem(video_tab_, 0, &item);
+        item.pszText = const_cast<wchar_t*>(L"Color"); TabCtrl_InsertItem(video_tab_, 1, &item);
+        TabCtrl_SetCurSel(video_tab_, 0);
 
         updating_command_ = true;
         add_combo(ID_LANGUAGE, {L"系統預設", L"繁體中文", L"簡體中文", L"日本語", L"English"}, language_index(settings_.language));
         add_combo(ID_BACKEND, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
-        add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1"}, settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : 1);
+        add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes (prores_ks)"},
+                  settings_.codec == L"avc" ? 0 : settings_.codec == L"av1" ? 2 : settings_.codec == L"vp9" ? 3 : settings_.codec == L"prores" ? 4 : 1);
         add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
         add_combo(ID_PRESET, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
         add_combo(ID_RATE, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        add_combo(ID_ALPHA, {L"None", L"4-channel", L"Black/white mask"}, settings_.alpha_mode == L"rgba" ? 1 : settings_.alpha_mode == L"mask" ? 2 : 0);
+        add_combo(ID_MASK_OUTPUT, {L"Stack below (height x2)", L"Separate alpha video"}, settings_.mask_output == L"separate" ? 1 : 0);
+        add_combo(ID_CHROMA, {L"4:2:0", L"4:2:2", L"4:4:4"}, settings_.chroma == L"422" ? 1 : settings_.chroma == L"444" ? 2 : 0);
+        add_combo(ID_COLORSPACE, {L"BT.601", L"BT.709", L"BT.2020"}, settings_.color_space == L"bt601" ? 0 : settings_.color_space == L"bt2020" ? 2 : 1);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
         add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
         SetWindowTextW(GetDlgItem(window_, ID_QP), std::to_wstring(settings_.qp).c_str());
@@ -1362,12 +1479,9 @@ private:
         switch_tab(0);
     }
     void switch_tab(int page) {
-        const std::array<int, 16> video{ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
-                                        ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
-                                        ID_TEST_REQUIREMENT, ID_LABEL_BACKEND, ID_LABEL_CODEC};
-        const std::array<int, 6> video_more{ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP, ID_LABEL_BITRATE, ID_COMMAND_HEADING};
-        for (const int id : video) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
-        for (const int id : video_more) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
+        const std::array<int, 9> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
+                                               ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_VIDEO_TAB};
+        for (const int id : video_bottom) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(audio_intro_, page == 1 ? SW_SHOW : SW_HIDE);
@@ -1377,7 +1491,24 @@ private:
         ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
         active_tab_ = page;
         ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
+        update_video_subtab_visibility();
         rebuild_layout();
+    }
+    void switch_video_tab(int page) {
+        active_video_tab_ = std::clamp(page, 0, 1);
+        update_video_subtab_visibility();
+        rebuild_layout();
+    }
+    void update_video_subtab_visibility() {
+        const bool video_visible = active_tab_ == 0;
+        const std::array<int, 12> encoding{ID_BACKEND, ID_CODEC, ID_DEPTH, ID_PRESET, ID_RATE, ID_QP, ID_BITRATE,
+                                            ID_LABEL_BACKEND, ID_LABEL_CODEC, ID_LABEL_DEPTH, ID_LABEL_PRESET, ID_LABEL_RATE};
+        const std::array<int, 2> encoding_more{ID_LABEL_QP, ID_LABEL_BITRATE};
+        const std::array<int, 8> color{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE,
+                                        ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE};
+        for (const int id : encoding) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
+        for (const int id : encoding_more) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
+        for (const int id : color) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 1 ? SW_SHOW : SW_HIDE);
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1452,12 +1583,25 @@ private:
             MessageBoxW(window_, text.open_log_failed_message, text.log_title, MB_OK | MB_ICONERROR);
     }
     void update_controls() {
-        const bool avc = combo_index(ID_CODEC) == 0;
-        if (avc) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
-        EnableWindow(GetDlgItem(window_, ID_DEPTH), !avc);
+        const int codec = combo_index(ID_CODEC);
+        const bool avc = codec == 0;
+        const bool vp9 = codec == 3;
+        const bool prores = codec == 4;
+        if (avc || vp9) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 0);
+        if (prores) ComboBox_SetCurSel(GetDlgItem(window_, ID_DEPTH), 1);
+        if (vp9 || prores) ComboBox_SetCurSel(GetDlgItem(window_, ID_BACKEND), 0);
+        EnableWindow(GetDlgItem(window_, ID_BACKEND), !vp9 && !prores);
+        EnableWindow(GetDlgItem(window_, ID_DEPTH), !avc && !vp9);
         const bool bitrate = combo_index(ID_RATE) == 2;
-        EnableWindow(GetDlgItem(window_, ID_QP), !bitrate);
-        EnableWindow(GetDlgItem(window_, ID_BITRATE), bitrate);
+        EnableWindow(GetDlgItem(window_, ID_RATE), !prores);
+        EnableWindow(GetDlgItem(window_, ID_QP), !bitrate && !prores);
+        EnableWindow(GetDlgItem(window_, ID_BITRATE), bitrate && !prores);
+        const bool rgba_supported = vp9 || prores;
+        if (!rgba_supported && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_ALPHA), 2);
+        const bool mask = combo_index(ID_ALPHA) == 2;
+        EnableWindow(GetDlgItem(window_, ID_MASK_OUTPUT), mask);
+        if (prores && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_CHROMA), 2);
+        EnableWindow(GetDlgItem(window_, ID_CHROMA), !(prores && combo_index(ID_ALPHA) == 1));
     }
     int combo_index(int id) const { return static_cast<int>(ComboBox_GetCurSel(GetDlgItem(window_, id))); }
     std::wstring combo_text(int id) const {
@@ -1476,8 +1620,12 @@ private:
     }
     void sync_structured_settings() {
         settings_.backend = combo_index(ID_BACKEND) == 0 ? L"cpu" : combo_index(ID_BACKEND) == 2 ? L"qsv" : combo_index(ID_BACKEND) == 3 ? L"amf" : L"nvenc";
-        settings_.codec = combo_index(ID_CODEC) == 0 ? L"avc" : combo_index(ID_CODEC) == 2 ? L"av1" : L"hevc";
-        settings_.bit_depth = combo_index(ID_DEPTH) == 1 && settings_.codec != L"avc" ? 10 : 8;
+        settings_.codec = combo_index(ID_CODEC) == 0 ? L"avc" : combo_index(ID_CODEC) == 2 ? L"av1" : combo_index(ID_CODEC) == 3 ? L"vp9" : combo_index(ID_CODEC) == 4 ? L"prores" : L"hevc";
+        settings_.bit_depth = combo_index(ID_DEPTH) == 1 && settings_.codec != L"avc" && settings_.codec != L"vp9" ? 10 : 8;
+        settings_.chroma = combo_index(ID_CHROMA) == 1 ? L"422" : combo_index(ID_CHROMA) == 2 ? L"444" : L"420";
+        settings_.alpha_mode = combo_index(ID_ALPHA) == 1 ? L"rgba" : combo_index(ID_ALPHA) == 2 ? L"mask" : L"none";
+        settings_.mask_output = combo_index(ID_MASK_OUTPUT) == 1 ? L"separate" : L"stacked";
+        settings_.color_space = combo_index(ID_COLORSPACE) == 0 ? L"bt601" : combo_index(ID_COLORSPACE) == 2 ? L"bt2020" : L"bt709";
         settings_.preset = combo_index(ID_BACKEND) == 3 ? (combo_index(ID_PRESET) == 0 ? 1 : combo_index(ID_PRESET) == 1 ? 4 : 7) : combo_index(ID_PRESET) + 1;
         settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
@@ -1575,23 +1723,35 @@ private:
             row_y += row_height;
         };
         if (active_tab_ == 0) {
-            const int label_width = maximum_text_width({ID_LABEL_BACKEND, ID_LABEL_CODEC, ID_LABEL_DEPTH,
-                                                        ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP}, dlu_x(52));
-            for (const auto& row : std::array<std::pair<int, int>, 5>{{
-                    {ID_LABEL_BACKEND, ID_BACKEND}, {ID_LABEL_CODEC, ID_CODEC}, {ID_LABEL_DEPTH, ID_DEPTH},
-                    {ID_LABEL_PRESET, ID_PRESET}, {ID_LABEL_RATE, ID_RATE}}}) {
-                add_form_row(row.first, row.second, label_width, y);
+            const int inner_height = dlu_y(92);
+            add_layout(ID_VIDEO_TAB, margin_x, y, full_width, tab_height);
+            int inner_y = y + tab_height + gap;
+            if (active_video_tab_ == 0) {
+                const int label_width = maximum_text_width({ID_LABEL_BACKEND, ID_LABEL_CODEC, ID_LABEL_DEPTH,
+                                                            ID_LABEL_PRESET, ID_LABEL_RATE, ID_LABEL_QP}, dlu_x(52));
+                for (const auto& row : std::array<std::pair<int, int>, 5>{{
+                        {ID_LABEL_BACKEND, ID_BACKEND}, {ID_LABEL_CODEC, ID_CODEC}, {ID_LABEL_DEPTH, ID_DEPTH},
+                        {ID_LABEL_PRESET, ID_PRESET}, {ID_LABEL_RATE, ID_RATE}}}) {
+                    add_form_row(row.first, row.second, label_width, inner_y);
+                }
+                const int content_width = right - margin_x;
+                const int middle = margin_x + content_width / 2;
+                const int qp_left = margin_x + label_width + field_gap;
+                const int bitrate_label_width = text_width(ID_LABEL_BITRATE, dlu_x(52));
+                const int bitrate_left = middle + bitrate_label_width + field_gap;
+                add_layout(ID_LABEL_QP, margin_x, inner_y + dlu_y(2), label_width, label_height);
+                add_layout(ID_QP, qp_left, inner_y, std::max(1, middle - field_gap - qp_left), edit_height);
+                add_layout(ID_LABEL_BITRATE, middle, inner_y + dlu_y(2), bitrate_label_width, label_height);
+                add_layout(ID_BITRATE, bitrate_left, inner_y, std::max(1, right - bitrate_left), edit_height);
+            } else {
+                const int label_width = maximum_text_width({ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE}, dlu_x(64));
+                for (const auto& row : std::array<std::pair<int, int>, 4>{{
+                        {ID_LABEL_ALPHA, ID_ALPHA}, {ID_LABEL_MASK_OUTPUT, ID_MASK_OUTPUT},
+                        {ID_LABEL_CHROMA, ID_CHROMA}, {ID_LABEL_COLORSPACE, ID_COLORSPACE}}}) {
+                    add_form_row(row.first, row.second, label_width, inner_y);
+                }
             }
-            const int content_width = right - margin_x;
-            const int middle = margin_x + content_width / 2;
-            const int qp_left = margin_x + label_width + field_gap;
-            const int bitrate_label_width = text_width(ID_LABEL_BITRATE, dlu_x(52));
-            const int bitrate_left = middle + bitrate_label_width + field_gap;
-            add_layout(ID_LABEL_QP, margin_x, y + dlu_y(2), label_width, label_height);
-            add_layout(ID_QP, qp_left, y, std::max(1, middle - field_gap - qp_left), edit_height);
-            add_layout(ID_LABEL_BITRATE, middle, y + dlu_y(2), bitrate_label_width, label_height);
-            add_layout(ID_BITRATE, bitrate_left, y, std::max(1, right - bitrate_left), edit_height);
-            y += row_height;
+            y += inner_height + gap;
             add_layout(ID_COMMAND_HEADING, margin_x, y, full_width, label_height);
             y += label_height + dlu_y(2);
             add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, dlu_y(24));
@@ -1700,6 +1860,10 @@ private:
         for (int index = 0; index < 3; ++index) {
             TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(tabs[index]); TabCtrl_SetItem(tab_, index, &item);
         }
+        const wchar_t* video_tabs[] = {text.encoding, text.color};
+        for (int index = 0; index < 2; ++index) {
+            TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(video_tabs[index]); TabCtrl_SetItem(video_tab_, index, &item);
+        }
         SetWindowTextW(audio_labels_[0], text.audio_format);
         SetWindowTextW(audio_labels_[1], text.sample_rate_depth);
         const int format = combo_index(ID_AUDIO_FORMAT), rate = combo_index(ID_AUDIO_RATE);
@@ -1716,6 +1880,8 @@ private:
         const int backend = combo_index(ID_BACKEND);
         reset_combo(ID_BACKEND, {(std::wstring(L"CPU (") + options.software + L")").c_str(),
                                  L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, backend);
+        const int codec = combo_index(ID_CODEC);
+        reset_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes (prores_ks)"}, codec);
         rebuild_backend_options();
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_LANGUAGE), text.language);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_BACKEND), text.encoder);
@@ -1725,6 +1891,10 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_RATE), text.rate_control);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_QP), text.quality);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_BITRATE), text.bitrate);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_ALPHA), text.alpha);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_MASK_OUTPUT), text.mask_output);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_CHROMA), text.chroma);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_COLORSPACE), text.color_space);
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_HEADING), text.command_heading);
         SetWindowTextW(GetDlgItem(window_, ID_TEST_REQUIREMENT), text.test_required);
         SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
@@ -1800,10 +1970,13 @@ private:
             self->scroll_to(self->scroll_offset_ - GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA * 80);
             return TRUE;
         }
-        else if (message == WM_NOTIFY && self && reinterpret_cast<NMHDR*>(lparam)->idFrom == ID_TAB &&
-                 reinterpret_cast<NMHDR*>(lparam)->code == TCN_SELCHANGE) {
-            self->switch_tab(TabCtrl_GetCurSel(self->tab_));
-            return TRUE;
+        else if (message == WM_NOTIFY && self) {
+            const auto* header = reinterpret_cast<NMHDR*>(lparam);
+            if (header->hwndFrom == self->tab_ && header->code == TCN_SELCHANGE) { self->switch_tab(TabCtrl_GetCurSel(self->tab_)); return TRUE; }
+            if ((header->hwndFrom == self->video_tab_ || header->idFrom == ID_VIDEO_TAB) && header->code == TCN_SELCHANGE) {
+                self->switch_video_tab(TabCtrl_GetCurSel(self->video_tab_));
+                return TRUE;
+            }
         }
         else if (message == WM_CTLCOLOREDIT && self && reinterpret_cast<HWND>(lparam) == self->github_link_) {
             SetTextColor(reinterpret_cast<HDC>(wparam), RGB(0, 102, 204));
@@ -1835,6 +2008,7 @@ private:
     IPropertyPageSite* site_ = nullptr;
     HWND window_ = nullptr;
     HWND tab_ = nullptr;
+    HWND video_tab_ = nullptr;
     HWND settings_info_ = nullptr;
     HWND github_link_ = nullptr;
     HWND audio_intro_ = nullptr;
@@ -1842,6 +2016,7 @@ private:
     std::array<HWND, 2> audio_labels_{};
     std::array<HWND, 2> audio_controls_{};
     int active_tab_ = 0;
+    int active_video_tab_ = 0;
     Settings settings_{};
     bool dirty_ = false;
     bool updating_command_ = false;
