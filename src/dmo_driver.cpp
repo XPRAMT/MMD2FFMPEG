@@ -1769,6 +1769,7 @@ private:
         audio_controls_ = {GetDlgItem(window_, ID_AUDIO_FORMAT), GetDlgItem(window_, ID_AUDIO_RATE)};
         settings_info_ = GetDlgItem(window_, ID_SETTINGS_INFO);
         github_link_ = GetDlgItem(window_, ID_GITHUB_LINK);
+        SetWindowTextW(GetDlgItem(window_, ID_COMPAT_WARNING), L"\x26A0");
 
         TCITEMW item{};
         item.mask = TCIF_TEXT;
