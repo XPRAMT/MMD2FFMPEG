@@ -932,7 +932,8 @@ bool uses_nvenc_bridge(const Settings& settings) {
 }
 
 DWORD encoder_test_timeout_ms(const Settings& settings) {
-    return uses_nvenc_bridge(settings) ? 30000u : 10000u;
+    static_cast<void>(settings);
+    return 10000u;
 }
 
 void write_log_line(HANDLE file, const std::wstring& text) {
@@ -955,6 +956,38 @@ std::wstring decode_process_output(const std::vector<char>& bytes) {
     std::wstring result(static_cast<std::size_t>(length), L'\0');
     MultiByteToWideChar(code_page, 0, bytes.data(), source_length, result.data(), length);
     return trim(result);
+}
+
+void drain_process_output(HANDLE output_read, std::vector<char>& output) {
+    std::array<char, 4096> buffer{};
+    for (;;) {
+        DWORD available = 0;
+        if (!PeekNamedPipe(output_read, nullptr, 0, nullptr, &available, nullptr) || available == 0) return;
+        DWORD read = 0;
+        const DWORD request = std::min<DWORD>(available, static_cast<DWORD>(buffer.size()));
+        if (!ReadFile(output_read, buffer.data(), request, &read, nullptr) || read == 0) return;
+        if (output.size() < 16384) {
+            const std::size_t retained = std::min<std::size_t>(read, 16384 - output.size());
+            output.insert(output.end(), buffer.data(), buffer.data() + retained);
+        }
+    }
+}
+
+DWORD wait_for_process_with_output(HANDLE process, HANDLE output_read, DWORD timeout_ms,
+                                   std::vector<char>& output) {
+    const ULONGLONG deadline = GetTickCount64() + timeout_ms;
+    for (;;) {
+        drain_process_output(output_read, output);
+        const ULONGLONG now = GetTickCount64();
+        if (now >= deadline) return WAIT_TIMEOUT;
+        const DWORD remaining = static_cast<DWORD>(std::min<ULONGLONG>(deadline - now, 50));
+        const DWORD wait_result = WaitForSingleObject(process, remaining);
+        if (wait_result == WAIT_OBJECT_0) {
+            drain_process_output(output_read, output);
+            return wait_result;
+        }
+        if (wait_result != WAIT_TIMEOUT) return wait_result;
+    }
 }
 
 std::wstring ffmpeg_version_line(const std::filesystem::path& ffmpeg_path) {
@@ -980,16 +1013,13 @@ std::wstring ffmpeg_version_line(const std::filesystem::path& ffmpeg_path) {
         close_handle(output_read);
         return L"Unavailable (Windows error " + std::to_wstring(GetLastError()) + L")";
     }
-    const DWORD wait_result = WaitForSingleObject(process.hProcess, 5000);
+    std::vector<char> output;
+    const DWORD wait_result = wait_for_process_with_output(process.hProcess, output_read, 5000, output);
     if (wait_result == WAIT_TIMEOUT) {
         TerminateProcess(process.hProcess, 1);
         WaitForSingleObject(process.hProcess, 1000);
+        drain_process_output(output_read, output);
     }
-    std::vector<char> output;
-    std::array<char, 4096> buffer{};
-    DWORD read = 0;
-    while (output.size() < 16384 && ReadFile(output_read, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) && read)
-        output.insert(output.end(), buffer.data(), buffer.data() + read);
     close_handle(output_read);
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
@@ -1086,16 +1116,13 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     }
 
     const DWORD timeout_ms = encoder_test_timeout_ms(settings);
-    const DWORD wait_result = WaitForSingleObject(process.hProcess, timeout_ms);
+    std::vector<char> output;
+    const DWORD wait_result = wait_for_process_with_output(process.hProcess, output_read, timeout_ms, output);
     if (wait_result == WAIT_TIMEOUT) {
         TerminateProcess(process.hProcess, 1);
         WaitForSingleObject(process.hProcess, 1000);
+        drain_process_output(output_read, output);
     }
-    std::vector<char> output;
-    std::array<char, 4096> buffer{};
-    DWORD read = 0;
-    while (output.size() < 16384 && ReadFile(output_read, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) && read)
-        output.insert(output.end(), buffer.data(), buffer.data() + read);
     DWORD exit_code = 1;
     GetExitCodeProcess(process.hProcess, &exit_code);
     close_handle(output_read);
