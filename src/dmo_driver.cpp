@@ -2136,7 +2136,7 @@ private:
         add_combo(ID_MASK_OUTPUT, {L"Stack x2", L"Separate"}, settings_.mask_output == L"separate" ? 1 : 0);
         add_combo(ID_CHROMA, {L"4:2:0", L"4:2:2", L"4:4:4"}, settings_.chroma == L"422" ? 1 : settings_.chroma == L"444" ? 2 : 0);
         add_combo(ID_COLORSPACE, {L"BT.601", L"BT.709", L"BT.2020"}, settings_.color_space == L"bt601" ? 0 : settings_.color_space == L"bt2020" ? 2 : 1);
-        add_combo(ID_COLOR_RANGE, {L"TV", L"PC"}, settings_.color_range == L"pc" ? 1 : 0);
+        add_combo(ID_COLOR_RANGE, {L"PC (Full)", L"TV (Limited)"}, settings_.color_range == L"pc" ? 0 : 1);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
         add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
         SetWindowTextW(GetDlgItem(window_, ID_QP), std::to_wstring(settings_.qp).c_str());
