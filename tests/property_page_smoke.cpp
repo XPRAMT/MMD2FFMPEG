@@ -101,7 +101,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 35) {
+        tooltip_count != 39) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -167,8 +167,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 17;
     }
     HWND video_tab = GetDlgItem(page_window, ID_VIDEO_TAB);
-    if (!video_tab || TabCtrl_GetItemCount(video_tab) != 2) {
-        std::wcerr << L"Video page does not expose Encoding and Color sub-tabs.\n";
+    if (!video_tab || TabCtrl_GetItemCount(video_tab) != 3) {
+        std::wcerr << L"Video page does not expose Encoding, Color, and Frame structure sub-tabs.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 22;
     }
     const RECT video_tab_bounds = child_rect(page_window, ID_VIDEO_TAB);
@@ -214,14 +214,43 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"FFmpeg command area did not remain fixed below the video sub-tabs.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 24;
     }
+    TabCtrl_SetCurSel(video_tab, 2);
+    const LRESULT frame_tab_result = SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
+    const int frame_ids[]{ID_GOP, ID_BFRAMES, ID_LABEL_GOP, ID_LABEL_BFRAMES};
+    for (const int id : frame_ids) {
+        const RECT rectangle = child_rect(page_window, id);
+        if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(rectangle)) {
+            std::wcerr << L"Frame structure sub-tab control is unavailable: " << id
+                       << L" notify_result=" << frame_tab_result << L"\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 32;
+        }
+    }
+    const RECT command_on_frame_structure = child_rect(page_window, ID_COMMAND);
+    if (command_before_color.top != command_on_frame_structure.top || command_before_color.bottom != command_on_frame_structure.bottom) {
+        std::wcerr << L"FFmpeg command area did not remain fixed below the Frame structure sub-tab.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 33;
+    }
     TabCtrl_SetCurSel(video_tab, 0);
     video_tab_change.code = TCN_SELCHANGE;
     SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
     HWND codec_combo = GetDlgItem(page_window, ID_CODEC);
     HWND depth_combo = GetDlgItem(page_window, ID_DEPTH);
     HWND alpha_combo = GetDlgItem(page_window, ID_ALPHA);
+    HWND gop_edit = GetDlgItem(page_window, ID_GOP);
+    HWND bframes_edit = GetDlgItem(page_window, ID_BFRAMES);
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
+    SendMessageW(codec_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CODEC, CBN_SELCHANGE), reinterpret_cast<LPARAM>(codec_combo));
+    SetWindowTextW(gop_edit, L"120");
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_GOP, EN_CHANGE), reinterpret_cast<LPARAM>(gop_edit));
+    SetWindowTextW(bframes_edit, L"2");
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_BFRAMES, EN_CHANGE), reinterpret_cast<LPARAM>(bframes_edit));
+    const std::wstring frame_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (frame_command.find(L"-g 120") == std::wstring::npos || frame_command.find(L"-bf 2") == std::wstring::npos) {
+        std::wcerr << L"GOP and B-frame settings were not mapped to the FFmpeg command.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 34;
+    }
     SendMessageW(codec_combo, CB_SETCURSEL, 3, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CODEC, CBN_SELCHANGE), reinterpret_cast<LPARAM>(codec_combo));
     if (!IsWindowEnabled(depth_combo)) {
@@ -233,6 +262,10 @@ int wmain(int argument_count, wchar_t** arguments) {
     if (SendMessageW(depth_combo, CB_GETCURSEL, 0, 0) != 1) {
         std::wcerr << L"VP9 10-bit selection was not retained.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 28;
+    }
+    if (IsWindowEnabled(bframes_edit)) {
+        std::wcerr << L"VP9 must disable the unsupported B-frame control.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 35;
     }
     std::array<wchar_t, 16> github_class{};
     GetClassNameW(GetDlgItem(page_window, ID_GITHUB_LINK), github_class.data(), static_cast<int>(github_class.size()));

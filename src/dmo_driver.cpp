@@ -61,6 +61,8 @@ struct Settings {
     std::wstring rate_control = L"crf";
     int qp = 18;
     int bitrate_kbps = 20000;
+    int gop = 300;
+    int b_frames = 3;
     std::wstring audio_format = L"flac";
     std::wstring audio_sample_rate = L"original";
     std::wstring audio_bit_depth = L"original";
@@ -78,14 +80,15 @@ struct CodecCapability {
     bool rgba_supports_10bit;
     bool supports_rate_control;
     bool forces_444_for_rgba;
+    bool supports_b_frames;
 };
 
 constexpr std::array<CodecCapability, 5> kCodecCapabilities{{
-    {L"avc", L"AVC (H.264)", false, false, false, false, false, true, false},
-    {L"hevc", L"HEVC (H.265)", false, true, false, false, false, true, false},
-    {L"av1", L"AV1", false, true, false, false, false, true, false},
-    {L"vp9", L"VP9", true, true, false, true, false, true, false},
-    {L"prores", L"ProRes", true, true, true, true, true, false, true},
+    {L"avc", L"AVC (H.264)", false, false, false, false, false, true, false, true},
+    {L"hevc", L"HEVC (H.265)", false, true, false, false, false, true, false, true},
+    {L"av1", L"AV1", false, true, false, false, false, true, false, true},
+    {L"vp9", L"VP9", true, true, false, true, false, true, false, false},
+    {L"prores", L"ProRes", true, true, true, true, true, false, true, false},
 }};
 
 const CodecCapability& codec_capability(std::wstring_view key) {
@@ -135,6 +138,8 @@ struct UiStrings {
     const wchar_t* chroma;
     const wchar_t* color_space;
     const wchar_t* color_range;
+    const wchar_t* gop;
+    const wchar_t* b_frames;
     const wchar_t* command_heading;
     const wchar_t* not_tested;
     const wchar_t* testing;
@@ -172,6 +177,8 @@ struct UiTooltips {
     const wchar_t* rate_control;
     const wchar_t* quality;
     const wchar_t* bitrate;
+    const wchar_t* gop;
+    const wchar_t* b_frames;
     const wchar_t* alpha;
     const wchar_t* mask_output;
     const wchar_t* chroma;
@@ -200,6 +207,7 @@ struct TabUiStrings {
     const wchar_t* github;
     const wchar_t* encoding;
     const wchar_t* color;
+    const wchar_t* frame_structure;
 };
 
 UiLanguage system_ui_language() {
@@ -222,10 +230,10 @@ UiLanguage ui_language(const std::wstring& value) {
 }
 
 const TabUiStrings& tab_ui_strings(UiLanguage language) {
-    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後，自動讀取AVI內含音訊，合併進MKV檔案，花費時間取決於硬碟速度。注意：MMD必須從第0幀開始輸出，AVI中才會包含音訊檔。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，Hi-Res模式以原始取樣率2倍及24bit編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub", L"編碼", L"色彩"};
-    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后，自动读取AVI内含音频，合并进MKV文件，耗时取决于硬盘速度。注意：MMD必须从第0帧开始输出，AVI中才会包含音频文件。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，Hi-Res模式以原始采样率2倍及24bit编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub", L"编码", L"色彩"};
-    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を自動的に読み取り、MKV に結合します。所要時間はディスク速度に依存します。注意：AVI に音声を含めるには、MMD の出力開始フレームを 0 にしてください。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、Hi-Res モードでは元の2倍かつ24bitで再エンコードし、bilibili Hi-Res 判定に対応します。", L"バージョン", L"作者", L"GitHub", L"エンコード", L"カラー"};
-    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio embedded in the AVI is automatically read and merged into the MKV. Time required depends on disk speed. Note: MMD must export from frame 0 for the AVI to contain audio.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, Hi-Res mode encodes at twice the original sample rate and 24-bit for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub", L"Encoding", L"Color"};
+    static constexpr TabUiStrings traditional{L"影片", L"音訊", L"設定", L"音訊格式", L"取樣率/位元深度", L"影片編碼完成後，自動讀取AVI內含音訊，合併進MKV檔案，花費時間取決於硬碟速度。注意：MMD必須從第0幀開始輸出，AVI中才會包含音訊檔。", L"原始", L"Hi-Res", L"如果原始取樣率小於48KHz，Hi-Res模式以原始取樣率2倍及24bit編碼，以通過 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub", L"編碼", L"色彩", L"幀結構"};
+    static constexpr TabUiStrings simplified{L"视频", L"音频", L"设置", L"音频格式", L"采样率/位深度", L"视频编码完成后，自动读取AVI内含音频，合并进MKV文件，耗时取决于硬盘速度。注意：MMD必须从第0帧开始输出，AVI中才会包含音频文件。", L"原始", L"Hi-Res", L"如果原始采样率小于48KHz，Hi-Res模式以原始采样率2倍及24bit编码，以通过 bilibili Hi-Res 判定。", L"版本", L"作者", L"GitHub", L"编码", L"色彩", L"帧结构"};
+    static constexpr TabUiStrings japanese{L"ビデオ", L"オーディオ", L"設定", L"音声形式", L"サンプルレート/ビット深度", L"動画エンコード完了後、AVI 内の音声を自動的に読み取り、MKV に結合します。所要時間はディスク速度に依存します。注意：AVI に音声を含めるには、MMD の出力開始フレームを 0 にしてください。", L"オリジナル", L"Hi-Res", L"元のサンプルレートが48kHz未満の場合、Hi-Res モードでは元の2倍かつ24bitで再エンコードし、bilibili Hi-Res 判定に対応します。", L"バージョン", L"作者", L"GitHub", L"エンコード", L"カラー", L"フレーム構造"};
+    static constexpr TabUiStrings english{L"Video", L"Audio", L"Settings", L"Audio format", L"Sample rate / bit depth", L"After video encoding, audio embedded in the AVI is automatically read and merged into the MKV. Time required depends on disk speed. Note: MMD must export from frame 0 for the AVI to contain audio.", L"Original", L"Hi-Res", L"If the source sample rate is below 48 kHz, Hi-Res mode encodes at twice the original sample rate and 24-bit for bilibili Hi-Res detection.", L"Version", L"Author", L"GitHub", L"Encoding", L"Color", L"Frame structure"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -237,7 +245,7 @@ const TabUiStrings& tab_ui_strings(UiLanguage language) {
 const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings traditional{
         L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
-        L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"輸出範圍", L"完整 FFmpeg 指令（中間區段可編輯）",
+        L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"輸出範圍", L"GOP / I 幀間隔", L"B 幀間隔", L"完整 FFmpeg 指令（中間區段可編輯）",
         L"編碼器狀態：尚未測試", L"編碼器狀態：測試中…", L"編碼器狀態：測試通過",
         L"編碼器狀態：設定已變更，請重新測試", L"編碼器狀態：測試失敗 - ",
         L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟log",
@@ -246,7 +254,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"需要測試 MMD2FFMPEG 編碼器"};
     static constexpr UiStrings simplified{
         L"MMD2FFMPEG 编码器设置", L"语言", L"编码器", L"编码格式", L"位深度", L"编码预设",
-        L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"完整 FFmpeg 命令（中间部分可编辑）",
+        L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"GOP / I 帧间隔", L"B 帧间隔", L"完整 FFmpeg 命令（中间部分可编辑）",
         L"编码器状态：尚未测试", L"编码器状态：测试中…", L"编码器状态：测试通过",
         L"编码器状态：设置已更改，请重新测试", L"编码器状态：测试失败 - ",
         L"测试通过后才能保存或应用。", L"测试编码", L"打开日志",
@@ -255,7 +263,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"需要测试 MMD2FFMPEG 编码器"};
     static constexpr UiStrings japanese{
         L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
-        L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"完全な FFmpeg コマンド（中央部分は編集可能）",
+        L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"GOP / I フレーム間隔", L"B フレーム間隔", L"完全な FFmpeg コマンド（中央部分は編集可能）",
         L"エンコーダー状態：未テスト", L"エンコーダー状態：テスト中…", L"エンコーダー状態：テスト合格",
         L"エンコーダー状態：設定が変更されました。再テストしてください", L"エンコーダー状態：テスト失敗 - ",
         L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログを開く",
@@ -264,7 +272,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"MMD2FFMPEG エンコーダーのテストが必要です"};
     static constexpr UiStrings english{
         L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
-        L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"Complete FFmpeg command (middle section is editable)",
+        L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"GOP / I-frame interval", L"B-frame interval", L"Complete FFmpeg command (middle section is editable)",
         L"Encoder status: not tested", L"Encoder status: testing...", L"Encoder status: test passed",
         L"Encoder status: settings changed; test again", L"Encoder status: test failed - ",
         L"Test must pass before saving or applying.", L"Test encoder", L"Open log",
@@ -306,6 +314,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"選擇固定品質、固定 QP 或目標位元率控制方式。",
         L"設定固定品質或 QP 的數值；數值意義會依目前的編碼器與控制方式而不同。",
         L"設定 VBR 目標位元率（kbps）。只有選擇 VBR 時會使用此值。",
+        L"設定 GOP 的最大長度，也就是 I 幀之間最多相隔多少畫面。I 幀是可獨立解碼的基準畫面；實際場景切換可能提早插入 I 幀。對應 FFmpeg 的 -g。",
+        L"設定每兩個 I/P 參考幀之間最多插入多少 B 幀。B 幀可同時參考前後 I/P 幀，通常能提高壓縮率但增加延遲；0 代表不使用 B 幀。對應 FFmpeg 的 -bf。",
         L"選擇透明輸出方式：無、4 通道，或黑白遮罩。4 通道僅適用於 VP9 與 ProRes。",
         L"黑白遮罩可堆疊在同一影片下方（高度 x2），或輸出為另一個遮罩影片。",
         L"選擇 4:2:0、4:2:2 或 4:4:4 色度取樣。部分 Alpha 組合會固定為 4:4:4。",
@@ -326,6 +336,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"选择固定质量、固定 QP 或目标比特率控制方式。",
         L"设置固定质量或 QP 的数值；数值含义会依当前的编码器与控制方式而不同。",
         L"设置 VBR 目标比特率（kbps）。只有选择 VBR 时会使用此值。",
+        L"设置 GOP 的最大长度，即 I 帧之间最多相隔多少画面。I 帧是可独立解码的基准画面；实际场景切换可能提早插入 I 帧。对应 FFmpeg 的 -g。",
+        L"设置每两个 I/P 参考帧之间最多插入多少 B 帧。B 帧可同时参考前后 I/P 帧，通常能提高压缩率但增加延迟；0 代表不使用 B 帧。对应 FFmpeg 的 -bf。",
         L"选择透明输出方式：无、4 通道，或黑白遮罩。4 通道仅适用于 VP9 和 ProRes。",
         L"黑白遮罩可堆叠在同一视频下方（高度 x2），或输出为另一个遮罩视频。",
         L"选择 4:2:0、4:2:2 或 4:4:4 色度采样。部分 Alpha 组合会固定为 4:4:4。",
@@ -346,6 +358,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"固定品質、固定 QP、または目標ビットレートの制御方法を選択します。",
         L"固定品質または QP の値を設定します。意味は現在のエンコーダーと制御方法によって異なります。",
         L"VBR の目標ビットレート（kbps）を設定します。VBR 選択時のみ使用されます。",
+        L"GOP の最大長、つまり I フレーム間の最大フレーム数を設定します。I フレームは単独でデコードできる基準画面です。シーン切替では早めに I フレームが挿入される場合があります。FFmpeg の -g に対応します。",
+        L"2 つの I/P 参照フレームの間に挿入する B フレームの最大数を設定します。B フレームは前後の I/P フレームを参照でき、圧縮率を高めますが遅延も増えます。0 は B フレームなしです。FFmpeg の -bf に対応します。",
         L"透明出力を選択します：なし、4 チャンネル、または白黒マスク。4 チャンネルは VP9 と ProRes のみ対応です。",
         L"白黒マスクは同じ動画の下に積み重ねる（高さ x2）か、別のマスク動画として出力できます。",
         L"4:2:0、4:2:2、4:4:4 のクロマサンプリングを選択します。一部のアルファ組み合わせでは 4:4:4 に固定されます。",
@@ -366,6 +380,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"Choose constant quality, constant QP, or target bitrate rate control.",
         L"Set the constant-quality or QP value. Its meaning depends on the active encoder and rate control.",
         L"Set the VBR target bitrate in kbps. This value is used only when VBR is selected.",
+        L"Set the maximum GOP length: the greatest number of frames between I-frames. An I-frame is an independently decodable reference picture; scene changes can insert one earlier. Maps to FFmpeg -g.",
+        L"Set the maximum number of B-frames between I/P reference frames. B-frames can reference both earlier and later I/P frames, usually improving compression at the cost of latency. Set 0 to disable B-frames. Maps to FFmpeg -bf.",
         L"Choose transparency output: none, 4-channel, or a black/white mask. 4-channel is available only with VP9 and ProRes.",
         L"Place the black/white mask below the same video (height x2), or write a separate mask video.",
         L"Choose 4:2:0, 4:2:2, or 4:4:4 chroma sampling. Some alpha combinations force 4:4:4.",
@@ -488,6 +504,8 @@ Settings load_settings() {
         else if (key == L"rate_control" && (value == L"crf" || value == L"qp" || value == L"vbr")) settings.rate_control = value;
         else if (key == L"qp") { try { settings.qp = std::clamp(std::stoi(value), 0, 51); } catch (...) {} }
         else if (key == L"bitrate_kbps") { try { settings.bitrate_kbps = std::clamp(std::stoi(value), 100, 1000000); } catch (...) {} }
+        else if (key == L"gop") { try { settings.gop = std::clamp(std::stoi(value), 1, 10000); } catch (...) {} }
+        else if (key == L"b_frames") { try { settings.b_frames = std::clamp(std::stoi(value), 0, 16); } catch (...) {} }
         else if (key == L"audio_format" && (value == L"flac" || value == L"wav" || value == L"none")) settings.audio_format = value;
         else if (key == L"audio_sample_rate" && (value == L"original" || value == L"hires")) settings.audio_sample_rate = value;
         else if (key == L"audio_bit_depth" && (value == L"original" || value == L"24")) settings.audio_bit_depth = value;
@@ -536,6 +554,8 @@ void save_settings(const Settings& settings) {
          << L"rate_control=" << settings.rate_control << L"\n"
          << L"qp=" << settings.qp << L"\n"
          << L"bitrate_kbps=" << settings.bitrate_kbps << L"\n"
+         << L"gop=" << settings.gop << L"\n"
+         << L"b_frames=" << settings.b_frames << L"\n"
          << L"audio_format=" << settings.audio_format << L"\n"
          << L"audio_sample_rate=" << settings.audio_sample_rate << L"\n"
          << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n";
@@ -640,6 +660,8 @@ std::wstring encoding_arguments(const Settings& settings) {
             args << L" -rc cqp -qp_i " << settings.qp << L" -qp_p " << settings.qp << L" -qp_b " << settings.qp;
         else args << L" -rc vbr_peak -b:v " << settings.bitrate_kbps << L"k";
     }
+    args << L" -g " << std::clamp(settings.gop, 1, 10000);
+    if (capability.supports_b_frames) args << L" -bf " << std::clamp(settings.b_frames, 0, 16);
     return args.str();
 }
 
@@ -1665,7 +1687,7 @@ private:
             SetPropW(window_, L"MMD2FFMPEG.TooltipWindow", tooltip_);
         }
         const auto& tip = ui_tooltips(ui_language(settings_.language));
-        const std::array<std::pair<int, const wchar_t*>, 35> items{{
+        const std::array<std::pair<int, const wchar_t*>, 39> items{{
             {ID_LABEL_LANGUAGE, tip.language}, {ID_LANGUAGE, tip.language},
             {ID_LABEL_BACKEND, tip.backend}, {ID_BACKEND, tip.backend},
             {ID_LABEL_CODEC, tip.codec}, {ID_CODEC, tip.codec},
@@ -1674,6 +1696,8 @@ private:
             {ID_LABEL_RATE, tip.rate_control}, {ID_RATE, tip.rate_control},
             {ID_LABEL_QP, tip.quality}, {ID_QP, tip.quality},
             {ID_LABEL_BITRATE, tip.bitrate}, {ID_BITRATE, tip.bitrate},
+            {ID_LABEL_GOP, tip.gop}, {ID_GOP, tip.gop},
+            {ID_LABEL_BFRAMES, tip.b_frames}, {ID_BFRAMES, tip.b_frames},
             {ID_LABEL_ALPHA, tip.alpha}, {ID_ALPHA, tip.alpha},
             {ID_LABEL_MASK_OUTPUT, tip.mask_output}, {ID_MASK_OUTPUT, tip.mask_output},
             {ID_LABEL_CHROMA, tip.chroma}, {ID_CHROMA, tip.chroma},
@@ -1705,6 +1729,7 @@ private:
         TabCtrl_SetCurSel(tab_, 0);
         item.pszText = const_cast<wchar_t*>(L"Encoding"); TabCtrl_InsertItem(video_tab_, 0, &item);
         item.pszText = const_cast<wchar_t*>(L"Color"); TabCtrl_InsertItem(video_tab_, 1, &item);
+        item.pszText = const_cast<wchar_t*>(L"Frame structure"); TabCtrl_InsertItem(video_tab_, 2, &item);
         TabCtrl_SetCurSel(video_tab_, 0);
 
         updating_command_ = true;
@@ -1723,6 +1748,8 @@ private:
         add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
         SetWindowTextW(GetDlgItem(window_, ID_QP), std::to_wstring(settings_.qp).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_BITRATE), std::to_wstring(settings_.bitrate_kbps).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_GOP), std::to_wstring(settings_.gop).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_BFRAMES), std::to_wstring(settings_.b_frames).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND), (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
@@ -1750,7 +1777,7 @@ private:
         rebuild_layout();
     }
     void switch_video_tab(int page) {
-        active_video_tab_ = std::clamp(page, 0, 1);
+        active_video_tab_ = std::clamp(page, 0, 2);
         update_video_subtab_visibility();
         rebuild_layout();
     }
@@ -1772,9 +1799,11 @@ private:
         const std::array<int, 2> encoding_more{ID_LABEL_QP, ID_LABEL_BITRATE};
         const std::array<int, 10> color{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE, ID_COLOR_RANGE,
                                          ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE, ID_LABEL_COLOR_RANGE};
+        const std::array<int, 4> frame_structure{ID_GOP, ID_BFRAMES, ID_LABEL_GOP, ID_LABEL_BFRAMES};
         for (const int id : encoding) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
         for (const int id : encoding_more) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
         for (const int id : color) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 1 ? SW_SHOW : SW_HIDE);
+        for (const int id : frame_structure) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 2 ? SW_SHOW : SW_HIDE);
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -1862,6 +1891,8 @@ private:
         EnableWindow(GetDlgItem(window_, ID_MASK_OUTPUT), mask);
         if (capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1) ComboBox_SetCurSel(GetDlgItem(window_, ID_CHROMA), 2);
         EnableWindow(GetDlgItem(window_, ID_CHROMA), !(capability.forces_444_for_rgba && combo_index(ID_ALPHA) == 1));
+        EnableWindow(GetDlgItem(window_, ID_GOP), wcscmp(capability.key, L"prores") != 0);
+        EnableWindow(GetDlgItem(window_, ID_BFRAMES), capability.supports_b_frames);
     }
     int combo_index(int id) const { return static_cast<int>(ComboBox_GetCurSel(GetDlgItem(window_, id))); }
     std::wstring combo_text(int id) const {
@@ -1891,6 +1922,8 @@ private:
         settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         settings_.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
+        settings_.gop = std::clamp(edit_number(ID_GOP, 300), 1, 10000);
+        settings_.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
@@ -2010,9 +2043,13 @@ private:
                 add_video_pair(ID_LABEL_RATE, ID_RATE, ID_LABEL_QP, ID_QP, inner_y);
                 add_video_field(ID_LABEL_BITRATE, ID_BITRATE, margin_x, right, inner_y);
             } else {
-                add_video_pair(ID_LABEL_ALPHA, ID_ALPHA, ID_LABEL_MASK_OUTPUT, ID_MASK_OUTPUT, inner_y);
-                add_video_pair(ID_LABEL_CHROMA, ID_CHROMA, ID_LABEL_COLORSPACE, ID_COLORSPACE, inner_y);
-                add_video_field(ID_LABEL_COLOR_RANGE, ID_COLOR_RANGE, margin_x, right, inner_y);
+                if (active_video_tab_ == 1) {
+                    add_video_pair(ID_LABEL_ALPHA, ID_ALPHA, ID_LABEL_MASK_OUTPUT, ID_MASK_OUTPUT, inner_y);
+                    add_video_pair(ID_LABEL_CHROMA, ID_CHROMA, ID_LABEL_COLORSPACE, ID_COLORSPACE, inner_y);
+                    add_video_field(ID_LABEL_COLOR_RANGE, ID_COLOR_RANGE, margin_x, right, inner_y);
+                } else {
+                    add_video_pair(ID_LABEL_GOP, ID_GOP, ID_LABEL_BFRAMES, ID_BFRAMES, inner_y);
+                }
             }
             y += inner_height + inner_gap;
             add_layout(ID_COMMAND_HEADING, margin_x, y, full_width, label_height);
@@ -2124,8 +2161,8 @@ private:
         for (int index = 0; index < 3; ++index) {
             TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(tabs[index]); TabCtrl_SetItem(tab_, index, &item);
         }
-        const wchar_t* video_tabs[] = {text.encoding, text.color};
-        for (int index = 0; index < 2; ++index) {
+        const wchar_t* video_tabs[] = {text.encoding, text.color, text.frame_structure};
+        for (int index = 0; index < 3; ++index) {
             TCITEMW item{}; item.mask = TCIF_TEXT; item.pszText = const_cast<wchar_t*>(video_tabs[index]); TabCtrl_SetItem(video_tab_, index, &item);
         }
         SetWindowTextW(audio_labels_[0], text.audio_format);
@@ -2158,6 +2195,8 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_CHROMA), text.chroma);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_COLORSPACE), text.color_space);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_COLOR_RANGE), text.color_range);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_GOP), text.gop);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_BFRAMES), text.b_frames);
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_HEADING), text.command_heading);
         SetWindowTextW(GetDlgItem(window_, ID_TEST_REQUIREMENT), text.test_required);
         SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
