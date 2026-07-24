@@ -97,7 +97,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Property page activation failed.\n";
         DestroyWindow(parent); page->Release(); CoUninitialize(); return 3;
     }
-    if (mode == L"vsr_probe") {
+    if (mode == L"vsr_probe" || mode == L"vsr_matrix") {
         const auto select_combo = [&](int id, int index) {
             const HWND control = GetDlgItem(page_window, id);
             SendMessageW(control, CB_SETCURSEL, index, 0);
@@ -107,39 +107,64 @@ int wmain(int argument_count, wchar_t** arguments) {
         select_combo(ID_BACKEND, 1);
         select_combo(ID_CODEC, 1);
         select_combo(ID_ALPHA, 0);
-        SetWindowTextW(GetDlgItem(page_window, ID_VSR_SCALE), L"2.00");
-        SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_SCALE, EN_CHANGE),
-                     reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_VSR_SCALE)));
-        select_combo(ID_VSR_QUALITY, 1);
         select_combo(ID_VSR_ENABLED, 1);
 
-        const ULONGLONG started = GetTickCount64();
-        SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_REFRESH, BN_CLICKED),
-                     reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_REFRESH)));
-        MSG message{};
-        while (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH)) &&
-               GetTickCount64() - started < 40000) {
-            const DWORD wait_result = MsgWaitForMultipleObjects(0, nullptr, FALSE, 100, QS_ALLINPUT);
-            if (wait_result == WAIT_OBJECT_0) {
-                while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
-                    TranslateMessage(&message);
-                    DispatchMessageW(&message);
+        struct VsrCase {
+            const wchar_t* name;
+            int depth;
+            int chroma;
+            int preset;
+            int quality;
+            const wchar_t* scale;
+        };
+        const std::array<VsrCase, 4> matrix{{
+            {L"minimum", 0, 0, 0, 0, L"2.00"},
+            {L"current", 1, 0, 6, 1, L"2.00"},
+            {L"fractional-422", 1, 1, 5, 2, L"1.50"},
+            {L"maximum", 1, 2, 6, 3, L"4.00"},
+        }};
+        const int case_count = mode == L"vsr_matrix" ? static_cast<int>(matrix.size()) : 1;
+        bool all_passed = true;
+        for (int case_index = 0; case_index < case_count; ++case_index) {
+            const VsrCase& test_case = mode == L"vsr_matrix" ? matrix[case_index] : matrix[1];
+            select_combo(ID_DEPTH, test_case.depth);
+            select_combo(ID_CHROMA, test_case.chroma);
+            select_combo(ID_PRESET, test_case.preset);
+            select_combo(ID_VSR_QUALITY, test_case.quality);
+            SetWindowTextW(GetDlgItem(page_window, ID_VSR_SCALE), test_case.scale);
+            SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_SCALE, EN_CHANGE),
+                         reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_VSR_SCALE)));
+
+            const ULONGLONG started = GetTickCount64();
+            SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_REFRESH, BN_CLICKED),
+                         reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_REFRESH)));
+            MSG message{};
+            while (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH)) &&
+                   GetTickCount64() - started < 40000) {
+                const DWORD wait_result = MsgWaitForMultipleObjects(0, nullptr, FALSE, 100, QS_ALLINPUT);
+                if (wait_result == WAIT_OBJECT_0) {
+                    while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+                        TranslateMessage(&message);
+                        DispatchMessageW(&message);
+                    }
                 }
             }
+            const ULONGLONG elapsed = GetTickCount64() - started;
+            const std::wstring status = window_text(GetDlgItem(page_window, ID_STATUS));
+            const bool completed = IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH)) != FALSE;
+            const bool passed = status.find(L"test passed") != std::wstring::npos ||
+                                status.find(L"測試通過") != std::wstring::npos ||
+                                status.find(L"测试通过") != std::wstring::npos ||
+                                status.find(L"テスト合格") != std::wstring::npos;
+            std::wcout << L"VSR case=" << test_case.name << L" elapsed=" << elapsed
+                       << L" ms completed=" << completed << L" passed=" << passed << L"\n";
+            all_passed = all_passed && completed && passed;
         }
-        const ULONGLONG elapsed = GetTickCount64() - started;
-        const std::wstring status = window_text(GetDlgItem(page_window, ID_STATUS));
-        std::wcout << L"VSR property-page probe elapsed=" << elapsed << L" ms status=\"" << status << L"\"\n";
-        const bool completed = IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH)) != FALSE;
-        const bool passed = status.find(L"test passed") != std::wstring::npos ||
-                            status.find(L"測試通過") != std::wstring::npos ||
-                            status.find(L"测试通过") != std::wstring::npos ||
-                            status.find(L"テスト合格") != std::wstring::npos;
         page->Deactivate();
         DestroyWindow(parent);
         page->Release();
         CoUninitialize();
-        return completed && passed ? 0 : 45;
+        return all_passed ? 0 : 45;
     }
     const HWND tooltip = reinterpret_cast<HWND>(GetPropW(page_window, L"MMD2FFMPEG.TooltipWindow"));
     std::array<wchar_t, 32> tooltip_class{};
