@@ -48,7 +48,7 @@ HINSTANCE module_instance() {
 struct Settings {
     std::wstring ffmpeg = L"ffmpeg.exe";
     std::wstring video_args;
-    std::wstring nvenc_command;
+    std::wstring nvenc_args;
     int fps = 30;
     std::wstring backend = L"cpu";
     std::wstring codec = L"hevc";
@@ -275,10 +275,10 @@ const wchar_t* super_resolution_label(UiLanguage language) {
 
 const wchar_t* nvenc_command_heading(UiLanguage language) {
     switch (language) {
-    case UiLanguage::TraditionalChinese: return L"完整 NVEncC 指令（可編輯）";
-    case UiLanguage::SimplifiedChinese: return L"完整 NVEncC 命令（可编辑）";
-    case UiLanguage::Japanese: return L"完全な NVEncC コマンド（編集可能）";
-    default: return L"Complete NVEncC command (editable)";
+    case UiLanguage::TraditionalChinese: return L"NVEncC 指令（中間參數可編輯）";
+    case UiLanguage::SimplifiedChinese: return L"NVEncC 命令（中间参数可编辑）";
+    case UiLanguage::Japanese: return L"NVEncC コマンド（中央の引数は編集可能）";
+    default: return L"NVEncC command (middle arguments are editable)";
     }
 }
 
@@ -432,7 +432,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"MMD 輸入固定為 PC 全範圍 RGB；這裡選擇輸出使用 TV 限制範圍或 PC 全範圍。",
         L"選擇從 AVI 合併到 MKV 的音訊格式，或不要輸出音訊。",
         L"選擇保留原始音訊，或使用 Hi-Res 重新編碼模式。",
-        L"FFmpeg 模式可編輯中間編碼參數；NVEncC 模式可編輯完整 NVEncC bridge 指令。修改後請重新測試編碼器。",
+        L"FFmpeg 與 NVEncC 模式都只開放中間編碼參數；執行檔、輸出、尺寸、幀率與輸入格式由程式固定。修改後請重新測試編碼器。",
         L"以目前設定執行小型測試；通過後才能儲存或套用。",
         L"開啟 MMD2FFMPEG 編碼與合併音訊的記錄資料夾。",
         L"開啟專案的 GitHub 網頁。"};
@@ -456,7 +456,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"MMD 输入固定为 PC 全范围 RGB；这里选择输出使用 TV 限制范围或 PC 全范围。",
         L"选择从 AVI 合并到 MKV 的音频格式，或不输出音频。",
         L"选择保留原始音频，或使用 Hi-Res 重新编码模式。",
-        L"FFmpeg 模式可编辑中间编码参数；NVEncC 模式可编辑完整 NVEncC bridge 命令。修改后请重新测试编码器。",
+        L"FFmpeg 与 NVEncC 模式都只开放中间编码参数；可执行文件、输出、尺寸、帧率与输入格式由程序固定。修改后请重新测试编码器。",
         L"以当前设置执行小型测试；通过后才能保存或应用。",
         L"打开 MMD2FFMPEG 编码与合并音频的日志文件夹。",
         L"打开项目的 GitHub 网页。"};
@@ -480,7 +480,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"MMD の入力は PC フルレンジ RGB に固定です。ここでは出力を TV リミテッドまたは PC フルレンジから選択します。",
         L"AVI から MKV へ結合する音声形式、または音声なしを選択します。",
         L"元の音声を保持するか、Hi-Res 再エンコードモードを使用するか選択します。",
-        L"FFmpeg モードでは中央の引数、NVEncC モードでは完全な NVEncC bridge コマンドを編集できます。変更後は再テストしてください。",
+        L"FFmpeg と NVEncC は中央のエンコード引数のみ編集できます。実行ファイル、出力、寸法、フレームレート、入力形式は固定です。変更後は再テストしてください。",
         L"現在の設定で小さなテストを実行します。保存または適用する前に合格が必要です。",
         L"MMD2FFMPEG のエンコードおよび音声結合ログのフォルダーを開きます。",
         L"プロジェクトの GitHub ページを開きます。"};
@@ -504,7 +504,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"MMD input is fixed to PC full-range RGB. Choose TV limited-range or PC full-range for output.",
         L"Choose the audio format merged from AVI into MKV, or disable audio output.",
         L"Keep the original audio or use the Hi-Res re-encoding mode.",
-        L"Edit the middle encoding arguments in FFmpeg mode, or the complete NVEncC bridge command in NVEncC mode. Test again after editing.",
+        L"Edit only the middle encoding arguments in FFmpeg and NVEncC modes. The executable, output, dimensions, frame rate, and input format remain fixed. Test again after editing.",
         L"Run a small test using the current settings. It must pass before settings can be saved or applied.",
         L"Open the folder containing MMD2FFMPEG encoding and audio-merge logs.",
         L"Open the project's GitHub page."};
@@ -641,7 +641,7 @@ Settings load_settings() {
         const auto value = trim(line.substr(split + 1));
         if (key == L"ffmpeg") settings.ffmpeg = value;
         else if (key == L"video_args") settings.video_args = value;
-        else if (key == L"nvenc_command") settings.nvenc_command = value;
+        else if (key == L"nvenc_args") settings.nvenc_args = value;
         else if (key == L"fps") {
             try { settings.fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {}
         }
@@ -674,7 +674,7 @@ Settings load_settings() {
     if (settings.backend == L"nvenc" &&
         (settings.vsr_enabled || (settings.codec == L"hevc" && settings.alpha_mode == L"rgba")))
         settings.backend = L"nvencc";
-    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(settings.nvenc_command);
+    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(settings.nvenc_args);
     normalize_codec_settings(settings);
     if (_wcsicmp(settings.ffmpeg.c_str(), L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe") == 0)
         settings.ffmpeg = L"ffmpeg.exe";
@@ -727,10 +727,10 @@ void save_settings(const Settings& settings) {
     std::wstring video_args = settings.video_args;
     std::replace_if(video_args.begin(), video_args.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
     if (!video_args.empty()) file << L"video_args=" << video_args << L"\n";
-    std::wstring nvenc_command = settings.nvenc_command;
-    std::replace_if(nvenc_command.begin(), nvenc_command.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
-    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(nvenc_command);
-    if (!nvenc_command.empty()) file << L"nvenc_command=" << nvenc_command << L"\n";
+    std::wstring nvenc_args = settings.nvenc_args;
+    std::replace_if(nvenc_args.begin(), nvenc_args.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
+    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(nvenc_args);
+    if (!nvenc_args.empty()) file << L"nvenc_args=" << nvenc_args << L"\n";
 }
 
 std::wstring lower(std::wstring value) {
@@ -968,19 +968,14 @@ std::filesystem::path resolve_nvenc(const std::filesystem::path& ffmpeg_path) {
     return resolve_executable(L"NVEncC64.exe");
 }
 
-std::wstring build_vsr_command(const Settings& settings, int width, int height, int bits,
-                               const std::filesystem::path& ffmpeg_path,
-                               const std::filesystem::path& nvenc_path,
-                               const std::filesystem::path& bridge_path,
-                               const std::wstring& output_path, bool probe = false) {
+std::wstring nvenc_display_prefix() {
+    return L"\"NVEncC.exe\" --output \"{output}\" --width {width} --height {height} "
+           L"--fps {fps} --input-format {input_pixel_format}";
+}
+
+std::wstring default_nvenc_args(const Settings& settings) {
     std::wostringstream command;
-    command << quote(bridge_path.wstring())
-            << L" --ffmpeg " << quote(ffmpeg_path.wstring())
-            << L" --nvenc " << quote(nvenc_path.wstring())
-            << L" --output " << quote(output_path)
-            << L" --width " << width << L" --height " << height << L" --fps " << settings.fps
-            << L" --input-format " << (bits == 24 ? L"bgr24" : L"bgra")
-            << L" --scale " << std::fixed << std::setprecision(3) << settings.vsr_scale
+    command << L"--scale " << std::fixed << std::setprecision(3) << settings.vsr_scale
             << L" --quality " << settings.vsr_quality
             << L" --depth " << settings.bit_depth
             << L" --output-csp yuv" << settings.chroma
@@ -993,20 +988,7 @@ std::wstring build_vsr_command(const Settings& settings, int width, int height, 
         command << L" --gop " << settings.gop << L" --bframes " << settings.b_frames;
     if (settings.alpha_mode == L"rgba") command << L" --alpha";
     if (settings.vsr_enabled) command << L" --vsr";
-    if (probe) command << L" --probe";
     return command.str();
-}
-
-std::wstring default_vsr_command_template(const Settings& settings,
-                                          const std::filesystem::path& ffmpeg_path,
-                                          const std::filesystem::path& nvenc_path,
-                                          const std::filesystem::path& bridge_path) {
-    auto command = build_vsr_command(settings, 1920, 1080, 32, ffmpeg_path, nvenc_path, bridge_path,
-                                     L"{output}");
-    replace_all(command, L"--width 1920 --height 1080", L"--width {width} --height {height}");
-    replace_all(command, L"--fps " + std::to_wstring(settings.fps), L"--fps {fps}");
-    replace_all(command, L"--input-format bgra", L"--input-format {input_pixel_format}");
-    return command;
 }
 
 std::wstring materialize_vsr_command(const Settings& settings, int width, int height, int bits,
@@ -1014,15 +996,17 @@ std::wstring materialize_vsr_command(const Settings& settings, int width, int he
                                      const std::filesystem::path& nvenc_path,
                                      const std::filesystem::path& bridge_path,
                                      const std::wstring& output_path, bool probe = false) {
-    std::wstring command = settings.nvenc_command.empty()
-        ? default_vsr_command_template(settings, ffmpeg_path, nvenc_path, bridge_path)
-        : settings.nvenc_command;
-    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(command);
-    replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
-    replace_all(command, L"{width}", std::to_wstring(width));
-    replace_all(command, L"{height}", std::to_wstring(height));
-    replace_all(command, L"{fps}", std::to_wstring(settings.fps));
-    replace_all(command, L"{output}", output_path);
+    std::wstring arguments = settings.nvenc_args.empty() ? default_nvenc_args(settings) : settings.nvenc_args;
+    if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(arguments);
+    std::wstring command = quote(bridge_path.wstring()) +
+        L" --ffmpeg " + quote(ffmpeg_path.wstring()) +
+        L" --nvenc " + quote(nvenc_path.wstring()) +
+        L" --output " + quote(output_path) +
+        L" --width " + std::to_wstring(width) +
+        L" --height " + std::to_wstring(height) +
+        L" --fps " + std::to_wstring(settings.fps) +
+        L" --input-format " + std::wstring(bits == 24 ? L"bgr24" : L"bgra");
+    if (!arguments.empty()) command += L" " + arguments;
     if (probe && command.find(L" --probe") == std::wstring::npos) command += L" --probe";
     return command;
 }
@@ -1296,7 +1280,7 @@ std::wstring command_test_signature(const Settings& settings) {
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
     const auto arguments = normalize_rate_values(settings.video_args.empty() ? editable_arguments(settings) : settings.video_args);
-    const auto nvenc_command = normalize_rate_values(settings.nvenc_command);
+    const auto nvenc_args = normalize_rate_values(settings.nvenc_args);
     std::wstring bridge_signature;
     if (uses_nvenc_bridge(settings)) {
         const auto nvenc_path = resolve_nvenc(ffmpeg_path);
@@ -1306,11 +1290,11 @@ std::wstring command_test_signature(const Settings& settings) {
         bridge_signature = L"|" + nvenc_path.wstring() + L"|" + std::to_wstring(nvenc_stamp) +
                            L"|" + bridge_path.wstring() + L"|" + std::to_wstring(bridge_stamp);
     }
-    return L"v10-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + bridge_signature +
+    return L"v11-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + bridge_signature +
            L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments +
-           L"|nvenc_command=" + nvenc_command +
+           L"|nvenc_args=" + nvenc_args +
            L"|vsr=" + std::to_wstring(settings.vsr_enabled ? 1 : 0) + L"|" + std::to_wstring(settings.vsr_scale) +
            L"|" + std::to_wstring(settings.vsr_quality);
 }
@@ -1973,11 +1957,11 @@ public:
         candidate.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY) + 1, 1, 4);
         normalize_codec_settings(candidate);
         if (uses_nvenc_bridge(candidate)) {
-            candidate.nvenc_command = edit_text(ID_COMMAND);
+            candidate.nvenc_args = edit_text(ID_COMMAND);
             candidate.video_args = settings_.video_args;
         } else {
             candidate.video_args = edit_text(ID_COMMAND);
-            candidate.nvenc_command = settings_.nvenc_command;
+            candidate.nvenc_args = settings_.nvenc_args;
         }
         const auto signature = command_test_signature(candidate);
         if (!current_command_tested_ || tested_signature_ != signature) {
@@ -2146,10 +2130,8 @@ private:
         const std::array<int, 10> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
                                                 ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_LABEL_STATUS, ID_VIDEO_TAB};
         for (const int id : video_bottom) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
-        if (page == 0 && uses_nvenc_bridge(settings_)) {
-            ShowWindow(GetDlgItem(window_, ID_COMMAND_PREFIX), SW_HIDE);
+        if (page == 0 && uses_nvenc_bridge(settings_))
             ShowWindow(GetDlgItem(window_, ID_COMMAND_SUFFIX), SW_HIDE);
-        }
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(audio_intro_, page == 1 ? SW_SHOW : SW_HIDE);
@@ -2173,7 +2155,7 @@ private:
     bool restore_cached_probe() {
         sync_structured_settings();
         Settings candidate = settings_;
-        if (uses_nvenc_bridge(candidate)) candidate.nvenc_command = edit_text(ID_COMMAND);
+        if (uses_nvenc_bridge(candidate)) candidate.nvenc_args = edit_text(ID_COMMAND);
         else candidate.video_args = edit_text(ID_COMMAND);
         ProbeResult cached{};
         if (!load_cached_probe(candidate, cached) || !cached.success) return false;
@@ -2238,7 +2220,7 @@ private:
         if (probe_thread_.joinable()) probe_thread_.join();
         sync_structured_settings();
         Settings candidate = settings_;
-        if (uses_nvenc_bridge(candidate)) candidate.nvenc_command = edit_text(ID_COMMAND);
+        if (uses_nvenc_bridge(candidate)) candidate.nvenc_args = edit_text(ID_COMMAND);
         else candidate.video_args = edit_text(ID_COMMAND);
         ProbeResult cached{};
         if (!force && load_cached_probe(candidate, cached)) {
@@ -2355,19 +2337,14 @@ private:
     }
     void update_command_display() {
         if (uses_nvenc_bridge(settings_)) {
-            const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
-            const auto nvenc_path = resolve_nvenc(ffmpeg_path);
-            const auto bridge_path = local_data_dir() / L"mmd2ffmpeg_vsr_bridge.exe";
-            SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), L"");
-            const auto display = settings_.nvenc_command.empty()
-                ? default_vsr_command_template(settings_, ffmpeg_path, nvenc_path, bridge_path)
-                : settings_.nvenc_command;
+            SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), nvenc_display_prefix().c_str());
+            const auto display = settings_.nvenc_args.empty() ? default_nvenc_args(settings_) : settings_.nvenc_args;
             SetWindowTextW(GetDlgItem(window_, ID_COMMAND), display.c_str());
             SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), L"");
             SendMessageW(GetDlgItem(window_, ID_COMMAND), EM_SETREADONLY, FALSE, 0);
             SetWindowTextW(GetDlgItem(window_, ID_COMMAND_HEADING),
                            nvenc_command_heading(ui_language(settings_.language)));
-            ShowWindow(GetDlgItem(window_, ID_COMMAND_PREFIX), SW_HIDE);
+            ShowWindow(GetDlgItem(window_, ID_COMMAND_PREFIX), active_tab_ == 0 ? SW_SHOW : SW_HIDE);
             ShowWindow(GetDlgItem(window_, ID_COMMAND_SUFFIX), SW_HIDE);
             rebuild_layout();
             return;
@@ -2513,11 +2490,9 @@ private:
             add_layout(ID_COMPAT_WARNING, right - warning_width, y, warning_width, label_height);
             y += label_height + dlu_y(2);
             const bool bridge_command = uses_nvenc_bridge(settings_);
-            if (!bridge_command) {
-                const int prefix_height = text_height(ID_COMMAND_PREFIX, full_width, dlu_y(24));
-                add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, prefix_height);
-                y += prefix_height + dlu_y(2);
-            }
+            const int prefix_height = text_height(ID_COMMAND_PREFIX, full_width, dlu_y(24));
+            add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, prefix_height);
+            y += prefix_height + dlu_y(2);
             const int command_height = edit_height * 4;
             add_layout(ID_COMMAND, margin_x, y, full_width, command_height);
             y += command_height + dlu_y(2);
@@ -2713,7 +2688,7 @@ private:
         if (id == ID_BACKEND || id == ID_CODEC) rebuild_backend_options();
         if (id != ID_COMMAND) {
             sync_structured_settings();
-            if (uses_nvenc_bridge(settings_)) settings_.nvenc_command.clear();
+            if (uses_nvenc_bridge(settings_)) settings_.nvenc_args.clear();
             else settings_.video_args.clear();
             updating_command_ = true;
             update_command_display();
@@ -2745,7 +2720,7 @@ private:
             self->probe_seconds_remaining_ = -1;
             self->sync_structured_settings();
             Settings current = self->settings_;
-            if (uses_nvenc_bridge(current)) current.nvenc_command = self->edit_text(ID_COMMAND);
+            if (uses_nvenc_bridge(current)) current.nvenc_args = self->edit_text(ID_COMMAND);
             else current.video_args = self->edit_text(ID_COMMAND);
             self->current_command_tested_ = result->success && result->signature == command_test_signature(current);
             self->tested_signature_ = self->current_command_tested_ ? result->signature : L"";

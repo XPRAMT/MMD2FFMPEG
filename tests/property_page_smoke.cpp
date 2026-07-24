@@ -387,23 +387,31 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(frame_mode_combo));
+    const std::wstring nvencc_prefix = window_text(GetDlgItem(page_window, ID_COMMAND_PREFIX));
     const std::wstring nvencc_command = window_text(GetDlgItem(page_window, ID_COMMAND));
     const LONG_PTR nvencc_command_style = GetWindowLongPtrW(GetDlgItem(page_window, ID_COMMAND), GWL_STYLE);
-    const RECT nvencc_heading_bounds = child_rect(page_window, ID_COMMAND_HEADING);
+    const RECT nvencc_prefix_bounds = child_rect(page_window, ID_COMMAND_PREFIX);
     const RECT nvencc_command_bounds = child_rect(page_window, ID_COMMAND);
     if ((nvencc_command_style & ES_READONLY) != 0 ||
-        has_visible_style(GetDlgItem(page_window, ID_COMMAND_PREFIX)) ||
+        !has_visible_style(GetDlgItem(page_window, ID_COMMAND_PREFIX)) ||
         has_visible_style(GetDlgItem(page_window, ID_COMMAND_SUFFIX)) ||
-        nvencc_command.find(L"mmd2ffmpeg_vsr_bridge.exe") == std::wstring::npos ||
-        nvencc_command.find(L"{width}") == std::wstring::npos ||
-        nvencc_command.find(L"{height}") == std::wstring::npos ||
-        nvencc_command.find(L"{input_pixel_format}") == std::wstring::npos ||
-        nvencc_command.find(L"{output}") == std::wstring::npos ||
+        nvencc_prefix.find(L"\"NVEncC.exe\"") == std::wstring::npos ||
+        nvencc_prefix.find(L"--output \"{output}\"") == std::wstring::npos ||
+        nvencc_prefix.find(L"--width {width} --height {height}") == std::wstring::npos ||
+        nvencc_prefix.find(L"--fps {fps}") == std::wstring::npos ||
+        nvencc_prefix.find(L"--input-format {input_pixel_format}") == std::wstring::npos ||
+        nvencc_prefix.find(L"mmd2ffmpeg_vsr_bridge.exe") != std::wstring::npos ||
+        nvencc_prefix.find(L"--ffmpeg ") != std::wstring::npos ||
+        nvencc_command.find(L"--scale ") == std::wstring::npos ||
         nvencc_command.find(L"--frame-mode auto") == std::wstring::npos ||
+        nvencc_command.find(L"NVEncC.exe") != std::wstring::npos ||
+        nvencc_command.find(L"{output}") != std::wstring::npos ||
+        nvencc_command.find(L"{width}") != std::wstring::npos ||
+        nvencc_command.find(L"{input_pixel_format}") != std::wstring::npos ||
         nvencc_command.find(L"--gop ") != std::wstring::npos ||
         nvencc_command.find(L"--bframes ") != std::wstring::npos ||
-        nvencc_command_bounds.top - nvencc_heading_bounds.bottom > 32) {
-        std::wcerr << L"NVEncC automatic mode must use an editable command without GOP/B-frame options or empty space.\n";
+        nvencc_command_bounds.top - nvencc_prefix_bounds.bottom > 32) {
+        std::wcerr << L"NVEncC must show a fixed compact prefix and only editable middle arguments.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 49;
     }
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 1, 0);
