@@ -808,11 +808,46 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
 }
 
 std::wstring command_test_signature(const Settings& settings) {
+    const auto normalize_rate_values = [](const std::wstring& arguments) {
+        static constexpr std::array<std::wstring_view, 9> rate_options{
+            L"-crf", L"-qp", L"-cq", L"-b:v", L"-global_quality", L"-qvbr_quality_level", L"-qp_i", L"-qp_p", L"-qp_b"};
+        std::wistringstream input(arguments);
+        std::wostringstream output;
+        std::wstring token;
+        bool replace_next = false;
+        bool first = true;
+        while (input >> token) {
+            if (!first) output << L' ';
+            first = false;
+            if (replace_next) {
+                output << L"{rate}";
+                replace_next = false;
+                continue;
+            }
+            bool rate_option = false;
+            for (const auto option : rate_options) {
+                if (token == option) {
+                    rate_option = true;
+                    break;
+                }
+                const std::wstring prefix(option);
+                if (token.rfind(prefix + L"=", 0) == 0) {
+                    output << prefix << L"={rate}";
+                    rate_option = false;
+                    token.clear();
+                    break;
+                }
+            }
+            if (!token.empty()) output << token;
+            replace_next = rate_option;
+        }
+        return output.str();
+    };
     const auto ffmpeg_path = resolve_executable(settings.ffmpeg);
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
-    const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
-    return L"v5-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+    const auto arguments = normalize_rate_values(settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args);
+    return L"v6-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments;
 }
@@ -1828,8 +1863,9 @@ private:
             y += edit_height + dlu_y(2);
             add_layout(ID_COMMAND_SUFFIX, margin_x, y, full_width, dlu_y(18));
             y += dlu_y(18) + dlu_y(1);
-            add_layout(ID_STATUS, margin_x, y, full_width, label_height);
-            y += label_height;
+            const int status_height = label_height * 2;
+            add_layout(ID_STATUS, margin_x, y, full_width, status_height);
+            y += status_height;
             const int open_log_width = text_width(ID_OPEN_LOG, dlu_x(58));
             const int test_width = text_width(ID_REFRESH, dlu_x(54));
             const int open_log_left = right - open_log_width;

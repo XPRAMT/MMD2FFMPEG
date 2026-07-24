@@ -157,9 +157,14 @@ int wmain(int argument_count, wchar_t** arguments) {
     const RECT quality = child_rect(page_window, ID_QP);
     const RECT bitrate = child_rect(page_window, ID_BITRATE);
     const RECT command_heading = child_rect(page_window, ID_COMMAND_HEADING);
+    const RECT initial_status_bounds = child_rect(page_window, ID_STATUS);
     if (quality.bottom > command_heading.top || bitrate.bottom > command_heading.top) {
         std::wcerr << L"Quality or bitrate control overlaps the FFmpeg command area.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 25;
+    }
+    if (initial_status_bounds.bottom - initial_status_bounds.top < (command_heading.bottom - command_heading.top) * 2) {
+        std::wcerr << L"Encoder status does not reserve two lines.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 29;
     }
     const RECT command_before_color = child_rect(page_window, ID_COMMAND);
     TabCtrl_SetCurSel(video_tab, 1);

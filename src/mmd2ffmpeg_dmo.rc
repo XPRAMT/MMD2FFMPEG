@@ -38,7 +38,7 @@ BEGIN
     LTEXT           "", ID_COMMAND_PREFIX, 0, 0, 1, 1, SS_LEFT
     EDITTEXT        ID_COMMAND, 0, 0, 1, 1, ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "", ID_COMMAND_SUFFIX, 0, 0, 1, 1, SS_LEFT
-    LTEXT           "Encoder status: not tested", ID_STATUS, 0, 0, 1, 1, SS_LEFTNOWORDWRAP
+    LTEXT           "Encoder status: not tested", ID_STATUS, 0, 0, 1, 1, SS_LEFT
     LTEXT           "Test must pass before saving or applying.", ID_TEST_REQUIREMENT, 0, 0, 1, 1
     DEFPUSHBUTTON   "Test encoder", ID_REFRESH, 0, 0, 1, 1, WS_TABSTOP
     PUSHBUTTON      "Open log", ID_OPEN_LOG, 0, 0, 1, 1, WS_TABSTOP
