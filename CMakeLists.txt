@@ -27,6 +27,7 @@ add_executable(mmd2ffmpeg_vsr_bridge src/vsr_bridge.cpp)
 target_compile_features(mmd2ffmpeg_vsr_bridge PRIVATE cxx_std_20)
 target_compile_definitions(mmd2ffmpeg_vsr_bridge PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(mmd2ffmpeg_vsr_bridge PRIVATE /W4 /permissive- /utf-8)
+target_link_libraries(mmd2ffmpeg_vsr_bridge PRIVATE advapi32)
 
 add_executable(dmo_smoke tests/dmo_smoke.cpp)
 target_compile_features(dmo_smoke PRIVATE cxx_std_20)

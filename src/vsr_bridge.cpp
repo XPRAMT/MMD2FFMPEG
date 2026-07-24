@@ -29,7 +29,7 @@ bool flag(const std::vector<std::wstring>& args, const std::wstring& key) {
 }
 
 bool start_process(const std::filesystem::path& executable, std::wstring command,
-                   HANDLE input, HANDLE output, HANDLE error, PROCESS_INFORMATION& process) {
+                    HANDLE input, HANDLE output, HANDLE error, PROCESS_INFORMATION& process) {
     std::vector<wchar_t> mutable_command(command.begin(), command.end());
     mutable_command.push_back(L'\0');
     STARTUPINFOW startup{};
@@ -38,8 +38,29 @@ bool start_process(const std::filesystem::path& executable, std::wstring command
     startup.hStdInput = input;
     startup.hStdOutput = output;
     startup.hStdError = error;
-    return CreateProcessW(executable.c_str(), mutable_command.data(), nullptr, nullptr, TRUE,
-                          CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process) != FALSE;
+    HANDLE process_token = nullptr;
+    HANDLE restricted_token = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE | TOKEN_QUERY,
+                          &process_token)) {
+        return false;
+    }
+    const BOOL restricted = CreateRestrictedToken(process_token, DISABLE_MAX_PRIVILEGE, 0, nullptr, 0, nullptr,
+                                                   0, nullptr, &restricted_token);
+    close_handle(process_token);
+    if (!restricted) return false;
+
+    // MMD is commonly launched through NTLEA, whose hook replaces CreateProcessW
+    // and injects ntleak.dll into every descendant.  NGX VSR can stall in an
+    // injected NVEncC process.  CreateProcessAsUserW is not intercepted by that
+    // hook; a restricted copy of our own primary token also avoids requiring
+    // SeAssignPrimaryTokenPrivilege.
+    const BOOL created = CreateProcessAsUserW(restricted_token, executable.c_str(), mutable_command.data(),
+                                              nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr,
+                                              &startup, &process);
+    const DWORD create_error = created ? ERROR_SUCCESS : GetLastError();
+    close_handle(restricted_token);
+    SetLastError(create_error);
+    return created != FALSE;
 }
 
 }  // namespace
