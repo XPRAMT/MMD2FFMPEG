@@ -163,6 +163,28 @@ struct UiOptions {
     const wchar_t* quality;
 };
 
+struct UiTooltips {
+    const wchar_t* language;
+    const wchar_t* backend;
+    const wchar_t* codec;
+    const wchar_t* bit_depth;
+    const wchar_t* preset;
+    const wchar_t* rate_control;
+    const wchar_t* quality;
+    const wchar_t* bitrate;
+    const wchar_t* alpha;
+    const wchar_t* mask_output;
+    const wchar_t* chroma;
+    const wchar_t* color_space;
+    const wchar_t* color_range;
+    const wchar_t* audio_format;
+    const wchar_t* audio_rate;
+    const wchar_t* command;
+    const wchar_t* test_encoder;
+    const wchar_t* open_log;
+    const wchar_t* github;
+};
+
 struct TabUiStrings {
     const wchar_t* video;
     const wchar_t* audio;
@@ -266,6 +288,95 @@ const UiOptions& ui_options(UiLanguage language) {
                                           L"VBR 目標ビットレート", L"グローバル品質", L"速度", L"バランス", L"品質"};
     static constexpr UiOptions english{L"software", L"fastest", L"best quality", L"constant quality", L"Constant QP",
                                          L"VBR target bitrate", L"global quality", L"speed", L"balanced", L"quality"};
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return traditional;
+    case UiLanguage::SimplifiedChinese: return simplified;
+    case UiLanguage::Japanese: return japanese;
+    default: return english;
+    }
+}
+
+const UiTooltips& ui_tooltips(UiLanguage language) {
+    static constexpr UiTooltips traditional{
+        L"選擇設定介面的顯示語言；系統預設會跟隨 Windows。",
+        L"選擇 FFmpeg 使用的軟體或硬體編碼器。VP9 與 ProRes 僅能使用 CPU。",
+        L"選擇影片編碼格式。可用的位元深度、Alpha 與碼率控制會依格式自動限制。",
+        L"選擇 8-bit 或 10-bit 輸出。部分編碼格式或 Alpha 模式會固定此選項。",
+        L"調整編碼速度與壓縮效率。較快通常檔案較大，較慢通常壓縮較佳。",
+        L"選擇固定品質、固定 QP 或目標位元率控制方式。",
+        L"設定固定品質或 QP 的數值；數值意義會依目前的編碼器與控制方式而不同。",
+        L"設定 VBR 目標位元率（kbps）。只有選擇 VBR 時會使用此值。",
+        L"選擇透明輸出方式：無、4 通道，或黑白遮罩。4 通道僅適用於 VP9 與 ProRes。",
+        L"黑白遮罩可堆疊在同一影片下方（高度 x2），或輸出為另一個遮罩影片。",
+        L"選擇 4:2:0、4:2:2 或 4:4:4 色度取樣。部分 Alpha 組合會固定為 4:4:4。",
+        L"指定輸出色彩空間：BT.601、BT.709 或 BT.2020。",
+        L"MMD 輸入固定為 PC 全範圍 RGB；這裡選擇輸出使用 TV 限制範圍或 PC 全範圍。",
+        L"選擇從 AVI 合併到 MKV 的音訊格式，或不要輸出音訊。",
+        L"選擇保留原始音訊，或使用 Hi-Res 重新編碼模式。",
+        L"可直接微調 FFmpeg 的中間編碼參數。修改後請重新測試編碼器。",
+        L"以目前設定執行小型測試；通過後才能儲存或套用。",
+        L"開啟 MMD2FFMPEG 編碼與合併音訊的記錄資料夾。",
+        L"開啟專案的 GitHub 網頁。"};
+    static constexpr UiTooltips simplified{
+        L"选择设置界面的显示语言；系统默认会跟随 Windows。",
+        L"选择 FFmpeg 使用的软件或硬件编码器。VP9 和 ProRes 只能使用 CPU。",
+        L"选择视频编码格式。可用的位深度、Alpha 和码率控制会依格式自动限制。",
+        L"选择 8-bit 或 10-bit 输出。部分编码格式或 Alpha 模式会固定此选项。",
+        L"调整编码速度与压缩效率。较快通常文件较大，较慢通常压缩较佳。",
+        L"选择固定质量、固定 QP 或目标比特率控制方式。",
+        L"设置固定质量或 QP 的数值；数值含义会依当前的编码器与控制方式而不同。",
+        L"设置 VBR 目标比特率（kbps）。只有选择 VBR 时会使用此值。",
+        L"选择透明输出方式：无、4 通道，或黑白遮罩。4 通道仅适用于 VP9 和 ProRes。",
+        L"黑白遮罩可堆叠在同一视频下方（高度 x2），或输出为另一个遮罩视频。",
+        L"选择 4:2:0、4:2:2 或 4:4:4 色度采样。部分 Alpha 组合会固定为 4:4:4。",
+        L"指定输出色彩空间：BT.601、BT.709 或 BT.2020。",
+        L"MMD 输入固定为 PC 全范围 RGB；这里选择输出使用 TV 限制范围或 PC 全范围。",
+        L"选择从 AVI 合并到 MKV 的音频格式，或不输出音频。",
+        L"选择保留原始音频，或使用 Hi-Res 重新编码模式。",
+        L"可直接微调 FFmpeg 的中间编码参数。修改后请重新测试编码器。",
+        L"以当前设置执行小型测试；通过后才能保存或应用。",
+        L"打开 MMD2FFMPEG 编码与合并音频的日志文件夹。",
+        L"打开项目的 GitHub 网页。"};
+    static constexpr UiTooltips japanese{
+        L"設定画面の表示言語を選択します。システム既定は Windows の表示言語に従います。",
+        L"FFmpeg で使用するソフトウェアまたはハードウェアエンコーダーを選択します。VP9 と ProRes は CPU 専用です。",
+        L"動画コーデックを選択します。利用可能なビット深度、アルファ、レート制御は形式に応じて制限されます。",
+        L"8-bit または 10-bit 出力を選択します。コーデックまたはアルファモードにより固定される場合があります。",
+        L"エンコード速度と圧縮効率を調整します。高速ほど通常はファイルが大きく、低速ほど圧縮効率が高くなります。",
+        L"固定品質、固定 QP、または目標ビットレートの制御方法を選択します。",
+        L"固定品質または QP の値を設定します。意味は現在のエンコーダーと制御方法によって異なります。",
+        L"VBR の目標ビットレート（kbps）を設定します。VBR 選択時のみ使用されます。",
+        L"透明出力を選択します：なし、4 チャンネル、または白黒マスク。4 チャンネルは VP9 と ProRes のみ対応です。",
+        L"白黒マスクは同じ動画の下に積み重ねる（高さ x2）か、別のマスク動画として出力できます。",
+        L"4:2:0、4:2:2、4:4:4 のクロマサンプリングを選択します。一部のアルファ組み合わせでは 4:4:4 に固定されます。",
+        L"出力色空間を BT.601、BT.709、BT.2020 から選択します。",
+        L"MMD の入力は PC フルレンジ RGB に固定です。ここでは出力を TV リミテッドまたは PC フルレンジから選択します。",
+        L"AVI から MKV へ結合する音声形式、または音声なしを選択します。",
+        L"元の音声を保持するか、Hi-Res 再エンコードモードを使用するか選択します。",
+        L"FFmpeg の中央のエンコード引数を直接調整できます。変更後はエンコーダーを再テストしてください。",
+        L"現在の設定で小さなテストを実行します。保存または適用する前に合格が必要です。",
+        L"MMD2FFMPEG のエンコードおよび音声結合ログのフォルダーを開きます。",
+        L"プロジェクトの GitHub ページを開きます。"};
+    static constexpr UiTooltips english{
+        L"Choose the settings interface language. System default follows the Windows display language.",
+        L"Choose the FFmpeg software or hardware encoder. VP9 and ProRes are CPU-only.",
+        L"Choose the video codec. Available bit depth, alpha, and rate control options are limited by the codec.",
+        L"Choose 8-bit or 10-bit output. Some codecs or alpha modes lock this option.",
+        L"Adjust encoding speed and compression efficiency. Faster presets usually create larger files; slower presets usually compress better.",
+        L"Choose constant quality, constant QP, or target bitrate rate control.",
+        L"Set the constant-quality or QP value. Its meaning depends on the active encoder and rate control.",
+        L"Set the VBR target bitrate in kbps. This value is used only when VBR is selected.",
+        L"Choose transparency output: none, 4-channel, or a black/white mask. 4-channel is available only with VP9 and ProRes.",
+        L"Place the black/white mask below the same video (height x2), or write a separate mask video.",
+        L"Choose 4:2:0, 4:2:2, or 4:4:4 chroma sampling. Some alpha combinations force 4:4:4.",
+        L"Set the output color space to BT.601, BT.709, or BT.2020.",
+        L"MMD input is fixed to PC full-range RGB. Choose TV limited-range or PC full-range for output.",
+        L"Choose the audio format merged from AVI into MKV, or disable audio output.",
+        L"Keep the original audio or use the Hi-Res re-encoding mode.",
+        L"Directly fine-tune the middle FFmpeg encoding arguments. Test the encoder again after editing.",
+        L"Run a small test using the current settings. It must pass before settings can be saved or applied.",
+        L"Open the folder containing MMD2FFMPEG encoding and audio-merge logs.",
+        L"Open the project's GitHub page."};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -1506,7 +1617,7 @@ public:
 
 private:
     static SIZE measure_dialog_size() {
-        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES};
+        INITCOMMONCONTROLSEX common{sizeof(common), ICC_TAB_CLASSES | ICC_WIN95_CLASSES};
         InitCommonControlsEx(&common);
         HWND parent = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr,
                                       module_instance(), nullptr);
@@ -1526,6 +1637,55 @@ private:
         HWND combo = GetDlgItem(window_, id);
         for (const auto* value : values) ComboBox_AddString(combo, value);
         ComboBox_SetCurSel(combo, selected);
+    }
+    UINT tooltip_info_size() const {
+        return SendMessageW(tooltip_, CCM_GETVERSION, 0, 0) < 6 ? TTTOOLINFOW_V2_SIZE : sizeof(TOOLINFOW);
+    }
+    void update_tooltip(int id, const wchar_t* text, bool add) {
+        const HWND control = GetDlgItem(window_, id);
+        if (!tooltip_ || !control) return;
+        TOOLINFOW info{};
+        info.cbSize = tooltip_info_size();
+        info.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+        info.hwnd = window_;
+        info.uId = reinterpret_cast<UINT_PTR>(control);
+        info.lpszText = const_cast<wchar_t*>(text);
+        SendMessageW(tooltip_, add ? TTM_ADDTOOLW : TTM_UPDATETIPTEXTW, 0, reinterpret_cast<LPARAM>(&info));
+    }
+    void apply_tooltips() {
+        if (!window_) return;
+        if (!tooltip_) {
+            tooltip_ = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                                       CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window_, nullptr,
+                                       module_instance(), nullptr);
+            if (!tooltip_) return;
+            SendMessageW(tooltip_, TTM_SETMAXTIPWIDTH, 0, 480);
+            SetWindowPos(tooltip_, HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetPropW(window_, L"MMD2FFMPEG.TooltipWindow", tooltip_);
+        }
+        const auto& tip = ui_tooltips(ui_language(settings_.language));
+        const std::array<std::pair<int, const wchar_t*>, 35> items{{
+            {ID_LABEL_LANGUAGE, tip.language}, {ID_LANGUAGE, tip.language},
+            {ID_LABEL_BACKEND, tip.backend}, {ID_BACKEND, tip.backend},
+            {ID_LABEL_CODEC, tip.codec}, {ID_CODEC, tip.codec},
+            {ID_LABEL_DEPTH, tip.bit_depth}, {ID_DEPTH, tip.bit_depth},
+            {ID_LABEL_PRESET, tip.preset}, {ID_PRESET, tip.preset},
+            {ID_LABEL_RATE, tip.rate_control}, {ID_RATE, tip.rate_control},
+            {ID_LABEL_QP, tip.quality}, {ID_QP, tip.quality},
+            {ID_LABEL_BITRATE, tip.bitrate}, {ID_BITRATE, tip.bitrate},
+            {ID_LABEL_ALPHA, tip.alpha}, {ID_ALPHA, tip.alpha},
+            {ID_LABEL_MASK_OUTPUT, tip.mask_output}, {ID_MASK_OUTPUT, tip.mask_output},
+            {ID_LABEL_CHROMA, tip.chroma}, {ID_CHROMA, tip.chroma},
+            {ID_LABEL_COLORSPACE, tip.color_space}, {ID_COLORSPACE, tip.color_space},
+            {ID_LABEL_COLOR_RANGE, tip.color_range}, {ID_COLOR_RANGE, tip.color_range},
+            {ID_LABEL_AUDIO_FORMAT, tip.audio_format}, {ID_AUDIO_FORMAT, tip.audio_format},
+            {ID_LABEL_AUDIO_RATE, tip.audio_rate}, {ID_AUDIO_RATE, tip.audio_rate},
+            {ID_COMMAND_HEADING, tip.command}, {ID_COMMAND, tip.command},
+            {ID_REFRESH, tip.test_encoder}, {ID_OPEN_LOG, tip.open_log}, {ID_GITHUB_LINK, tip.github},
+        }};
+        for (const auto& item : items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
+        tooltips_initialized_ = true;
     }
     void create_controls() {
         tab_ = GetDlgItem(window_, ID_TAB);
@@ -2003,6 +2163,7 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_REFRESH), text.test_button);
         SetWindowTextW(GetDlgItem(window_, ID_OPEN_LOG), text.open_log_button);
         apply_tab_language();
+        apply_tooltips();
         const wchar_t* status = probe_running_ ? text.testing : current_command_tested_ ? text.test_passed : text.not_tested;
         SetWindowTextW(GetDlgItem(window_, ID_STATUS), status);
         rebuild_layout();
@@ -2111,6 +2272,7 @@ private:
     std::atomic<ULONG> references_{1};
     IPropertyPageSite* site_ = nullptr;
     HWND window_ = nullptr;
+    HWND tooltip_ = nullptr;
     HWND tab_ = nullptr;
     HWND video_tab_ = nullptr;
     HWND settings_info_ = nullptr;
@@ -2124,6 +2286,7 @@ private:
     Settings settings_{};
     bool dirty_ = false;
     bool updating_command_ = false;
+    bool tooltips_initialized_ = false;
     std::atomic<bool> alive_{true};
     bool probe_running_ = false;
     bool current_command_tested_ = false;

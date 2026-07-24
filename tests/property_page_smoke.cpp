@@ -96,6 +96,28 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Property page activation failed.\n";
         DestroyWindow(parent); page->Release(); CoUninitialize(); return 3;
     }
+    const HWND tooltip = reinterpret_cast<HWND>(GetPropW(page_window, L"MMD2FFMPEG.TooltipWindow"));
+    std::array<wchar_t, 32> tooltip_class{};
+    GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
+    const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
+    if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
+        tooltip_count != 35) {
+        std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
+                   << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
+    }
+    TOOLINFOW backend_tip{};
+    backend_tip.cbSize = SendMessageW(tooltip, CCM_GETVERSION, 0, 0) < 6 ? TTTOOLINFOW_V2_SIZE : sizeof(TOOLINFOW);
+    backend_tip.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    backend_tip.hwnd = page_window;
+    backend_tip.uId = reinterpret_cast<UINT_PTR>(GetDlgItem(page_window, ID_BACKEND));
+    std::array<wchar_t, 1024> backend_tip_text{};
+    backend_tip.lpszText = backend_tip_text.data();
+    SendMessageW(tooltip, TTM_GETTEXTW, 0, reinterpret_cast<LPARAM>(&backend_tip));
+    if (backend_tip_text[0] == L'\0') {
+        std::wcerr << L"Encoder tooltip text is missing.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 31;
+    }
 
     RECT client{};
     GetClientRect(page_window, &client);
