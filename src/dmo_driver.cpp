@@ -1769,7 +1769,7 @@ private:
         audio_controls_ = {GetDlgItem(window_, ID_AUDIO_FORMAT), GetDlgItem(window_, ID_AUDIO_RATE)};
         settings_info_ = GetDlgItem(window_, ID_SETTINGS_INFO);
         github_link_ = GetDlgItem(window_, ID_GITHUB_LINK);
-        SetWindowTextW(GetDlgItem(window_, ID_COMPAT_WARNING), L"\x26A0");
+        SetWindowTextW(GetDlgItem(window_, ID_COMPAT_WARNING), (std::wstring(L"\x26A0") + L"不可用的組合").c_str());
 
         TCITEMW item{};
         item.mask = TCIF_TEXT;
@@ -2121,7 +2121,7 @@ private:
                 }
             }
             y += inner_height + inner_gap;
-            const int warning_width = dlu_x(12);
+            const int warning_width = text_width(ID_COMPAT_WARNING, dlu_x(60));
             add_layout(ID_COMMAND_HEADING, margin_x, y, std::max(1, full_width - warning_width), label_height);
             add_layout(ID_COMPAT_WARNING, right - warning_width, y, warning_width, label_height);
             y += label_height + dlu_y(2);

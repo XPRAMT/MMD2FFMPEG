@@ -342,7 +342,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 28;
     }
     if (!IsWindowEnabled(bframes_edit) || !has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING)) ||
-        window_text(GetDlgItem(page_window, ID_COMPAT_WARNING)) != L"\x26A0") {
+        window_text(GetDlgItem(page_window, ID_COMPAT_WARNING)) != (std::wstring(L"\x26A0") + L"不可用的組合")) {
         std::wcerr << L"Potentially unsupported VP9 B-frames must keep the control enabled and show a warning.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 35;
     }
