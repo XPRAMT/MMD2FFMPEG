@@ -273,6 +273,28 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Only the FFmpeg filter and output-encoding middle section should be editable.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 40;
     }
+    HWND mask_output_combo = GetDlgItem(page_window, ID_MASK_OUTPUT);
+    SendMessageW(alpha_combo, CB_SETCURSEL, 2, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
+    SendMessageW(mask_output_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_MASK_OUTPUT, CBN_SELCHANGE), reinterpret_cast<LPARAM>(mask_output_combo));
+    const std::wstring stacked_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (stacked_command.find(L"-filter_complex ") == std::wstring::npos || stacked_command.find(L"vstack=inputs=2") == std::wstring::npos ||
+        window_text(GetDlgItem(page_window, ID_COMMAND_SUFFIX)) != L" \"{output}\"") {
+        std::wcerr << L"Stacked alpha command display does not match the final FFmpeg command.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 41;
+    }
+    SendMessageW(mask_output_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_MASK_OUTPUT, CBN_SELCHANGE), reinterpret_cast<LPARAM>(mask_output_combo));
+    const std::wstring separate_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    const std::wstring separate_suffix = window_text(GetDlgItem(page_window, ID_COMMAND_SUFFIX));
+    if (separate_command.find(L"-filter_complex ") == std::wstring::npos || separate_command.find(L"-map \"[colorout]\"") == std::wstring::npos ||
+        separate_suffix.find(L"-map \"[mask]\" -c:v ffv1 -pix_fmt gray \"{mask_output}\"") == std::wstring::npos) {
+        std::wcerr << L"Separate alpha command display does not match the final FFmpeg command.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 42;
+    }
+    SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 1, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(frame_mode_combo));
     if (!IsWindowEnabled(gop_edit) || !IsWindowEnabled(bframes_edit)) {

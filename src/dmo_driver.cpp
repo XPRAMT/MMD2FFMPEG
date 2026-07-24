@@ -709,24 +709,32 @@ std::wstring command_prefix(const Settings& settings) {
            L"-video_size {width}x{height} -framerate {fps} -i pipe:0 ";
 }
 
-std::wstring command_suffix(const Settings&) {
+std::wstring command_suffix(const Settings& settings) {
+    if (settings.alpha_mode == L"mask" && settings.mask_output == L"separate")
+        return L" \"{output}\" -map \"[mask]\" -c:v ffv1 -pix_fmt gray \"{mask_output}\"";
     return L" \"{output}\"";
 }
 
 std::wstring editable_arguments(const Settings& settings) {
-    const auto pixel_format = output_pixel_format(settings);
+    if (settings.alpha_mode != L"mask") {
+        const auto pixel_format = output_pixel_format(settings);
+        const auto color = color_space_spec(settings);
+        return L"-vf scale=in_range=pc:out_range=" + settings.color_range + L":out_color_matrix=" + color.matrix +
+               L",format=" + pixel_format + L" " + encoding_arguments(settings) +
+               L" -pix_fmt " + pixel_format + color_metadata(settings);
+    }
     const auto color = color_space_spec(settings);
-    return L"-vf scale=in_range=pc:out_range=" + settings.color_range + L":out_color_matrix=" + color.matrix +
-           L",format=" + pixel_format + L" " + encoding_arguments(settings) +
-           L" -pix_fmt " + pixel_format + color_metadata(settings);
-}
-
-std::wstring encoder_arguments_from_editable(const Settings& settings) {
-    const std::wstring& editable = settings.video_args;
-    const auto begin = editable.find(L"-c:v ");
-    if (begin == std::wstring::npos) return encoding_arguments(settings);
-    const auto end = editable.find(L" -pix_fmt ", begin);
-    return editable.substr(begin, end == std::wstring::npos ? std::wstring::npos : end - begin);
+    Settings color_settings = settings;
+    color_settings.alpha_mode = L"none";
+    const std::wstring pixel_format = output_pixel_format(color_settings);
+    std::wstring arguments = L"-filter_complex \"[0:v]split=2[color][alpha];[color]scale=in_range=pc:out_range=" +
+        settings.color_range + L":out_color_matrix=" + color.matrix + L",format=" + pixel_format + L"[colorout];" +
+        L"[alpha]alphaextract,format=gray[mask]";
+    if (settings.mask_output == L"stacked")
+        arguments += L";[colorout][mask]vstack=inputs=2,format=" + pixel_format + L"[out]\" -map \"[out]\" ";
+    else
+        arguments += L"\" -map \"[colorout]\" ";
+    return arguments + encoding_arguments(settings) + L" -pix_fmt " + pixel_format + color_metadata(settings);
 }
 
 void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
@@ -748,33 +756,8 @@ std::wstring recording_date_metadata() {
 std::wstring build_ffmpeg_command(const Settings& settings, int width, int height, int bits,
                                   const std::wstring& output_path, const std::wstring& mask_path = L"") {
     const auto arguments = settings.video_args.empty() ? editable_arguments(settings) : settings.video_args;
-    if (settings.alpha_mode == L"mask") {
-        const auto encoder_arguments = settings.video_args.empty() ? encoding_arguments(settings) : encoder_arguments_from_editable(settings);
-        const auto color = color_space_spec(settings);
-        Settings color_settings = settings;
-        color_settings.alpha_mode = L"none";
-        const std::wstring pixel_format = output_pixel_format(color_settings);
-        std::wstring command = L"\"" + settings.ffmpeg + L"\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {input_pixel_format} "
-            L"-video_size {width}x{height} -framerate {fps} -i pipe:0 -filter_complex \"[0:v]split=2[color][alpha];"
-            L"[color]scale=in_range=pc:out_range=" + settings.color_range + L":out_color_matrix=" + color.matrix +
-            L",format=" + pixel_format + L"[colorout];"
-            L"[alpha]alphaextract,format=gray[mask]";
-        if (settings.mask_output == L"stacked") {
-            command += L";[colorout][mask]vstack=inputs=2,format=" + pixel_format + L"[out]\" -map \"[out]\" " + encoder_arguments +
-                       L" -pix_fmt " + pixel_format + color_metadata(settings) + L" \"{output}\"";
-        } else {
-            command += L"\" -map \"[colorout]\" " + encoder_arguments + L" -pix_fmt " + pixel_format + color_metadata(settings) +
-                       L" \"{output}\" -map \"[mask]\" -c:v ffv1 -pix_fmt gray \"{mask_output}\"";
-        }
-        replace_all(command, L"{mask_output}", mask_path);
-        replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
-        replace_all(command, L"{width}", std::to_wstring(width));
-        replace_all(command, L"{height}", std::to_wstring(height));
-        replace_all(command, L"{fps}", std::to_wstring(settings.fps));
-        replace_all(command, L"{output}", output_path);
-        return command;
-    }
     std::wstring command = command_prefix(settings) + arguments + command_suffix(settings);
+    replace_all(command, L"{mask_output}", mask_path);
     replace_all(command, L"{input_pixel_format}", bits == 24 ? L"bgr24" : L"bgra");
     replace_all(command, L"{width}", std::to_wstring(width));
     replace_all(command, L"{height}", std::to_wstring(height));
@@ -890,23 +873,15 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         return false;
     }
     const auto arguments = settings.video_args.empty() ? editable_arguments(settings) : settings.video_args;
-    const auto encoder_arguments = settings.video_args.empty() ? encoding_arguments(settings) : encoder_arguments_from_editable(settings);
     std::wstring command;
     if (settings.alpha_mode == L"mask") {
-        const auto color = color_space_spec(settings);
-        Settings color_settings = settings;
-        color_settings.alpha_mode = L"none";
-        const std::wstring color_pixel_format = output_pixel_format(color_settings);
         command = L"\"" + settings.ffmpeg +
             L"\" -hide_banner -loglevel error -f lavfi -i color=c=black@0.5:s=1920x1080:r=1,format=bgra -frames:v 1 "
-            L"-filter_complex \"[0:v]split=2[color][alpha];[color]scale=in_range=pc:out_range=" + settings.color_range +
-            L":out_color_matrix=" + color.matrix + L",format=" + color_pixel_format + L"[colorout];[alpha]alphaextract,format=gray[mask]";
+            + arguments;
         if (settings.mask_output == L"stacked") {
-            command += L";[colorout][mask]vstack=inputs=2,format=" + color_pixel_format + L"[out]\" -map \"[out]\" " +
-                       encoder_arguments + L" -pix_fmt " + color_pixel_format + L" -f null -";
+            command += L" -f null -";
         } else {
-            command += L"\" -map \"[colorout]\" " + encoder_arguments + L" -pix_fmt " + color_pixel_format +
-                       L" -f null - -map \"[mask]\" -c:v ffv1 -pix_fmt gray -f null -";
+            command += L" -f null - -map \"[mask]\" -c:v ffv1 -pix_fmt gray -f null -";
         }
     } else {
         command = L"\"" + settings.ffmpeg +
@@ -1005,7 +980,7 @@ std::wstring command_test_signature(const Settings& settings) {
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
     const auto arguments = normalize_rate_values(settings.video_args.empty() ? editable_arguments(settings) : settings.video_args);
-    return L"v7-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+    return L"v8-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments;
 }
