@@ -38,6 +38,8 @@ BEGIN
     EDITTEXT        ID_GOP, 0, 0, 1, 1, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "B-frame interval", ID_LABEL_BFRAMES, 0, 0, 1, 1
     EDITTEXT        ID_BFRAMES, 0, 0, 1, 1, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "Frame structure", ID_LABEL_FRAME_MODE, 0, 0, 1, 1
+    COMBOBOX        ID_FRAME_MODE, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Complete FFmpeg command (middle section is editable)", ID_COMMAND_HEADING, 0, 0, 1, 1
     LTEXT           "", ID_COMMAND_PREFIX, 0, 0, 1, 1, SS_LEFT
     EDITTEXT        ID_COMMAND, 0, 0, 1, 1, ES_AUTOHSCROLL | WS_TABSTOP

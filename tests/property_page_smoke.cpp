@@ -101,7 +101,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 39) {
+        tooltip_count != 41) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -216,7 +216,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     TabCtrl_SetCurSel(video_tab, 2);
     const LRESULT frame_tab_result = SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
-    const int frame_ids[]{ID_GOP, ID_BFRAMES, ID_LABEL_GOP, ID_LABEL_BFRAMES};
+    const int frame_ids[]{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES};
     for (const int id : frame_ids) {
         const RECT rectangle = child_rect(page_window, id);
         if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(rectangle)) {
@@ -224,6 +224,12 @@ int wmain(int argument_count, wchar_t** arguments) {
                        << L" notify_result=" << frame_tab_result << L"\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 32;
         }
+    }
+    const int command_edit_height = child_rect(page_window, ID_COMMAND).bottom - child_rect(page_window, ID_COMMAND).top;
+    if (child_rect(page_window, ID_GOP).bottom - child_rect(page_window, ID_GOP).top > command_edit_height * 2 ||
+        child_rect(page_window, ID_BFRAMES).bottom - child_rect(page_window, ID_BFRAMES).top > command_edit_height * 2) {
+        std::wcerr << L"GOP and B-frame inputs must use compact edit-control heights.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 38;
     }
     const RECT command_on_frame_structure = child_rect(page_window, ID_COMMAND);
     if (command_before_color.top != command_on_frame_structure.top || command_before_color.bottom != command_on_frame_structure.bottom) {
@@ -236,12 +242,27 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND codec_combo = GetDlgItem(page_window, ID_CODEC);
     HWND depth_combo = GetDlgItem(page_window, ID_DEPTH);
     HWND alpha_combo = GetDlgItem(page_window, ID_ALPHA);
+    HWND frame_mode_combo = GetDlgItem(page_window, ID_FRAME_MODE);
     HWND gop_edit = GetDlgItem(page_window, ID_GOP);
     HWND bframes_edit = GetDlgItem(page_window, ID_BFRAMES);
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
     SendMessageW(codec_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_CODEC, CBN_SELCHANGE), reinterpret_cast<LPARAM>(codec_combo));
+    SendMessageW(frame_mode_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(frame_mode_combo));
+    const std::wstring automatic_frame_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (automatic_frame_command.find(L"-g ") != std::wstring::npos || automatic_frame_command.find(L"-bf ") != std::wstring::npos ||
+        IsWindowEnabled(gop_edit) || IsWindowEnabled(bframes_edit)) {
+        std::wcerr << L"Automatic frame structure must omit FFmpeg frame arguments and disable manual fields.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 36;
+    }
+    SendMessageW(frame_mode_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(frame_mode_combo));
+    if (!IsWindowEnabled(gop_edit) || !IsWindowEnabled(bframes_edit)) {
+        std::wcerr << L"Manual frame structure must enable GOP and B-frame fields for AVC.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 37;
+    }
     SetWindowTextW(gop_edit, L"120");
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_GOP, EN_CHANGE), reinterpret_cast<LPARAM>(gop_edit));
     SetWindowTextW(bframes_edit, L"2");
