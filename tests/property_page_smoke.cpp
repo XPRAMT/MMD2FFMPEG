@@ -180,7 +180,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 49) {
+        tooltip_count != 50) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -196,6 +196,17 @@ int wmain(int argument_count, wchar_t** arguments) {
     if (backend_tip_text[0] == L'\0') {
         std::wcerr << L"Encoder tooltip text is missing.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 31;
+    }
+    TOOLINFOW warning_tip = backend_tip;
+    warning_tip.uId = reinterpret_cast<UINT_PTR>(GetDlgItem(page_window, ID_COMPAT_WARNING));
+    std::array<wchar_t, 1024> warning_tip_text{};
+    warning_tip.lpszText = warning_tip_text.data();
+    SendMessageW(tooltip, TTM_GETTEXTW, 0, reinterpret_cast<LPARAM>(&warning_tip));
+    const std::wstring warning_tooltip(warning_tip_text.data());
+    if (warning_tooltip.find(L"可能") == std::wstring::npos &&
+        warning_tooltip.find(L"may") == std::wstring::npos) {
+        std::wcerr << L"Compatibility warning tooltip text is missing.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 53;
     }
 
     RECT client{};
@@ -481,8 +492,9 @@ int wmain(int argument_count, wchar_t** arguments) {
     const std::wstring command_suffix = window_text(GetDlgItem(page_window, ID_COMMAND_SUFFIX));
     if (command_prefix.find(L"-i pipe:0 ") == std::wstring::npos ||
         editable_command.find(L"-vf scale=") == std::wstring::npos || editable_command.find(L"-c:v ") == std::wstring::npos ||
-        editable_command.find(L"-pix_fmt ") == std::wstring::npos || command_suffix != L" \"{output}\"") {
-        std::wcerr << L"Only the FFmpeg filter and output-encoding middle section should be editable.\n";
+        editable_command.find(L"-pix_fmt ") == std::wstring::npos || !command_suffix.empty() ||
+        has_visible_style(GetDlgItem(page_window, ID_COMMAND_SUFFIX))) {
+        std::wcerr << L"FFmpeg output must remain hidden while the four-line middle section stays editable.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 40;
     }
     HWND mask_output_combo = GetDlgItem(page_window, ID_MASK_OUTPUT);
@@ -492,7 +504,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_MASK_OUTPUT, CBN_SELCHANGE), reinterpret_cast<LPARAM>(mask_output_combo));
     const std::wstring stacked_command = window_text(GetDlgItem(page_window, ID_COMMAND));
     if (stacked_command.find(L"-filter_complex ") == std::wstring::npos || stacked_command.find(L"vstack=inputs=2") == std::wstring::npos ||
-        window_text(GetDlgItem(page_window, ID_COMMAND_SUFFIX)) != L" \"{output}\"") {
+        !window_text(GetDlgItem(page_window, ID_COMMAND_SUFFIX)).empty()) {
         std::wcerr << L"Stacked alpha command display does not match the final FFmpeg command.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 41;
     }
@@ -501,7 +513,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     const std::wstring separate_command = window_text(GetDlgItem(page_window, ID_COMMAND));
     const std::wstring separate_suffix = window_text(GetDlgItem(page_window, ID_COMMAND_SUFFIX));
     if (separate_command.find(L"-filter_complex ") == std::wstring::npos || separate_command.find(L"-map \"[colorout]\"") == std::wstring::npos ||
-        separate_suffix.find(L"-map \"[mask]\" -c:v ffv1 -pix_fmt gray \"{mask_output}\"") == std::wstring::npos) {
+        !separate_suffix.empty()) {
         std::wcerr << L"Separate alpha command display does not match the final FFmpeg command.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 42;
     }
@@ -535,7 +547,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 28;
     }
     if (!IsWindowEnabled(bframes_edit) || !has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING)) ||
-        window_text(GetDlgItem(page_window, ID_COMPAT_WARNING)) != (std::wstring(L"\x26A0") + L"不可用的組合")) {
+        window_text(GetDlgItem(page_window, ID_COMPAT_WARNING)) != L"\x26A0") {
         std::wcerr << L"Potentially unsupported VP9 B-frames must keep the control enabled and show a warning.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 35;
     }
@@ -613,9 +625,10 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(page_window, WM_NOTIFY, ID_TAB, reinterpret_cast<LPARAM>(&video_selected));
     const RECT prefix = child_rect(page_window, ID_COMMAND_PREFIX);
     const RECT command = child_rect(page_window, ID_COMMAND);
-    const RECT suffix = child_rect(page_window, ID_COMMAND_SUFFIX);
-    if (prefix.bottom > command.top || command.bottom > suffix.top) {
-        std::wcerr << L"FFmpeg command controls overlap.\n";
+    if (prefix.bottom > command.top ||
+        command.bottom - command.top != nvencc_command_bounds.bottom - nvencc_command_bounds.top ||
+        has_visible_style(GetDlgItem(page_window, ID_COMMAND_SUFFIX))) {
+        std::wcerr << L"Command controls overlap or the editable command is not fixed at four lines.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 5;
     }
     if (constrained_host) {

@@ -212,6 +212,7 @@ struct UiTooltips {
     const wchar_t* test_encoder;
     const wchar_t* open_log;
     const wchar_t* github;
+    const wchar_t* compatibility_warning;
 };
 
 struct TabUiStrings {
@@ -315,7 +316,7 @@ const std::array<const wchar_t*, 3> vsr_tooltips(UiLanguage language) {
 const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings traditional{
         L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼核心數", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
-        L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"輸出範圍", L"GOP / I 幀間隔", L"B 幀間隔", L"幀結構", L"完整 FFmpeg 指令（中間區段可編輯）",
+        L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"輸出範圍", L"GOP / I 幀間隔", L"B 幀間隔", L"幀結構", L"FFmpeg 指令（中間參數可編輯）",
         L"編碼器狀態", L"尚未測試", L"測試中…", L"測試通過",
         L"設定已變更，請重新測試", L"測試失敗 - ",
         L"通過測試後才能儲存或套用。", L"測試編碼", L"開啟log",
@@ -324,7 +325,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"需要測試 MMD2FFMPEG 編碼器"};
     static constexpr UiStrings simplified{
         L"MMD2FFMPEG 编码器设置", L"语言", L"编码核心数", L"编码器", L"编码格式", L"位深度", L"编码预设",
-        L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"GOP / I 帧间隔", L"B 帧间隔", L"帧结构", L"完整 FFmpeg 命令（中间部分可编辑）",
+        L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"GOP / I 帧间隔", L"B 帧间隔", L"帧结构", L"FFmpeg 命令（中间参数可编辑）",
         L"编码器状态", L"尚未测试", L"测试中…", L"测试通过",
         L"设置已更改，请重新测试", L"测试失败 - ",
         L"测试通过后才能保存或应用。", L"测试编码", L"打开日志",
@@ -333,7 +334,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"需要测试 MMD2FFMPEG 编码器"};
     static constexpr UiStrings japanese{
         L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコード CPU スレッド", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
-        L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"GOP / I フレーム間隔", L"B フレーム間隔", L"フレーム構造", L"完全な FFmpeg コマンド（中央部分は編集可能）",
+        L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"GOP / I フレーム間隔", L"B フレーム間隔", L"フレーム構造", L"FFmpeg コマンド（中央の引数は編集可能）",
         L"エンコーダー状態", L"未テスト", L"テスト中…", L"テスト合格",
         L"設定が変更されました。再テストしてください", L"テスト失敗 - ",
         L"保存または適用する前にテストに合格する必要があります。", L"エンコーダーをテスト", L"ログを開く",
@@ -342,7 +343,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"MMD2FFMPEG エンコーダーのテストが必要です"};
     static constexpr UiStrings english{
         L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoding CPU threads", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
-        L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"GOP / I-frame interval", L"B-frame interval", L"Frame structure", L"Complete FFmpeg command (middle section is editable)",
+        L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"GOP / I-frame interval", L"B-frame interval", L"Frame structure", L"FFmpeg command (middle arguments are editable)",
         L"Encoder status", L"Not tested", L"Testing...", L"Test passed",
         L"Settings changed; test again", L"Test failed - ",
         L"Test must pass before saving or applying.", L"Test encoder", L"Open log",
@@ -435,7 +436,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"FFmpeg 與 NVEncC 模式都只開放中間編碼參數；執行檔、輸出、尺寸、幀率與輸入格式由程式固定。修改後請重新測試編碼器。",
         L"以目前設定執行小型測試；通過後才能儲存或套用。",
         L"開啟 MMD2FFMPEG 編碼與合併音訊的記錄資料夾。",
-        L"開啟專案的 GitHub 網頁。"};
+        L"開啟專案的 GitHub 網頁。",
+        L"此組合可能無法執行"};
     static constexpr UiTooltips simplified{
         L"选择设置界面的显示语言；系统默认会跟随 Windows。",
         L"选择 CPU 软件编码使用的线程数。自动不传递 -threads；全部、全部 - 1、全部 - 2 会依 Windows 检测的可用逻辑处理器数计算。硬件编码不使用此设置。",
@@ -459,7 +461,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"FFmpeg 与 NVEncC 模式都只开放中间编码参数；可执行文件、输出、尺寸、帧率与输入格式由程序固定。修改后请重新测试编码器。",
         L"以当前设置执行小型测试；通过后才能保存或应用。",
         L"打开 MMD2FFMPEG 编码与合并音频的日志文件夹。",
-        L"打开项目的 GitHub 网页。"};
+        L"打开项目的 GitHub 网页。",
+        L"此组合可能无法执行"};
     static constexpr UiTooltips japanese{
         L"設定画面の表示言語を選択します。システム既定は Windows の表示言語に従います。",
         L"CPU ソフトウェアエンコードで使用するスレッド数を選択します。自動は -threads を渡しません。すべて、すべて - 1、すべて - 2 は Windows が検出した論理プロセッサ数から計算します。ハードウェアエンコードでは使用しません。",
@@ -483,7 +486,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"FFmpeg と NVEncC は中央のエンコード引数のみ編集できます。実行ファイル、出力、寸法、フレームレート、入力形式は固定です。変更後は再テストしてください。",
         L"現在の設定で小さなテストを実行します。保存または適用する前に合格が必要です。",
         L"MMD2FFMPEG のエンコードおよび音声結合ログのフォルダーを開きます。",
-        L"プロジェクトの GitHub ページを開きます。"};
+        L"プロジェクトの GitHub ページを開きます。",
+        L"この組み合わせは実行できない可能性があります"};
     static constexpr UiTooltips english{
         L"Choose the settings interface language. System default follows the Windows display language.",
         L"Choose the thread count for CPU software encoding. Automatic passes no -threads option; All, All - 1, and All - 2 are calculated from Windows-detected logical processors. Hardware encoding does not use this setting.",
@@ -507,7 +511,8 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"Edit only the middle encoding arguments in FFmpeg and NVEncC modes. The executable, output, dimensions, frame rate, and input format remain fixed. Test again after editing.",
         L"Run a small test using the current settings. It must pass before settings can be saved or applied.",
         L"Open the folder containing MMD2FFMPEG encoding and audio-merge logs.",
-        L"Open the project's GitHub page."};
+        L"Open the project's GitHub page.",
+        L"This combination may not run"};
     switch (language) {
     case UiLanguage::TraditionalChinese: return traditional;
     case UiLanguage::SimplifiedChinese: return simplified;
@@ -2033,7 +2038,7 @@ private:
             SetPropW(window_, L"MMD2FFMPEG.TooltipWindow", tooltip_);
         }
         const auto& tip = ui_tooltips(ui_language(settings_.language));
-        const std::array<std::pair<int, const wchar_t*>, 43> items{{
+        const std::array<std::pair<int, const wchar_t*>, 44> items{{
             {ID_LABEL_LANGUAGE, tip.language}, {ID_LANGUAGE, tip.language},
             {ID_LABEL_CPU_THREADS, tip.cpu_threads}, {ID_CPU_THREADS, tip.cpu_threads},
             {ID_LABEL_BACKEND, tip.backend}, {ID_BACKEND, tip.backend},
@@ -2055,6 +2060,7 @@ private:
             {ID_LABEL_AUDIO_RATE, tip.audio_rate}, {ID_AUDIO_RATE, tip.audio_rate},
             {ID_COMMAND_HEADING, tip.command}, {ID_COMMAND, tip.command},
             {ID_REFRESH, tip.test_encoder}, {ID_OPEN_LOG, tip.open_log}, {ID_GITHUB_LINK, tip.github},
+            {ID_COMPAT_WARNING, tip.compatibility_warning},
         }};
         for (const auto& item : items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         const auto vsr_tip = vsr_tooltips(ui_language(settings_.language));
@@ -2075,7 +2081,7 @@ private:
         audio_controls_ = {GetDlgItem(window_, ID_AUDIO_FORMAT), GetDlgItem(window_, ID_AUDIO_RATE)};
         settings_info_ = GetDlgItem(window_, ID_SETTINGS_INFO);
         github_link_ = GetDlgItem(window_, ID_GITHUB_LINK);
-        SetWindowTextW(GetDlgItem(window_, ID_COMPAT_WARNING), (std::wstring(L"\x26A0") + L"不可用的組合").c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMPAT_WARNING), L"\x26A0");
 
         TCITEMW item{};
         item.mask = TCIF_TEXT;
@@ -2117,7 +2123,7 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_VSR_SCALE), scale_value.str().c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND), (settings_.video_args.empty() ? editable_arguments(settings_) : settings_.video_args).c_str());
-        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), L"");
         update_command_display();
         rebuild_backend_options();
         update_controls();
@@ -2130,8 +2136,7 @@ private:
         const std::array<int, 10> video_bottom{ID_COMMAND, ID_REFRESH, ID_STATUS, ID_OPEN_LOG, ID_COMMAND_PREFIX, ID_COMMAND_SUFFIX,
                                                 ID_TEST_REQUIREMENT, ID_COMMAND_HEADING, ID_LABEL_STATUS, ID_VIDEO_TAB};
         for (const int id : video_bottom) ShowWindow(GetDlgItem(window_, id), page == 0 ? SW_SHOW : SW_HIDE);
-        if (page == 0 && uses_nvenc_bridge(settings_))
-            ShowWindow(GetDlgItem(window_, ID_COMMAND_SUFFIX), SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_COMMAND_SUFFIX), SW_HIDE);
         for (HWND control : audio_labels_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         for (HWND control : audio_controls_) ShowWindow(control, page == 1 ? SW_SHOW : SW_HIDE);
         ShowWindow(audio_intro_, page == 1 ? SW_SHOW : SW_HIDE);
@@ -2354,9 +2359,9 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND),
                        (settings_.video_args.empty() ? editable_arguments(settings_) : settings_.video_args).c_str());
-        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), L"");
         ShowWindow(GetDlgItem(window_, ID_COMMAND_PREFIX), active_tab_ == 0 ? SW_SHOW : SW_HIDE);
-        ShowWindow(GetDlgItem(window_, ID_COMMAND_SUFFIX), active_tab_ == 0 ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_COMMAND_SUFFIX), SW_HIDE);
         rebuild_layout();
     }
     struct LayoutItem {
@@ -2485,22 +2490,16 @@ private:
                 }
             }
             y += inner_height + inner_gap;
-            const int warning_width = text_width(ID_COMPAT_WARNING, dlu_x(60));
+            const int warning_width = text_width(ID_COMPAT_WARNING, dlu_x(12));
             add_layout(ID_COMMAND_HEADING, margin_x, y, std::max(1, full_width - warning_width), label_height);
             add_layout(ID_COMPAT_WARNING, right - warning_width, y, warning_width, label_height);
             y += label_height + dlu_y(2);
-            const bool bridge_command = uses_nvenc_bridge(settings_);
             const int prefix_height = text_height(ID_COMMAND_PREFIX, full_width, dlu_y(24));
             add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, prefix_height);
             y += prefix_height + dlu_y(2);
             const int command_height = edit_height * 4;
             add_layout(ID_COMMAND, margin_x, y, full_width, command_height);
             y += command_height + dlu_y(2);
-            if (!bridge_command) {
-                const int suffix_height = text_height(ID_COMMAND_SUFFIX, full_width, dlu_y(12));
-                add_layout(ID_COMMAND_SUFFIX, margin_x, y, full_width, suffix_height);
-                y += suffix_height + dlu_y(1);
-            }
             add_layout(ID_LABEL_STATUS, margin_x, y, full_width, label_height);
             y += label_height + dlu_y(1);
             const int status_height = edit_height * 2;
