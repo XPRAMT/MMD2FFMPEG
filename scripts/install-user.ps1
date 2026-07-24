@@ -1,7 +1,9 @@
 ﻿$ErrorActionPreference = 'Stop'
 
 function Wait-ForExit {
-    [void](Read-Host 'Press Enter to close this window')
+    if ($env:MMD2FFMPEG_NONINTERACTIVE -ne '1') {
+        [void](Read-Host 'Press Enter to close this window')
+    }
 }
 
 try {
