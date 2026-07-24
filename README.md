@@ -95,7 +95,7 @@ This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`.
 
 ## Use in MMD
 
-1. Select **File > AVI Output** and choose the desired AVI save path.
+1. Select **File > AVI Output** and choose the desired AVI save path. MMD itself accepts only an `.avi` extension or no extension in this filename field; do not enter `.mkv`. This is an MMD limitation, not an MMD2FFMPEG limitation.
 2. In **Video encoder**, select **MMD2FFMPEG DMO Encoder**.
 
 <img src="imgs/MMD編碼選擇介面_EN.png" alt="MMD AVI output encoder selection" width="300">

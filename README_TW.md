@@ -95,7 +95,7 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 ## 在 MMD 中使用
 
-1. 選擇 **檔案 > AVI輸出**，指定 AVI 儲存位置。
+1. 選擇 **檔案 > AVI輸出**，指定 AVI 儲存位置。MMD 的這個檔名欄位只能填入 `.avi` 副檔名或不填副檔名；請勿填入 `.mkv`。這是 MMD 本身的限制，不是 MMD2FFMPEG 的限制。
 2. 在 **影片編碼** 選擇 **MMD2FFMPEG DMO Encoder**。
 
 <img src="imgs/MMD編碼選擇介面_TW.png" alt="MMD AVI 輸出編碼器選擇" width="300">
