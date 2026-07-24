@@ -448,6 +448,8 @@ std::filesystem::path config_path() {
         : std::filesystem::path(L"config.ini");
 }
 
+std::wstring editable_arguments(const Settings& settings);
+
 std::filesystem::path local_data_dir() { return config_path().parent_path(); }
 
 std::filesystem::path logs_directory() { return local_data_dir() / L"logs"; }
@@ -536,11 +538,7 @@ Settings load_settings() {
         }
     }
     settings.command_template.clear();
-    const auto encoder_begin = settings.video_args.find(L"-c:v ");
-    const auto fixed_output_begin = settings.video_args.find(L" -pix_fmt ", encoder_begin);
-    if (encoder_begin != std::wstring::npos && fixed_output_begin != std::wstring::npos) {
-        settings.video_args = settings.video_args.substr(encoder_begin, fixed_output_begin - encoder_begin);
-    }
+    if (settings.video_args.rfind(L"-c:v ", 0) == 0) settings.video_args = editable_arguments(settings);
     return settings;
 }
 
@@ -571,7 +569,9 @@ void save_settings(const Settings& settings) {
          << L"audio_sample_rate=" << settings.audio_sample_rate << L"\n"
          << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n";
     file << L"language=" << settings.language << L"\n";
-    if (!settings.video_args.empty()) file << L"video_args=" << settings.video_args << L"\n";
+    std::wstring video_args = settings.video_args;
+    std::replace_if(video_args.begin(), video_args.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
+    if (!video_args.empty()) file << L"video_args=" << video_args << L"\n";
 }
 
 std::wstring lower(std::wstring value) {
@@ -704,18 +704,29 @@ std::wstring color_metadata(const Settings& settings) {
 }
 
 std::wstring command_prefix(const Settings& settings) {
-    const auto pixel_format = output_pixel_format(settings);
-    const auto color = color_space_spec(settings);
     return L"\"" + settings.ffmpeg +
            L"\" -hide_banner -loglevel warning -y -f rawvideo -pixel_format {input_pixel_format} "
-           L"-video_size {width}x{height} -framerate {fps} -i pipe:0 "
-           L"-vf scale=in_range=pc:out_range=" + settings.color_range + L":out_color_matrix=" + color.matrix +
-           L",format=" + pixel_format + L" ";
+           L"-video_size {width}x{height} -framerate {fps} -i pipe:0 ";
 }
 
-std::wstring command_suffix(const Settings& settings) {
+std::wstring command_suffix(const Settings&) {
+    return L" \"{output}\"";
+}
+
+std::wstring editable_arguments(const Settings& settings) {
     const auto pixel_format = output_pixel_format(settings);
-    return L" -pix_fmt " + std::wstring(pixel_format) + color_metadata(settings) + L" \"{output}\"";
+    const auto color = color_space_spec(settings);
+    return L"-vf scale=in_range=pc:out_range=" + settings.color_range + L":out_color_matrix=" + color.matrix +
+           L",format=" + pixel_format + L" " + encoding_arguments(settings) +
+           L" -pix_fmt " + pixel_format + color_metadata(settings);
+}
+
+std::wstring encoder_arguments_from_editable(const Settings& settings) {
+    const std::wstring& editable = settings.video_args;
+    const auto begin = editable.find(L"-c:v ");
+    if (begin == std::wstring::npos) return encoding_arguments(settings);
+    const auto end = editable.find(L" -pix_fmt ", begin);
+    return editable.substr(begin, end == std::wstring::npos ? std::wstring::npos : end - begin);
 }
 
 void replace_all(std::wstring& value, const std::wstring& from, const std::wstring& to) {
@@ -736,8 +747,9 @@ std::wstring recording_date_metadata() {
 
 std::wstring build_ffmpeg_command(const Settings& settings, int width, int height, int bits,
                                   const std::wstring& output_path, const std::wstring& mask_path = L"") {
-    const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
+    const auto arguments = settings.video_args.empty() ? editable_arguments(settings) : settings.video_args;
     if (settings.alpha_mode == L"mask") {
+        const auto encoder_arguments = settings.video_args.empty() ? encoding_arguments(settings) : encoder_arguments_from_editable(settings);
         const auto color = color_space_spec(settings);
         Settings color_settings = settings;
         color_settings.alpha_mode = L"none";
@@ -748,10 +760,10 @@ std::wstring build_ffmpeg_command(const Settings& settings, int width, int heigh
             L",format=" + pixel_format + L"[colorout];"
             L"[alpha]alphaextract,format=gray[mask]";
         if (settings.mask_output == L"stacked") {
-            command += L";[colorout][mask]vstack=inputs=2,format=" + pixel_format + L"[out]\" -map \"[out]\" " + arguments +
+            command += L";[colorout][mask]vstack=inputs=2,format=" + pixel_format + L"[out]\" -map \"[out]\" " + encoder_arguments +
                        L" -pix_fmt " + pixel_format + color_metadata(settings) + L" \"{output}\"";
         } else {
-            command += L"\" -map \"[colorout]\" " + arguments + L" -pix_fmt " + pixel_format + color_metadata(settings) +
+            command += L"\" -map \"[colorout]\" " + encoder_arguments + L" -pix_fmt " + pixel_format + color_metadata(settings) +
                        L" \"{output}\" -map \"[mask]\" -c:v ffv1 -pix_fmt gray \"{mask_output}\"";
         }
         replace_all(command, L"{mask_output}", mask_path);
@@ -877,8 +889,8 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
         error_message = L"FFmpeg was not found in the system PATH:\n" + settings.ffmpeg;
         return false;
     }
-    const auto arguments = settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args;
-    const auto pixel_format = output_pixel_format(settings);
+    const auto arguments = settings.video_args.empty() ? editable_arguments(settings) : settings.video_args;
+    const auto encoder_arguments = settings.video_args.empty() ? encoding_arguments(settings) : encoder_arguments_from_editable(settings);
     std::wstring command;
     if (settings.alpha_mode == L"mask") {
         const auto color = color_space_spec(settings);
@@ -891,15 +903,15 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
             L":out_color_matrix=" + color.matrix + L",format=" + color_pixel_format + L"[colorout];[alpha]alphaextract,format=gray[mask]";
         if (settings.mask_output == L"stacked") {
             command += L";[colorout][mask]vstack=inputs=2,format=" + color_pixel_format + L"[out]\" -map \"[out]\" " +
-                       arguments + L" -pix_fmt " + color_pixel_format + L" -f null -";
+                       encoder_arguments + L" -pix_fmt " + color_pixel_format + L" -f null -";
         } else {
-            command += L"\" -map \"[colorout]\" " + arguments + L" -pix_fmt " + color_pixel_format +
+            command += L"\" -map \"[colorout]\" " + encoder_arguments + L" -pix_fmt " + color_pixel_format +
                        L" -f null - -map \"[mask]\" -c:v ffv1 -pix_fmt gray -f null -";
         }
     } else {
         command = L"\"" + settings.ffmpeg +
             L"\" -hide_banner -loglevel error -f lavfi -i color=c=black@0.5:s=1920x1080:r=1 -frames:v 1 "
-            L"-vf format=" + pixel_format + L" " + arguments + L" -pix_fmt " + pixel_format + L" -f null -";
+            + arguments + L" -f null -";
     }
 
     SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
@@ -992,8 +1004,8 @@ std::wstring command_test_signature(const Settings& settings) {
     const auto ffmpeg_path = resolve_executable(settings.ffmpeg);
     std::error_code error;
     const auto stamp = std::filesystem::last_write_time(ffmpeg_path, error).time_since_epoch().count();
-    const auto arguments = normalize_rate_values(settings.video_args.empty() ? encoding_arguments(settings) : settings.video_args);
-    return L"v6-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
+    const auto arguments = normalize_rate_values(settings.video_args.empty() ? editable_arguments(settings) : settings.video_args);
+    return L"v7-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments;
 }
@@ -1766,7 +1778,7 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_GOP), std::to_wstring(settings_.gop).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_BFRAMES), std::to_wstring(settings_.b_frames).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
-        SetWindowTextW(GetDlgItem(window_, ID_COMMAND), (settings_.video_args.empty() ? encoding_arguments(settings_) : settings_.video_args).c_str());
+        SetWindowTextW(GetDlgItem(window_, ID_COMMAND), (settings_.video_args.empty() ? editable_arguments(settings_) : settings_.video_args).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), command_suffix(settings_).c_str());
         rebuild_backend_options();
         update_controls();
@@ -2073,12 +2085,15 @@ private:
             y += inner_height + inner_gap;
             add_layout(ID_COMMAND_HEADING, margin_x, y, full_width, label_height);
             y += label_height + dlu_y(2);
-            add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, dlu_y(24));
-            y += dlu_y(24) + dlu_y(2);
-            add_layout(ID_COMMAND, margin_x, y, full_width, edit_height);
-            y += edit_height + dlu_y(2);
-            add_layout(ID_COMMAND_SUFFIX, margin_x, y, full_width, dlu_y(18));
-            y += dlu_y(18) + dlu_y(1);
+            const int prefix_height = text_height(ID_COMMAND_PREFIX, full_width, dlu_y(24));
+            add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, prefix_height);
+            y += prefix_height + dlu_y(2);
+            const int command_height = edit_height * 3;
+            add_layout(ID_COMMAND, margin_x, y, full_width, command_height);
+            y += command_height + dlu_y(2);
+            const int suffix_height = text_height(ID_COMMAND_SUFFIX, full_width, dlu_y(12));
+            add_layout(ID_COMMAND_SUFFIX, margin_x, y, full_width, suffix_height);
+            y += suffix_height + dlu_y(1);
             const int status_height = label_height * 2;
             add_layout(ID_STATUS, margin_x, y, full_width, status_height);
             y += status_height;
@@ -2248,7 +2263,7 @@ private:
         if (id != ID_COMMAND) {
             sync_structured_settings();
             updating_command_ = true;
-            SetWindowTextW(GetDlgItem(window_, ID_COMMAND), encoding_arguments(settings_).c_str());
+            SetWindowTextW(GetDlgItem(window_, ID_COMMAND), editable_arguments(settings_).c_str());
             update_command_display();
             updating_command_ = false;
         }

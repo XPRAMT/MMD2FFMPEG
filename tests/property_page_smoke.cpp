@@ -179,10 +179,17 @@ int wmain(int argument_count, wchar_t** arguments) {
     const RECT quality = child_rect(page_window, ID_QP);
     const RECT bitrate = child_rect(page_window, ID_BITRATE);
     const RECT command_heading = child_rect(page_window, ID_COMMAND_HEADING);
+    const RECT command_editor = child_rect(page_window, ID_COMMAND);
     const RECT initial_status_bounds = child_rect(page_window, ID_STATUS);
     if (quality.bottom > command_heading.top || bitrate.bottom > command_heading.top) {
         std::wcerr << L"Quality or bitrate control overlaps the FFmpeg command area.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 25;
+    }
+    const LONG_PTR command_style = GetWindowLongPtrW(GetDlgItem(page_window, ID_COMMAND), GWL_STYLE);
+    if ((command_style & ES_MULTILINE) == 0 || (command_style & ES_AUTOHSCROLL) != 0 ||
+        command_editor.bottom - command_editor.top < (quality.bottom - quality.top) * 3) {
+        std::wcerr << L"Editable FFmpeg command must be a three-line word-wrapping edit control.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 39;
     }
     if (initial_status_bounds.bottom - initial_status_bounds.top < (command_heading.bottom - command_heading.top) * 2) {
         std::wcerr << L"Encoder status does not reserve two lines.\n";
@@ -256,6 +263,15 @@ int wmain(int argument_count, wchar_t** arguments) {
         IsWindowEnabled(gop_edit) || IsWindowEnabled(bframes_edit)) {
         std::wcerr << L"Automatic frame structure must omit FFmpeg frame arguments and disable manual fields.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 36;
+    }
+    const std::wstring command_prefix = window_text(GetDlgItem(page_window, ID_COMMAND_PREFIX));
+    const std::wstring editable_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    const std::wstring command_suffix = window_text(GetDlgItem(page_window, ID_COMMAND_SUFFIX));
+    if (command_prefix.find(L"-i pipe:0 ") == std::wstring::npos ||
+        editable_command.find(L"-vf scale=") == std::wstring::npos || editable_command.find(L"-c:v ") == std::wstring::npos ||
+        editable_command.find(L"-pix_fmt ") == std::wstring::npos || command_suffix != L" \"{output}\"") {
+        std::wcerr << L"Only the FFmpeg filter and output-encoding middle section should be editable.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 40;
     }
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 1, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE), reinterpret_cast<LPARAM>(frame_mode_combo));
