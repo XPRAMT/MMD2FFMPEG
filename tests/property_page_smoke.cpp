@@ -168,8 +168,8 @@ int wmain(int argument_count, wchar_t** arguments) {
     video_tab_change.idFrom = ID_VIDEO_TAB;
     video_tab_change.code = TCN_SELCHANGE;
     const LRESULT video_tab_result = SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
-    const int color_ids[]{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE,
-                          ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE};
+    const int color_ids[]{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE, ID_COLOR_RANGE,
+                          ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE, ID_LABEL_COLOR_RANGE};
     for (const int id : color_ids) {
         const RECT rectangle = child_rect(page_window, id);
         if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(rectangle)) {
