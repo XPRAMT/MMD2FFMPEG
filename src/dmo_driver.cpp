@@ -926,9 +926,9 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
             L"\" -hide_banner -loglevel error -f lavfi -i color=c=black@0.5:s=1920x1080:r=1,format=bgra -frames:v 1 "
             + arguments;
         if (settings.mask_output == L"stacked") {
-            command += L" -f null -";
+            command += L" -frames:v 1 -f null -";
         } else {
-            command += L" -f null - -map \"[mask]\" -c:v ffv1 -pix_fmt gray -f null -";
+            command += L" -frames:v 1 -f null - -map \"[mask]\" -c:v ffv1 -pix_fmt gray -frames:v 1 -f null -";
         }
     } else {
         command = L"\"" + settings.ffmpeg +
