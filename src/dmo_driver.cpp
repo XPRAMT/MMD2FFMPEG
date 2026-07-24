@@ -2088,7 +2088,7 @@ private:
             const int prefix_height = text_height(ID_COMMAND_PREFIX, full_width, dlu_y(24));
             add_layout(ID_COMMAND_PREFIX, margin_x, y, full_width, prefix_height);
             y += prefix_height + dlu_y(2);
-            const int command_height = edit_height * 3;
+            const int command_height = edit_height * 4;
             add_layout(ID_COMMAND, margin_x, y, full_width, command_height);
             y += command_height + dlu_y(2);
             const int suffix_height = text_height(ID_COMMAND_SUFFIX, full_width, dlu_y(12));

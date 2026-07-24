@@ -187,8 +187,8 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     const LONG_PTR command_style = GetWindowLongPtrW(GetDlgItem(page_window, ID_COMMAND), GWL_STYLE);
     if ((command_style & ES_MULTILINE) == 0 || (command_style & ES_AUTOHSCROLL) != 0 ||
-        command_editor.bottom - command_editor.top < (quality.bottom - quality.top) * 3) {
-        std::wcerr << L"Editable FFmpeg command must be a three-line word-wrapping edit control.\n";
+        command_editor.bottom - command_editor.top < (quality.bottom - quality.top) * 4) {
+        std::wcerr << L"Editable FFmpeg command must be a four-line word-wrapping edit control.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 39;
     }
     if (initial_status_bounds.bottom - initial_status_bounds.top < (command_heading.bottom - command_heading.top) * 2) {
