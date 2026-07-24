@@ -85,7 +85,7 @@ constexpr std::array<CodecCapability, 5> kCodecCapabilities{{
     {L"hevc", L"HEVC (H.265)", false, true, false, false, false, true, false},
     {L"av1", L"AV1", false, true, false, false, false, true, false},
     {L"vp9", L"VP9", true, true, false, true, false, true, false},
-    {L"prores", L"ProRes (prores_ks)", true, true, true, true, true, false, true},
+    {L"prores", L"ProRes", true, true, true, true, true, false, true},
 }};
 
 const CodecCapability& codec_capability(std::wstring_view key) {
@@ -1514,16 +1514,16 @@ private:
 
         updating_command_ = true;
         add_combo(ID_LANGUAGE, {L"系統預設", L"繁體中文", L"簡體中文", L"日本語", L"English"}, language_index(settings_.language));
-        add_combo(ID_BACKEND, {L"CPU (software)", L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
-        add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes (prores_ks)"}, codec_index(settings_.codec));
+        add_combo(ID_BACKEND, {L"CPU", L"NVENC", L"QSV", L"AMF"}, settings_.backend == L"cpu" ? 0 : settings_.backend == L"qsv" ? 2 : settings_.backend == L"amf" ? 3 : 1);
+        add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes"}, codec_index(settings_.codec));
         add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
         add_combo(ID_PRESET, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
-        add_combo(ID_RATE, {L"CQ (constant quality)", L"Constant QP", L"VBR target bitrate"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+        add_combo(ID_RATE, {L"CRF", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         add_combo(ID_ALPHA, {L"None", L"4-channel", L"Black/white mask"}, settings_.alpha_mode == L"rgba" ? 1 : settings_.alpha_mode == L"mask" ? 2 : 0);
-        add_combo(ID_MASK_OUTPUT, {L"Stack below (height x2)", L"Separate alpha video"}, settings_.mask_output == L"separate" ? 1 : 0);
+        add_combo(ID_MASK_OUTPUT, {L"Stack x2", L"Separate"}, settings_.mask_output == L"separate" ? 1 : 0);
         add_combo(ID_CHROMA, {L"4:2:0", L"4:2:2", L"4:4:4"}, settings_.chroma == L"422" ? 1 : settings_.chroma == L"444" ? 2 : 0);
         add_combo(ID_COLORSPACE, {L"BT.601", L"BT.709", L"BT.2020"}, settings_.color_space == L"bt601" ? 0 : settings_.color_space == L"bt2020" ? 2 : 1);
-        add_combo(ID_COLOR_RANGE, {L"TV / limited", L"PC / full"}, settings_.color_range == L"pc" ? 1 : 0);
+        add_combo(ID_COLOR_RANGE, {L"TV", L"PC"}, settings_.color_range == L"pc" ? 1 : 0);
         add_combo(ID_AUDIO_FORMAT, {L"FLAC", L"WAV", L"None"}, settings_.audio_format == L"flac" ? 0 : settings_.audio_format == L"wav" ? 1 : 2);
         add_combo(ID_AUDIO_RATE, {L"Original", L"Hi-Res"}, settings_.audio_sample_rate == L"hires" ? 1 : 0);
         SetWindowTextW(GetDlgItem(window_, ID_QP), std::to_wstring(settings_.qp).c_str());
@@ -1594,27 +1594,23 @@ private:
         const std::wstring best_4 = std::wstring(L"4 (") + options.best_quality + L")";
         const std::wstring fastest_p1 = std::wstring(L"P1 (") + options.fastest + L")";
         const std::wstring best_p7 = std::wstring(L"P7 (") + options.best_quality + L")";
-        const std::wstring crf = std::wstring(L"CRF (") + options.constant_quality + L")";
-        const std::wstring cq = std::wstring(L"CQ (") + options.constant_quality + L")";
-        const std::wstring icq = std::wstring(L"ICQ / ") + options.global_quality;
-        const std::wstring qvbr = std::wstring(L"QVBR ") + options.quality;
         updating_command_ = true;
         if (backend == 0) {
             if (combo_index(ID_CODEC) == 2)
                 reset_combo(ID_PRESET, {fastest_13.c_str(), L"11", L"9", L"8", L"7", L"6", best_4.c_str()}, old_level - 1);
             else
                 reset_combo(ID_PRESET, {L"ultrafast", L"superfast", L"veryfast", L"faster", L"fast", L"medium", L"slow"}, old_level - 1);
-            reset_combo(ID_RATE, {crf.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_RATE, {L"CRF", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         } else if (backend == 1) {
             reset_combo(ID_PRESET, {fastest_p1.c_str(), L"P2", L"P3", L"P4", L"P5", L"P6", best_p7.c_str()}, old_level - 1);
-            reset_combo(ID_RATE, {cq.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_RATE, {L"CQ", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         } else if (backend == 2) {
             reset_combo(ID_PRESET, {L"veryfast", L"faster", L"fast", L"medium", L"slow", L"slower", L"veryslow"}, old_level - 1);
-            reset_combo(ID_RATE, {icq.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_RATE, {L"ICQ", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         } else {
             const int amf_selected = old_level <= 2 ? 0 : old_level <= 5 ? 1 : 2;
             reset_combo(ID_PRESET, {options.speed, options.balanced, options.quality}, amf_selected);
-            reset_combo(ID_RATE, {qvbr.c_str(), options.constant_qp, options.target_bitrate}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
+            reset_combo(ID_RATE, {L"QVBR", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         }
         updating_command_ = false;
     }
@@ -1947,12 +1943,10 @@ private:
     }
     void apply_language() {
         const auto& text = current_text();
-        const auto& options = ui_options(ui_language(settings_.language));
         const int backend = combo_index(ID_BACKEND);
-        reset_combo(ID_BACKEND, {(std::wstring(L"CPU (") + options.software + L")").c_str(),
-                                 L"NVIDIA NVENC", L"Intel Quick Sync", L"AMD AMF"}, backend);
+        reset_combo(ID_BACKEND, {L"CPU", L"NVENC", L"QSV", L"AMF"}, backend);
         const int codec = combo_index(ID_CODEC);
-        reset_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes (prores_ks)"}, codec);
+        reset_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes"}, codec);
         rebuild_backend_options();
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_LANGUAGE), text.language);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_BACKEND), text.encoder);
