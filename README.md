@@ -12,13 +12,17 @@ MMD2FFMPEG is a 64-bit DirectX Media Object (DMO) encoder for MikuMikuDance 9.32
 - After video encoding, can read audio embedded in MMD's AVI and mux it into the MKV as FLAC, WAV/PCM, or no audio.
 - Includes an optional Hi-Res audio mode: audio below 48 kHz is encoded at twice its original sample rate and 24-bit depth.
 - Writes the MKV `DATE_RECORDED` metadata field automatically when encoding starts, using the local date in `yyyy-M-d` format.
-- Supports CPU software encoding, NVIDIA NVENC, Intel Quick Sync, and AMD AMF through FFmpeg.
-- Supports AVC, HEVC, and AV1; 8-bit and supported 10-bit output; CRF/CQ, constant QP, and target-bitrate modes.
-- Uses the frame rate chosen by MMD and marks video as BT.709.
+- Supports CPU software encoding, NVIDIA NVENC, NVEncC (NVIDIA), Intel Quick Sync, and AMD AMF. NVEncC is a separate NVIDIA encoder path for RTX Video Super Resolution and optical-flow interpolation.
+- Supports AVC, HEVC, AV1, VP9, and ProRes; 4:2:0, 4:2:2, and 4:4:4 chroma; supported 8-bit/10-bit output; and CRF/CQ, constant QP, and target-bitrate modes.
+- Provides BT.601, BT.709, and BT.2020 color tags plus PC (full) and TV (limited) output range selection. MMD source frames are full-range RGB.
+- Supports alpha output: VP9 and ProRes four-channel output, and NVEncC HEVC alpha at 8-bit. Black/white alpha masks can be stacked below the video or written as a separate MKV when using the FFmpeg path.
+- Provides automatic or manual GOP / I-frame interval and B-frame settings.
+- Supports RTX Video Super Resolution through NVEncC, with a 1.00–4.00 scale factor and VSR quality level 1–4.
+- Supports NVIDIA Optical Flow frame interpolation through NVEncC: Off, Double, or Custom target FPS (1–240).
+- Uses the frame rate chosen by MMD and marks video as BT.709 by default.
 - Requires a successful manual encoder test before settings can be saved or applied.
 - Includes Traditional Chinese, Simplified Chinese, Japanese, English, and system-default UI languages.
 - Writes per-export diagnostics under `%LOCALAPPDATA%\MMD2FFMPEG\logs`, including FFmpeg version, input frames, measured input FPS, elapsed time, exit code, and output size.
-- Includes **MMD Locale Launcher**, an optional companion that starts MMD through ntleas with Japanese CP932 settings and can register itself as a `.pmm` opener.
 
 ## Requirements
 
@@ -67,7 +71,6 @@ The installer registers only for the current Windows user and places the runtime
 | `uninstall-user.ps1` | Removes the current user's DMO registration. Runtime files, configuration, and logs are deliberately retained for manual backup or removal. |
 | `mmd2ffmpeg_dmo.dll` | The MMD-visible DirectX Media Object encoder. It receives MMD frames and streams them to FFmpeg to create the MKV. |
 | `mmd2ffmpeg_cleanup.exe` | Runs after successful video encoding. It waits for MMD to release the AVI, muxes embedded audio into MKV when enabled, then deletes the placeholder AVI and records the result in the export log. |
-| `MMDLocaleLauncher.exe` | Optional portable MMD launcher. It starts MMD via ntleas using Japanese CP932 settings and can be registered as a `.pmm` opener. |
 
 ### Build from source
 
@@ -95,7 +98,7 @@ This creates `release\MMD2FFMPEG-x64\` and `release\MMD2FFMPEG-x64.zip`.
 
 ## Use in MMD
 
-1. Select **File > AVI Output** and choose the desired AVI save path. MMD itself accepts only an `.avi` extension or no extension in this filename field; do not enter `.mkv`. This is an MMD limitation, not an MMD2FFMPEG limitation.
+1. Select **File > AVI Output** and choose the desired save path. **MMD's filename field accepts only a blank extension or `.avi`; do not enter `.mkv`, `.webm`, or another final-video extension.** This is an MMD limitation, not an MMD2FFMPEG limitation. MMD2FFMPEG changes the selected path to `.mkv` for its final output.
 2. In **Video encoder**, select **MMD2FFMPEG DMO Encoder**.
 
 <img src="imgs/MMD編碼選擇介面_EN.png" alt="MMD AVI output encoder selection" width="300">
@@ -120,6 +123,24 @@ The **Audio** tab controls what happens after video encoding finishes:
 | Hi-Res | When the source is below 48 kHz, uses twice the source sample rate and 24-bit depth for bilibili Hi-Res detection. |
 
 For MMD to place audio in the AVI, select **Include WAV** in MMD's AVI output settings and export starting from **frame 0**. If the export begins later, the AVI exported by MMD contains no audio, so there is nothing for MMD2FFMPEG to mux. The AVI is deleted only after successful video-only completion or successful audio muxing; it is retained when muxing fails for diagnosis.
+
+## Video encoding and NVIDIA features
+
+The **Video** page is organized into **Encoding**, **Color**, **Frame structure**, and **Super resolution / interpolation** tabs. The complete command display always remains below these tabs; its middle arguments are editable after the structured settings have generated the command.
+
+| Area | Available settings and behavior |
+| --- | --- |
+| Encoding | Encoder backend, codec, bit depth, chroma, preset, rate control, quality/QP, and bitrate. VP9 and ProRes use the CPU path. |
+| Color | Alpha mode, stacked or separate black/white mask output, BT.601/709/2020 tags, and PC (full) or TV (limited) YUV output range. |
+| Frame structure | Automatic mode leaves GOP/B-frame decisions to the encoder. Manual mode sends the selected GOP/I-frame interval and B-frame count. |
+| RTX VSR | Requires **NVEncC (NVIDIA)**, uses the bridge to send MMD frames to NVEncC, and cannot be combined with alpha output. |
+| Optical flow | Requires **NVEncC (NVIDIA)**. **Double** sends `--vpp-fruc double`; **Custom** sends `--vpp-fruc fps=<target>` for 1–240 FPS. |
+
+### NVEncC requirements
+
+Choose **NVEncC (NVIDIA)** only when `NVEncC.exe` is available beside FFmpeg or on `PATH`. MMD2FFMPEG tests the selected command before it can be saved. NVEncC HEVC alpha is limited to 8-bit YUVA420; it is best verified in Safari on macOS or iOS because Windows FFmpeg/NVDEC decoding does not reliably expose that alpha stream. NVIDIA Optical Flow and RTX VSR are separate features; they are not the NVIDIA App's game-only Smooth Motion feature.
+
+RIFE-OV exists in newer standalone NVEncC releases, but **RIFE interpolation is not integrated into MMD2FFMPEG 0.3.0**.
 
 ## Updating and uninstalling
 
@@ -159,17 +180,3 @@ The advanced command field exposes the editable FFmpeg video-argument section. T
 - MMD output is SDR BT.709. HDR output is not implemented.
 - Hardware encoder availability depends on the installed FFmpeg build, GPU, and driver. Use **Test encoder** after changing encoder settings.
 - The encoder launches `ffmpeg.exe` from `PATH`. Review custom FFmpeg arguments before saving them.
-
-## Optional MMD Locale Launcher
-
-`MMDLocaleLauncher.exe` is for non-Japanese Windows installations where MMD needs ntleas to avoid mojibake. It uses ntleas's Japanese profile equivalent to:
-
-```text
-ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
-```
-
-1. From the extracted Release package, copy `MMDLocaleLauncher.exe` into the same folder as `MikuMikuDance.exe`.
-2. On its first run, the launcher searches only its own folder for `ntleas.exe` or `MikuMikuDance.exe`. Otherwise, select the two executable paths, then save. The paths are stored in `MMDLocaleLauncherConfig.ini` beside the running `MMDLocaleLauncher.exe`.
-3. After setup, double-clicking `MMDLocaleLauncher.exe` starts MMD through ntleas. Opening a `.pmm` through the launcher passes that PMM to MMD using ntleas's documented `A` application-argument option.
-
-This is a CP932 compatibility launcher, not a full UTF-8 conversion of MMD. Paths containing characters that CP932 cannot represent may still be limited by MMD itself.

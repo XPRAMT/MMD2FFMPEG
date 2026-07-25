@@ -12,13 +12,17 @@ MMD2FFMPEG 是為 MikuMikuDance 9.32 x64 製作的 64-bit DirectX Media Object�
 - 影片編碼完成後，可讀取 MMD AVI 內含音訊，並以 FLAC、WAV/PCM 或無音訊模式合併進 MKV。
 - 提供選用的 Hi-Res 音訊模式：來源低於 48 kHz 時，以原始取樣率 2 倍及 24-bit 編碼。
 - 編碼開始時會自動寫入 MKV 的 `DATE_RECORDED` metadata 欄位，使用本機日期 `yyyy-M-d` 格式。
-- 透過 FFmpeg 支援 CPU 軟體編碼、NVIDIA NVENC、Intel Quick Sync、AMD AMF。
-- 支援 AVC、HEVC、AV1、8-bit 與可用的 10-bit 輸出，以及 CRF/CQ、固定 QP、目標位元率模式。
-- 跟隨 MMD 設定的影格率，並標記輸出為 BT.709。
+- 透過 FFmpeg 支援 CPU 軟體編碼、NVIDIA NVENC、NVEncC（NVIDIA）、Intel Quick Sync、AMD AMF。NVEncC 是獨立的 NVIDIA 編碼路徑，可使用 RTX VSR 與光流補幀。
+- 支援 AVC、HEVC、AV1、VP9、ProRes、4:2:0／4:2:2／4:4:4 色度取樣、可用的 8-bit／10-bit 輸出，以及 CRF/CQ、固定 QP、目標位元率模式。
+- 可選擇 BT.601、BT.709、BT.2020 色彩標記，以及 PC（Full）／TV（Limited）輸出範圍；MMD 輸入影格為 Full-range RGB。
+- 支援 Alpha 輸出：VP9 與 ProRes 四通道輸出，以及 8-bit NVEncC HEVC Alpha。使用 FFmpeg 路徑時，黑白遮罩可堆疊在影片下方或另存為獨立 MKV。
+- 可設定自動或手動 GOP／I 幀間隔與 B 幀數量。
+- 支援透過 NVEncC 執行 RTX Video Super Resolution，可設定 1.00–4.00 放大倍率與 VSR 處理等級 1–4。
+- 支援透過 NVEncC 執行 NVIDIA Optical Flow 光流補幀：Off、Double 或自訂目標 FPS（1–240）。
+- 跟隨 MMD 設定的影格率，預設標記輸出為 BT.709。
 - 編碼設定必須先通過手動「測試編碼」才能儲存或套用。
 - 支援系統預設、繁體中文、簡體中文、日本語、English 介面。
 - 每次輸出會在 `%LOCALAPPDATA%\MMD2FFMPEG\logs` 建立診斷 log，包含 FFmpeg 版本、輸入幀數、實際輸入 FPS、耗時、exit code、輸出大小。
-- 內含選用的 **MMD Locale Launcher**，可透過 ntleas 以日語 CP932 設定啟動 MMD，也能註冊為 `.pmm` 的開啟程式。
 
 ## 需求
 
@@ -67,7 +71,6 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 | `uninstall-user.ps1` | 移除目前使用者的 DMO 註冊。執行檔、設定與 log 會刻意保留，方便手動備份或刪除。 |
 | `mmd2ffmpeg_dmo.dll` | MMD 可見的 DirectX Media Object 編碼器；接收 MMD 影格並串流給 FFmpeg 建立 MKV。 |
 | `mmd2ffmpeg_cleanup.exe` | 影片編碼成功後執行，等待 MMD 釋放 AVI；若已啟用音訊，會將 AVI 內含音訊合併進 MKV，接著刪除佔位 AVI，並將結果寫入輸出 log。 |
-| `MMDLocaleLauncher.exe` | 選用的可攜式 MMD 啟動器；透過 ntleas 以日語 CP932 設定啟動 MMD，並可註冊為 `.pmm` 的開啟程式。 |
 
 ### 從原始碼建置
 
@@ -95,7 +98,7 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 ## 在 MMD 中使用
 
-1. 選擇 **檔案 > AVI輸出**，指定 AVI 儲存位置。MMD 的這個檔名欄位只能填入 `.avi` 副檔名或不填副檔名；請勿填入 `.mkv`。這是 MMD 本身的限制，不是 MMD2FFMPEG 的限制。
+1. 選擇 **檔案 > AVI輸出**，指定儲存位置。**MMD 的檔名欄位副檔名只能留白或填入 `.avi`；請勿填入 `.mkv`、`.webm` 或其它最終影片副檔名。** 這是 MMD 本身的限制，不是 MMD2FFMPEG 的限制；MMD2FFMPEG 會將所選路徑改為同名 `.mkv` 作為最終輸出。
 2. 在 **影片編碼** 選擇 **MMD2FFMPEG DMO Encoder**。
 
 <img src="imgs/MMD編碼選擇介面_TW.png" alt="MMD AVI 輸出編碼器選擇" width="300">
@@ -120,6 +123,24 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 | Hi-Res | 來源低於 48 kHz 時，以原始取樣率 2 倍及 24-bit 編碼，以通過 bilibili Hi-Res 判定。 |
 
 要讓 MMD 將音訊寫入 AVI，必須在AVI輸出設定頁勾選**包含WAV**，且必須從**第 0 幀**開始輸出。若開始幀較晚，MMD輸出的 AVI 將不含音訊，MMD2FFMPEG 就沒有可合併的音訊。只有純影片輸出成功或音訊合併成功後才會刪除 AVI；若合併失敗，會保留 AVI 以供診斷。
+
+## 影片編碼與 NVIDIA 功能
+
+**影片**頁面分為**編碼**、**色彩**、**幀結構**、**超分／補幀**子頁籤。完整指令會固定顯示在子頁籤下方；結構化選項產生指令後，可編輯中間參數區段。
+
+| 區域 | 可用設定與行為 |
+| --- | --- |
+| 編碼 | 編碼器後端、編碼格式、位元深度、色度取樣、編碼預設、碼率控制、品質／QP、位元率。VP9 與 ProRes 使用 CPU 路徑。 |
+| 色彩 | Alpha 模式、堆疊或分離黑白遮罩、BT.601／709／2020 標記，以及 PC（Full）或 TV（Limited）YUV 輸出範圍。 |
+| 幀結構 | 自動模式不傳入 GOP／B 幀參數，由編碼器決定；手動模式傳入指定 GOP／I 幀間隔及 B 幀數量。 |
+| RTX VSR | 必須選擇 **NVEncC（NVIDIA）**；透過 Bridge 將 MMD 影格送入 NVEncC，且不可與 Alpha 輸出同時使用。 |
+| 光流補幀 | 必須選擇 **NVEncC（NVIDIA）**。**Double** 傳入 `--vpp-fruc double`；**Custom** 傳入 `--vpp-fruc fps=<target>`，目標 FPS 可設定 1–240。 |
+
+### NVEncC 需求
+
+只有在 `NVEncC.exe` 位於 FFmpeg 同一資料夾或系統 `PATH` 時才可選擇 **NVEncC（NVIDIA）**。MMD2FFMPEG 會先測試所選指令才能儲存。NVEncC HEVC Alpha 限於 8-bit YUVA420；Windows FFmpeg／NVDEC 無法可靠呈現這個 Alpha 串流，建議使用 macOS 或 iOS Safari 驗證。NVIDIA Optical Flow 與 RTX VSR 是獨立功能，並非 NVIDIA App 的遊戲專用 Smooth Motion。
+
+較新的獨立 NVEncC 版本雖提供 RIFE-OV，但 **MMD2FFMPEG 0.3.0 尚未整合 RIFE 補幀**。
 
 ## 更新與解除安裝
 
@@ -159,17 +180,3 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 - MMD 輸出固定為 SDR BT.709，尚未實作 HDR 輸出。
 - 硬體編碼器是否可用取決於 FFmpeg 編譯版本、顯示卡與驅動程式；變更編碼器設定後請使用 **測試編碼** 確認。
 - 編碼器會從 `PATH` 啟動 `ffmpeg.exe`；儲存自訂 FFmpeg 參數前請先確認內容。
-
-## 選用：MMD Locale Launcher
-
-`MMDLocaleLauncher.exe` 適用於非日語 Windows 中必須透過 ntleas 才能避免 MMD 亂碼的情況。它使用的 ntleas 日語設定等同於：
-
-```text
-ntleas.exe MikuMikuDance.exe C932 L1041 "FMS PGothic" P4
-```
-
-1. 從解壓縮後的 Release 資料夾將 `MMDLocaleLauncher.exe`複製到MikuMikuDance.exe相同目錄。
-2. 首次啟動時，launcher 只會在自身同資料夾搜尋 `ntleas.exe` 或 `MikuMikuDance.exe`，否則請分別選擇兩個執行檔後儲存，路徑會儲存至目前執行的 `MMDLocaleLauncher.exe` 同資料夾內的`MMDLocaleLauncherConfig.ini`。
-3. 完成設定後，直接雙擊 `MMDLocaleLauncher.exe` 即會透過 ntleas 啟動 MMD。經由 launcher 開啟 `.pmm` 時，會使用 ntleas 已定義的 `A` 應用程式參數將 PMM 路徑傳給 MMD。
-
-這是 CP932 相容啟動器，不是將 MMD 完整轉換為 UTF-8。若路徑含 CP932 無法表示的字元，仍可能受 MMD 本身限制。

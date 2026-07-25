@@ -2786,7 +2786,7 @@ private:
         const auto fruc = fruc_labels(ui_language(settings_.language));
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRUC_ENABLED), fruc[0]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRUC_FPS), fruc[1]);
-        const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" + text.author + L": XPRAMT";
+        const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.3.0\r\n" + text.author + L": XPRAMT";
         SetWindowTextW(settings_info_, info.c_str());
     }
     void apply_language() {
