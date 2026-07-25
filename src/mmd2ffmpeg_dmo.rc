@@ -46,6 +46,10 @@ BEGIN
     EDITTEXT        ID_VSR_SCALE, 0, 0, 1, 1, ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "VSR quality", ID_LABEL_VSR_QUALITY, 0, 0, 1, 1
     COMBOBOX        ID_VSR_QUALITY, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "FRUC (Optical Flow)", ID_LABEL_FRUC_ENABLED, 0, 0, 1, 1
+    COMBOBOX        ID_FRUC_ENABLED, 0, 0, 1, 1, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "", ID_LABEL_FRUC_FPS, 0, 0, 1, 1
+    EDITTEXT        ID_FRUC_FPS, 0, 0, 1, 1, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "Complete FFmpeg command (middle section is editable)", ID_COMMAND_HEADING, 0, 0, 1, 1
     LTEXT           "", ID_COMPAT_WARNING, 0, 0, 1, 1, SS_RIGHT
     LTEXT           "", ID_COMMAND_PREFIX, 0, 0, 1, 1, SS_LEFT

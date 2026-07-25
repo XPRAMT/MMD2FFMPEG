@@ -72,6 +72,8 @@ struct Settings {
     bool vsr_enabled = false;
     double vsr_scale = 2.0;
     int vsr_quality = 2;
+    bool fruc_enabled = false;
+    int fruc_fps = 60;
     std::wstring language = L"system";
     std::wstring command_template;
 };
@@ -272,7 +274,7 @@ const wchar_t* super_resolution_label(UiLanguage language) {
     case UiLanguage::TraditionalChinese: return L"超分";
     case UiLanguage::SimplifiedChinese: return L"超分";
     case UiLanguage::Japanese: return L"超解像";
-    default: return L"Super resolution";
+    default: return L"超分/補幀";
     }
 }
 
@@ -291,6 +293,32 @@ const std::array<const wchar_t*, 3> vsr_labels(UiLanguage language) {
     case UiLanguage::SimplifiedChinese: return {L"RTX VSR", L"放大倍率", L"VSR 处理等级"};
     case UiLanguage::Japanese: return {L"RTX VSR", L"拡大倍率", L"VSR 品質レベル"};
     default: return {L"RTX VSR", L"Scale factor", L"VSR quality level"};
+    }
+}
+
+const std::array<const wchar_t*, 2> fruc_labels(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return {L"FRUC（光流補幀）", L"目標幀率"};
+    case UiLanguage::SimplifiedChinese: return {L"FRUC（光流补帧）", L"目标帧率"};
+    case UiLanguage::Japanese: return {L"FRUC（オプティカルフロー補間）", L"目標フレームレート"};
+    default: return {L"FRUC (Optical Flow)", L"Target FPS"};
+    }
+}
+
+const std::array<const wchar_t*, 2> fruc_tooltips(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese:
+        return {L"NVIDIA Optical Flow 硬體加速補幀。倍幀 = 將幀率加倍；自訂目標幀率可指定輸出幀率。雙擊開啟後 NVEncC 會自動插值生成中間幀。",
+                L"選擇自訂目標幀率時，NVEncC 會將輸入補幀到此幀率。"};
+    case UiLanguage::SimplifiedChinese:
+        return {L"NVIDIA Optical Flow 硬件加速补帧。倍帧 = 将帧率加倍；自定义目标帧率可指定输出帧率。",
+                L"选择自定义目标帧率时，NVEncC 会将输入补帧到此帧率。"};
+    case UiLanguage::Japanese:
+        return {L"NVIDIA Optical Flow ハードウェア補間。倍フレーム = フレームレートを2倍に。カスタムFPS = 指定のフレームレートに変換。",
+                L"カスタムFPS選択時、NVEncC は入力フレームを指定FPSに補間します。"};
+    default:
+        return {L"NVIDIA Optical Flow hardware frame interpolation. Double = double frame rate. Custom FPS = convert to the specified frame rate.",
+                L"When Custom FPS is selected, NVEncC interpolates the input to the target frame rate."};
     }
 }
 
@@ -683,6 +711,8 @@ Settings load_settings() {
         else if (key == L"vsr_enabled") settings.vsr_enabled = value == L"1";
         else if (key == L"vsr_scale") { try { settings.vsr_scale = std::clamp(std::stod(value), 1.0, 4.0); } catch (...) {} }
         else if (key == L"vsr_quality") { try { settings.vsr_quality = std::clamp(std::stoi(value), 1, 4); } catch (...) {} }
+        else if (key == L"fruc_enabled") settings.fruc_enabled = value == L"1";
+        else if (key == L"fruc_fps") { try { settings.fruc_fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {} }
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
@@ -737,7 +767,9 @@ void save_settings(const Settings& settings) {
          << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n"
          << L"vsr_enabled=" << (settings.vsr_enabled ? 1 : 0) << L"\n"
          << L"vsr_scale=" << settings.vsr_scale << L"\n"
-         << L"vsr_quality=" << settings.vsr_quality << L"\n";
+         << L"vsr_quality=" << settings.vsr_quality << L"\n"
+         << L"fruc_enabled=" << (settings.fruc_enabled ? 1 : 0) << L"\n"
+         << L"fruc_fps=" << settings.fruc_fps << L"\n";
     file << L"language=" << settings.language << L"\n";
     std::wstring video_args = settings.video_args;
     std::replace_if(video_args.begin(), video_args.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
@@ -1014,6 +1046,8 @@ std::wstring default_nvenc_args(const Settings& settings) {
     if (settings.frame_structure_mode == L"manual")
         command << L" --gop-len " << settings.gop << L" --bframes " << settings.b_frames;
     if (settings.alpha_mode == L"rgba") command << L" --alpha";
+    if (settings.fruc_enabled)
+        command << L" --vpp-fruc " << (settings.fruc_fps > 0 ? L"fps=" + std::to_wstring(settings.fruc_fps) : L"double");
     return command.str();
 }
 
@@ -1987,6 +2021,8 @@ public:
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
+        candidate.fruc_enabled = combo_index(ID_FRUC_ENABLED) != 0;
+        candidate.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         candidate.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         candidate.audio_bit_depth = candidate.audio_sample_rate == L"hires" ? L"24" : L"original";
@@ -2112,6 +2148,12 @@ private:
             {ID_LABEL_VSR_QUALITY, vsr_tip[2]}, {ID_VSR_QUALITY, vsr_tip[2]},
         }};
         for (const auto& item : vsr_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
+        const auto fruc_tip = fruc_tooltips(ui_language(settings_.language));
+        const std::array<std::pair<int, const wchar_t*>, 4> fruc_items{{
+            {ID_LABEL_FRUC_ENABLED, fruc_tip[0]}, {ID_FRUC_ENABLED, fruc_tip[0]},
+            {ID_LABEL_FRUC_FPS, fruc_tip[1]}, {ID_FRUC_FPS, fruc_tip[1]},
+        }};
+        for (const auto& item : fruc_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         tooltips_initialized_ = true;
         update_compatibility_warning();
     }
@@ -2138,7 +2180,7 @@ private:
         item.pszText = const_cast<wchar_t*>(L"Encoding"); TabCtrl_InsertItem(video_tab_, 0, &item);
         item.pszText = const_cast<wchar_t*>(L"Color"); TabCtrl_InsertItem(video_tab_, 1, &item);
         item.pszText = const_cast<wchar_t*>(L"Frame structure"); TabCtrl_InsertItem(video_tab_, 2, &item);
-        item.pszText = const_cast<wchar_t*>(L"Super resolution"); TabCtrl_InsertItem(video_tab_, 3, &item);
+        item.pszText = const_cast<wchar_t*>(L"超分/補幀"); TabCtrl_InsertItem(video_tab_, 3, &item);
         TabCtrl_SetCurSel(video_tab_, 0);
 
         updating_command_ = true;
@@ -2154,6 +2196,8 @@ private:
         add_combo(ID_FRAME_MODE, {L"Automatic", L"Manual"}, settings_.frame_structure_mode == L"manual" ? 1 : 0);
         add_combo(ID_VSR_ENABLED, {L"Off", L"On"}, settings_.vsr_enabled ? 1 : 0);
         add_combo(ID_VSR_QUALITY, {L"1", L"2", L"3", L"4"}, std::clamp(settings_.vsr_quality - 1, 0, 3));
+        add_combo(ID_FRUC_ENABLED, {L"Off", L"Double", L"Custom FPS"}, settings_.fruc_enabled ? 1 : 0);
+        SetWindowTextW(GetDlgItem(window_, ID_FRUC_FPS), std::to_wstring(settings_.fruc_fps).c_str());
         add_combo(ID_ALPHA, {L"None", L"4-channel", L"Black/white mask"}, settings_.alpha_mode == L"rgba" ? 1 : settings_.alpha_mode == L"mask" ? 2 : 0);
         add_combo(ID_MASK_OUTPUT, {L"Stack x2", L"Separate"}, settings_.mask_output == L"separate" ? 1 : 0);
         add_combo(ID_CHROMA, {L"4:2:0", L"4:2:2", L"4:4:4"}, settings_.chroma == L"422" ? 1 : settings_.chroma == L"444" ? 2 : 0);
@@ -2224,6 +2268,7 @@ private:
         const std::array<int, 10> color{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE, ID_COLOR_RANGE,
                                          ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE, ID_LABEL_COLOR_RANGE};
         const std::array<int, 6> frame_structure{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES};
+        const std::array<int, 4> fruc{ID_FRUC_ENABLED, ID_FRUC_FPS, ID_LABEL_FRUC_ENABLED, ID_LABEL_FRUC_FPS};
         const std::array<int, 6> super_resolution{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
                                                   ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY};
         for (const int id : encoding) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
@@ -2231,6 +2276,7 @@ private:
         for (const int id : color) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 1 ? SW_SHOW : SW_HIDE);
         for (const int id : frame_structure) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 2 ? SW_SHOW : SW_HIDE);
         for (const int id : super_resolution) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 3 ? SW_SHOW : SW_HIDE);
+        for (const int id : fruc) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 3 ? SW_SHOW : SW_HIDE);
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -2419,6 +2465,8 @@ private:
         settings_.frame_structure_mode = combo_index(ID_FRAME_MODE) == 1 ? L"manual" : L"auto";
         settings_.gop = std::clamp(edit_number(ID_GOP, 120), 1, 10000);
         settings_.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
+        settings_.fruc_enabled = combo_index(ID_FRUC_ENABLED) != 0;
+        settings_.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         settings_.cpu_threads = cpu_thread_mode_key(combo_index(ID_CPU_THREADS));
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
@@ -2575,6 +2623,10 @@ private:
                     add_video_field(ID_LABEL_VSR_ENABLED, ID_VSR_ENABLED, margin_x, right, inner_y);
                     inner_y += inner_row_height;
                     add_video_pair(ID_LABEL_VSR_SCALE, ID_VSR_SCALE, ID_LABEL_VSR_QUALITY, ID_VSR_QUALITY, inner_y);
+                    inner_y += inner_row_height;
+                    add_video_field(ID_LABEL_FRUC_ENABLED, ID_FRUC_ENABLED, margin_x, right, inner_y);
+                    inner_y += inner_row_height;
+                    add_video_field(ID_LABEL_FRUC_FPS, ID_FRUC_FPS, margin_x, right, inner_y);
                 }
             }
             y += inner_height + inner_gap;
