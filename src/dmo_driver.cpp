@@ -2649,7 +2649,6 @@ private:
                     add_video_field(ID_LABEL_VSR_ENABLED, ID_VSR_ENABLED, margin_x, right, inner_y);
                     inner_y += inner_row_height;
                     add_video_pair(ID_LABEL_VSR_SCALE, ID_VSR_SCALE, ID_LABEL_VSR_QUALITY, ID_VSR_QUALITY, inner_y);
-                    inner_y += inner_row_height;
                     add_video_pair(ID_LABEL_FRUC_ENABLED, ID_FRUC_ENABLED, ID_LABEL_FRUC_FPS, ID_FRUC_FPS, inner_y);
                 }
             }

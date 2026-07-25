@@ -341,6 +341,12 @@ int wmain(int argument_count, wchar_t** arguments) {
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 40;
         }
     }
+    const RECT vsr_scale_bounds = child_rect(page_window, ID_VSR_SCALE);
+    const RECT fruc_bounds = child_rect(page_window, ID_FRUC_ENABLED);
+    if (fruc_bounds.top - vsr_scale_bounds.bottom > 12) {
+        std::wcerr << L"Optical-flow interpolation must be directly below the VSR controls without a blank row.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 61;
+    }
     const RECT command_on_vsr = child_rect(page_window, ID_COMMAND);
     if (command_before_color.top != command_on_vsr.top || command_before_color.bottom != command_on_vsr.bottom) {
         std::wcerr << L"FFmpeg command area did not remain fixed below the Super resolution sub-tab.\n";
