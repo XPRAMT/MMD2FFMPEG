@@ -72,7 +72,9 @@ struct Settings {
     bool vsr_enabled = false;
     double vsr_scale = 2.0;
     int vsr_quality = 2;
-    bool fruc_enabled = false;
+    // Keep the interpolation mode explicit so Double cannot be mistaken for a
+    // custom-FPS request.
+    std::wstring fruc_mode = L"off";
     int fruc_fps = 60;
     std::wstring language = L"system";
     std::wstring command_template;
@@ -124,6 +126,21 @@ int backend_index(std::wstring_view key) {
     if (key == L"qsv") return 3;
     if (key == L"amf") return 4;
     return 0;
+}
+
+int fruc_mode_index(std::wstring_view key) {
+    if (key == L"double") return 1;
+    if (key == L"custom") return 2;
+    return 0;
+}
+
+const wchar_t* fruc_mode_key(int index) {
+    static constexpr std::array<const wchar_t*, 3> keys{L"off", L"double", L"custom"};
+    return keys[std::clamp(index, 0, static_cast<int>(keys.size()) - 1)];
+}
+
+bool fruc_enabled(const Settings& settings) {
+    return settings.fruc_mode != L"off";
 }
 
 const wchar_t* backend_key(int index) {
@@ -271,10 +288,10 @@ const TabUiStrings& tab_ui_strings(UiLanguage language) {
 
 const wchar_t* super_resolution_label(UiLanguage language) {
     switch (language) {
-    case UiLanguage::TraditionalChinese: return L"超分";
-    case UiLanguage::SimplifiedChinese: return L"超分";
-    case UiLanguage::Japanese: return L"超解像";
-    default: return L"超分/補幀";
+    case UiLanguage::TraditionalChinese: return L"超分/補幀";
+    case UiLanguage::SimplifiedChinese: return L"超分/补帧";
+    case UiLanguage::Japanese: return L"超解像/補間";
+    default: return L"Super resolution / interpolation";
     }
 }
 
@@ -298,27 +315,27 @@ const std::array<const wchar_t*, 3> vsr_labels(UiLanguage language) {
 
 const std::array<const wchar_t*, 2> fruc_labels(UiLanguage language) {
     switch (language) {
-    case UiLanguage::TraditionalChinese: return {L"FRUC（光流補幀）", L"目標幀率"};
-    case UiLanguage::SimplifiedChinese: return {L"FRUC（光流补帧）", L"目标帧率"};
-    case UiLanguage::Japanese: return {L"FRUC（オプティカルフロー補間）", L"目標フレームレート"};
-    default: return {L"FRUC (Optical Flow)", L"Target FPS"};
+    case UiLanguage::TraditionalChinese: return {L"光流補幀", L"自訂目標 FPS"};
+    case UiLanguage::SimplifiedChinese: return {L"光流补帧", L"自定义目标 FPS"};
+    case UiLanguage::Japanese: return {L"光フロー補間", L"カスタム目標 FPS"};
+    default: return {L"Optical-flow interpolation", L"Custom target FPS"};
     }
 }
 
 const std::array<const wchar_t*, 2> fruc_tooltips(UiLanguage language) {
     switch (language) {
     case UiLanguage::TraditionalChinese:
-        return {L"NVIDIA Optical Flow 硬體加速補幀。倍幀 = 將幀率加倍；自訂目標幀率可指定輸出幀率。雙擊開啟後 NVEncC 會自動插值生成中間幀。",
-                L"選擇自訂目標幀率時，NVEncC 會將輸入補幀到此幀率。"};
+        return {L"NVIDIA Optical Flow 硬體加速補幀。Off 不補幀；Double 將輸出幀率加倍；Custom 使用右側數字指定目標 FPS。需要 NVEncC (NVIDIA) 編碼器。",
+                L"僅在 Custom 模式使用。輸入 1 到 240 的目標輸出 FPS；NVEncC 會插值生成中間幀。"};
     case UiLanguage::SimplifiedChinese:
-        return {L"NVIDIA Optical Flow 硬件加速补帧。倍帧 = 将帧率加倍；自定义目标帧率可指定输出帧率。",
-                L"选择自定义目标帧率时，NVEncC 会将输入补帧到此帧率。"};
+        return {L"NVIDIA Optical Flow 硬件加速补帧。Off 不补帧；Double 将输出帧率加倍；Custom 使用右侧数字指定目标 FPS。需要 NVEncC (NVIDIA) 编码器。",
+                L"仅在 Custom 模式使用。输入 1 到 240 的目标输出 FPS；NVEncC 会插值生成中间帧。"};
     case UiLanguage::Japanese:
-        return {L"NVIDIA Optical Flow ハードウェア補間。倍フレーム = フレームレートを2倍に。カスタムFPS = 指定のフレームレートに変換。",
-                L"カスタムFPS選択時、NVEncC は入力フレームを指定FPSに補間します。"};
+        return {L"NVIDIA Optical Flow ハードウェア補間。Off は無効、Double は出力FPSを2倍、Custom は右側の数値で目標FPSを指定します。NVEncC (NVIDIA) が必要です。",
+                L"Custom モードでのみ使用します。1～240 の目標出力FPSを指定すると、NVEncC が中間フレームを補間します。"};
     default:
-        return {L"NVIDIA Optical Flow hardware frame interpolation. Double = double frame rate. Custom FPS = convert to the specified frame rate.",
-                L"When Custom FPS is selected, NVEncC interpolates the input to the target frame rate."};
+        return {L"NVIDIA Optical Flow hardware frame interpolation. Off disables it; Double doubles output FPS; Custom uses the numeric target FPS. NVEncC (NVIDIA) is required.",
+                L"Used only in Custom mode. Enter an output FPS from 1 to 240; NVEncC synthesizes the intermediate frames."};
     }
 }
 
@@ -711,7 +728,7 @@ Settings load_settings() {
         else if (key == L"vsr_enabled") settings.vsr_enabled = value == L"1";
         else if (key == L"vsr_scale") { try { settings.vsr_scale = std::clamp(std::stod(value), 1.0, 4.0); } catch (...) {} }
         else if (key == L"vsr_quality") { try { settings.vsr_quality = std::clamp(std::stoi(value), 1, 4); } catch (...) {} }
-        else if (key == L"fruc_enabled") settings.fruc_enabled = value == L"1";
+        else if (key == L"fruc_mode" && (value == L"off" || value == L"double" || value == L"custom")) settings.fruc_mode = value;
         else if (key == L"fruc_fps") { try { settings.fruc_fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {} }
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
@@ -720,6 +737,9 @@ Settings load_settings() {
         (settings.vsr_enabled || (settings.codec == L"hevc" && settings.alpha_mode == L"rgba")))
         settings.backend = L"nvencc";
     if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(settings.nvenc_args);
+    // The old boolean FRUC setting had no way to distinguish Double from a
+    // target FPS.  Rebuild this generated option from fruc_mode instead.
+    remove_command_option(settings.nvenc_args, L"--vpp-fruc");
     normalize_codec_settings(settings);
     if (_wcsicmp(settings.ffmpeg.c_str(), L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe") == 0)
         settings.ffmpeg = L"ffmpeg.exe";
@@ -768,7 +788,7 @@ void save_settings(const Settings& settings) {
          << L"vsr_enabled=" << (settings.vsr_enabled ? 1 : 0) << L"\n"
          << L"vsr_scale=" << settings.vsr_scale << L"\n"
          << L"vsr_quality=" << settings.vsr_quality << L"\n"
-         << L"fruc_enabled=" << (settings.fruc_enabled ? 1 : 0) << L"\n"
+         << L"fruc_mode=" << settings.fruc_mode << L"\n"
          << L"fruc_fps=" << settings.fruc_fps << L"\n";
     file << L"language=" << settings.language << L"\n";
     std::wstring video_args = settings.video_args;
@@ -1046,8 +1066,8 @@ std::wstring default_nvenc_args(const Settings& settings) {
     if (settings.frame_structure_mode == L"manual")
         command << L" --gop-len " << settings.gop << L" --bframes " << settings.b_frames;
     if (settings.alpha_mode == L"rgba") command << L" --alpha";
-    if (settings.fruc_enabled)
-        command << L" --vpp-fruc " << (settings.fruc_fps > 0 ? L"fps=" + std::to_wstring(settings.fruc_fps) : L"double");
+    if (settings.fruc_mode == L"double") command << L" --vpp-fruc double";
+    else if (settings.fruc_mode == L"custom") command << L" --vpp-fruc fps=" << settings.fruc_fps;
     return command.str();
 }
 
@@ -1061,14 +1081,17 @@ std::wstring materialize_vsr_command(const Settings& settings, int width, int he
         remove_command_option(arguments, L"--output-res");
         remove_command_option(arguments, L"--vpp-resize");
     }
+    remove_command_option(arguments, L"--vpp-fruc");
     if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(arguments);
     std::wstring nvenc_full_args;
     if (settings.vsr_enabled) {
         const int out_w = std::max(1, static_cast<int>(width * settings.vsr_scale + 0.5));
         const int out_h = std::max(1, static_cast<int>(height * settings.vsr_scale + 0.5));
         nvenc_full_args = L"--output-res " + std::to_wstring(out_w) + L"x" + std::to_wstring(out_h) +
-                          L" --vpp-resize algo=ngx-vsr,vsr-quality=" + std::to_wstring(settings.vsr_quality) + L" ";
+                           L" --vpp-resize algo=ngx-vsr,vsr-quality=" + std::to_wstring(settings.vsr_quality) + L" ";
     }
+    if (settings.fruc_mode == L"double") nvenc_full_args += L"--vpp-fruc double ";
+    else if (settings.fruc_mode == L"custom") nvenc_full_args += L"--vpp-fruc fps=" + std::to_wstring(settings.fruc_fps) + L" ";
     nvenc_full_args += arguments;
     std::wstring command = quote(bridge_path.wstring()) +
         L" --ffmpeg " + quote(ffmpeg_path.wstring()) +
@@ -1204,8 +1227,9 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     std::filesystem::path executable = ffmpeg_path;
     std::filesystem::path probe_output;
     std::wstring command;
-    if (settings.vsr_enabled && settings.backend != L"nvencc") {
-        error_message = L"RTX VSR requires the NVEncC encoder.";
+    if ((settings.vsr_enabled || fruc_enabled(settings)) && settings.backend != L"nvencc") {
+        error_message = settings.vsr_enabled ? L"RTX VSR requires the NVEncC encoder."
+                                             : L"Optical-flow interpolation requires the NVEncC encoder.";
         return false;
     }
     if (uses_nvenc_bridge(settings)) {
@@ -1362,13 +1386,13 @@ std::wstring command_test_signature(const Settings& settings) {
         bridge_signature = L"|" + nvenc_path.wstring() + L"|" + std::to_wstring(nvenc_stamp) +
                            L"|" + bridge_path.wstring() + L"|" + std::to_wstring(bridge_stamp);
     }
-    return L"v11-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + bridge_signature +
+    return L"v12-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + bridge_signature +
            L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments +
            L"|nvenc_args=" + nvenc_args +
            L"|vsr=" + std::to_wstring(settings.vsr_enabled ? 1 : 0) + L"|" + std::to_wstring(settings.vsr_scale) +
-           L"|" + std::to_wstring(settings.vsr_quality);
+            L"|" + std::to_wstring(settings.vsr_quality) + L"|fruc=" + settings.fruc_mode + L"|" + std::to_wstring(settings.fruc_fps);
 }
 
 std::wstring capability_key(const Settings& settings) {
@@ -1745,7 +1769,7 @@ private:
         avi.replace_extension(L".mkv");
         const auto ffmpeg_path = resolve_executable(settings_.ffmpeg);
         if (ffmpeg_path.empty()) return false;
-        if (settings_.vsr_enabled && settings_.backend != L"nvencc") return false;
+        if ((settings_.vsr_enabled || fruc_enabled(settings_)) && settings_.backend != L"nvencc") return false;
         std::filesystem::path launch_path = ffmpeg_path;
         std::filesystem::path nvenc_path;
         std::filesystem::path bridge_path;
@@ -2021,7 +2045,7 @@ public:
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
-        candidate.fruc_enabled = combo_index(ID_FRUC_ENABLED) != 0;
+        candidate.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         candidate.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         candidate.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
@@ -2196,7 +2220,7 @@ private:
         add_combo(ID_FRAME_MODE, {L"Automatic", L"Manual"}, settings_.frame_structure_mode == L"manual" ? 1 : 0);
         add_combo(ID_VSR_ENABLED, {L"Off", L"On"}, settings_.vsr_enabled ? 1 : 0);
         add_combo(ID_VSR_QUALITY, {L"1", L"2", L"3", L"4"}, std::clamp(settings_.vsr_quality - 1, 0, 3));
-        add_combo(ID_FRUC_ENABLED, {L"Off", L"Double", L"Custom FPS"}, settings_.fruc_enabled ? 1 : 0);
+        add_combo(ID_FRUC_ENABLED, {L"Off", L"Double", L"Custom"}, fruc_mode_index(settings_.fruc_mode));
         SetWindowTextW(GetDlgItem(window_, ID_FRUC_FPS), std::to_wstring(settings_.fruc_fps).c_str());
         add_combo(ID_ALPHA, {L"None", L"4-channel", L"Black/white mask"}, settings_.alpha_mode == L"rgba" ? 1 : settings_.alpha_mode == L"mask" ? 2 : 0);
         add_combo(ID_MASK_OUTPUT, {L"Stack x2", L"Separate"}, settings_.mask_output == L"separate" ? 1 : 0);
@@ -2358,6 +2382,7 @@ private:
         const int alpha = combo_index(ID_ALPHA);
         if (combo_index(ID_VSR_ENABLED) == 1 &&
             (alpha != 0 || codec != 1 || backend != 2)) return true;
+        if (combo_index(ID_FRUC_ENABLED) != 0 && backend != 2) return true;
         if (backend == 2 && alpha == 2) return true;
         const auto& capability = codec_capability_from_index(codec);
         if (capability.cpu_only && backend != 0) return true;
@@ -2465,7 +2490,7 @@ private:
         settings_.frame_structure_mode = combo_index(ID_FRAME_MODE) == 1 ? L"manual" : L"auto";
         settings_.gop = std::clamp(edit_number(ID_GOP, 120), 1, 10000);
         settings_.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
-        settings_.fruc_enabled = combo_index(ID_FRUC_ENABLED) != 0;
+        settings_.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         settings_.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         settings_.cpu_threads = cpu_thread_mode_key(combo_index(ID_CPU_THREADS));
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
@@ -2597,7 +2622,8 @@ private:
                 const int field_left = left + label_width + field_gap;
                 add_layout(label, left, row_y + dlu_y(1), label_width, label_height);
                 const int control_height = control == ID_QP || control == ID_BITRATE || control == ID_GOP ||
-                                           control == ID_BFRAMES || control == ID_VSR_SCALE ? edit_height : combo_height;
+                                           control == ID_BFRAMES || control == ID_VSR_SCALE || control == ID_FRUC_FPS
+                    ? edit_height : combo_height;
                 add_layout(control, field_left, row_y, std::max(1, column_right - field_left), control_height);
             };
             const auto add_video_pair = [&](int left_label, int left_control, int right_label, int right_control, int& row_y) {
@@ -2624,9 +2650,7 @@ private:
                     inner_y += inner_row_height;
                     add_video_pair(ID_LABEL_VSR_SCALE, ID_VSR_SCALE, ID_LABEL_VSR_QUALITY, ID_VSR_QUALITY, inner_y);
                     inner_y += inner_row_height;
-                    add_video_field(ID_LABEL_FRUC_ENABLED, ID_FRUC_ENABLED, margin_x, right, inner_y);
-                    inner_y += inner_row_height;
-                    add_video_field(ID_LABEL_FRUC_FPS, ID_FRUC_FPS, margin_x, right, inner_y);
+                    add_video_pair(ID_LABEL_FRUC_ENABLED, ID_FRUC_ENABLED, ID_LABEL_FRUC_FPS, ID_FRUC_FPS, inner_y);
                 }
             }
             y += inner_height + inner_gap;
@@ -2760,6 +2784,9 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_ENABLED), labels[0]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_SCALE), labels[1]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_QUALITY), labels[2]);
+        const auto fruc = fruc_labels(ui_language(settings_.language));
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRUC_ENABLED), fruc[0]);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRUC_FPS), fruc[1]);
         const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.2.0\r\n" + text.author + L": XPRAMT";
         SetWindowTextW(settings_info_, info.c_str());
     }

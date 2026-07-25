@@ -332,11 +332,12 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     TabCtrl_SetCurSel(video_tab, 3);
     SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
-    const int vsr_ids[]{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
-                        ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY};
-    for (const int id : vsr_ids) {
+    const int super_resolution_ids[]{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
+                                     ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY,
+                                     ID_FRUC_ENABLED, ID_FRUC_FPS, ID_LABEL_FRUC_ENABLED, ID_LABEL_FRUC_FPS};
+    for (const int id : super_resolution_ids) {
         if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(child_rect(page_window, id))) {
-            std::wcerr << L"Super resolution sub-tab control is unavailable: " << id << L"\n";
+            std::wcerr << L"Super-resolution/interpolation sub-tab control is unavailable: " << id << L"\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 40;
         }
     }
@@ -357,6 +358,8 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND bframes_edit = GetDlgItem(page_window, ID_BFRAMES);
     HWND cpu_threads_combo = GetDlgItem(page_window, ID_CPU_THREADS);
     HWND vsr_enabled_combo = GetDlgItem(page_window, ID_VSR_ENABLED);
+    HWND fruc_mode_combo = GetDlgItem(page_window, ID_FRUC_ENABLED);
+    HWND fruc_fps_edit = GetDlgItem(page_window, ID_FRUC_FPS);
     if (SendMessageW(backend_combo, CB_GETCOUNT, 0, 0) != 5 ||
         combo_item_text(backend_combo, 1) != L"NVENC" ||
         combo_item_text(backend_combo, 2) != L"NVEncC (NVIDIA)") {
@@ -365,6 +368,13 @@ int wmain(int argument_count, wchar_t** arguments) {
                    << combo_item_text(backend_combo, 1) << L"\" item2=\""
                    << combo_item_text(backend_combo, 2) << L"\"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 47;
+    }
+    if (SendMessageW(fruc_mode_combo, CB_GETCOUNT, 0, 0) != 3 ||
+        combo_item_text(fruc_mode_combo, 0) != L"Off" ||
+        combo_item_text(fruc_mode_combo, 1) != L"Double" ||
+        combo_item_text(fruc_mode_combo, 2) != L"Custom") {
+        std::wcerr << L"Optical-flow interpolation must expose Off, Double, and Custom modes.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 57;
     }
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
@@ -484,6 +494,30 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_without_vsr.rfind(L"--output-depth ", 0) != 0) {
         std::wcerr << L"Disabled VSR must omit its flag, scale, and quality from the NVEncC command.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 54;
+    }
+    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(fruc_mode_combo));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-fruc double") == std::wstring::npos) {
+        std::wcerr << L"Double interpolation must generate NVEncC --vpp-fruc double.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 58;
+    }
+    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 2, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(fruc_mode_combo));
+    SetWindowTextW(fruc_fps_edit, L"90");
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_FPS, EN_CHANGE),
+                 reinterpret_cast<LPARAM>(fruc_fps_edit));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-fruc fps=90") == std::wstring::npos) {
+        std::wcerr << L"Custom interpolation must generate NVEncC --vpp-fruc fps=<target>.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 59;
+    }
+    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(fruc_mode_combo));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-fruc ") != std::wstring::npos) {
+        std::wcerr << L"Off interpolation must omit --vpp-fruc.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 60;
     }
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
