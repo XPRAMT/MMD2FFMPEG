@@ -871,8 +871,8 @@ std::wstring recording_date_metadata();
 struct ColorSpaceSpec { const wchar_t* matrix; const wchar_t* primaries; const wchar_t* transfer; };
 
 ColorSpaceSpec color_space_spec(const Settings& settings) {
-    if (settings.color_space == L"bt601") return {L"smpte170m", L"smpte170m", L"bt709"};
-    if (settings.color_space == L"bt2020") return {L"bt2020nc", L"bt2020", L"bt709"};
+    if (settings.color_space == L"bt601") return {L"smpte170m", L"smpte170m", L"smpte170m"};
+    if (settings.color_space == L"bt2020") return {L"bt2020nc", L"bt2020", L"bt2020-10"};
     return {L"bt709", L"bt709", L"bt709"};
 }
 
