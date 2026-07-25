@@ -65,6 +65,8 @@ struct Settings {
     std::wstring frame_structure_mode = L"auto";
     int gop = 120;
     int b_frames = 3;
+    int lookahead = 16;
+    int lookahead_level = 2;
     std::wstring cpu_threads = L"auto";
     std::wstring audio_format = L"flac";
     std::wstring audio_sample_rate = L"original";
@@ -137,6 +139,18 @@ int fruc_mode_index(std::wstring_view key) {
 const wchar_t* fruc_mode_key(int index) {
     static constexpr std::array<const wchar_t*, 3> keys{L"off", L"double", L"custom"};
     return keys[std::clamp(index, 0, static_cast<int>(keys.size()) - 1)];
+}
+
+int lookahead_value(int index) {
+    static constexpr std::array<int, 4> values{0, 8, 16, 32};
+    return values[std::clamp(index, 0, static_cast<int>(values.size()) - 1)];
+}
+
+int lookahead_index(int value) {
+    if (value == 8) return 1;
+    if (value == 16) return 2;
+    if (value == 32) return 3;
+    return 0;
 }
 
 bool fruc_enabled(const Settings& settings) {
@@ -336,6 +350,32 @@ const std::array<const wchar_t*, 2> fruc_tooltips(UiLanguage language) {
     default:
         return {L"NVIDIA Optical Flow hardware frame interpolation. Off disables it; Double doubles output FPS; Custom uses the numeric target FPS. NVEncC (NVIDIA) is required.",
                 L"Used only in Custom mode. Enter an output FPS from 1 to 240; NVEncC synthesizes the intermediate frames."};
+    }
+}
+
+const std::array<const wchar_t*, 2> lookahead_labels(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return {L"Lookahead", L"處理等級"};
+    case UiLanguage::SimplifiedChinese: return {L"Lookahead", L"处理等级"};
+    case UiLanguage::Japanese: return {L"Lookahead", L"処理レベル"};
+    default: return {L"Lookahead", L"Processing level"};
+    }
+}
+
+const std::array<const wchar_t*, 2> lookahead_tooltips(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese:
+        return {L"預先分析未來畫面，協助 NVIDIA 編碼器決定碼率與畫面類型。Off 不傳遞參數；16／等級 2 是預設的品質平衡。需要 NVENC 或 NVEncC。",
+                L"較高等級可提升 Lookahead 的分析品質，但會增加 GPU 編碼時間。Lookahead 為 Off 時不會生效。"};
+    case UiLanguage::SimplifiedChinese:
+        return {L"预先分析未来画面，协助 NVIDIA 编码器决定码率与画面类型。Off 不传递参数；16／等级 2 是默认的质量平衡。需要 NVENC 或 NVEncC。",
+                L"较高等级可提升 Lookahead 的分析质量，但会增加 GPU 编码时间。Lookahead 为 Off 时不会生效。"};
+    case UiLanguage::Japanese:
+        return {L"先のフレームを分析して、NVIDIA エンコーダーのビットレートとフレーム種別の判断を補助します。Off では引数を渡しません。16／レベル 2 が既定のバランスです。NVENC または NVEncC が必要です。",
+                L"高いレベルほど Lookahead の分析品質を高められますが、GPU エンコード時間が増えます。Lookahead が Off の場合は効果がありません。"};
+    default:
+        return {L"Pre-analyze future frames to help the NVIDIA encoder choose bitrate and frame types. Off omits the parameters; 16 / level 2 is the default quality balance. Requires NVENC or NVEncC.",
+                L"Higher levels can improve Lookahead analysis but take more GPU encoding time. It has no effect when Lookahead is Off."};
     }
 }
 
@@ -721,6 +761,8 @@ Settings load_settings() {
         else if (key == L"frame_structure_mode" && (value == L"auto" || value == L"manual")) settings.frame_structure_mode = value;
         else if (key == L"gop") { try { settings.gop = std::clamp(std::stoi(value), 1, 10000); } catch (...) {} }
         else if (key == L"b_frames") { try { settings.b_frames = std::clamp(std::stoi(value), 0, 16); } catch (...) {} }
+        else if (key == L"lookahead") { try { settings.lookahead = lookahead_value(lookahead_index(std::stoi(value))); } catch (...) {} }
+        else if (key == L"lookahead_level") { try { settings.lookahead_level = std::clamp(std::stoi(value), 1, 3); } catch (...) {} }
         else if (key == L"cpu_threads" && (value == L"auto" || value == L"all" || value == L"all-minus-1" || value == L"all-minus-2")) settings.cpu_threads = value;
         else if (key == L"audio_format" && (value == L"flac" || value == L"wav" || value == L"none")) settings.audio_format = value;
         else if (key == L"audio_sample_rate" && (value == L"original" || value == L"hires")) settings.audio_sample_rate = value;
@@ -781,6 +823,8 @@ void save_settings(const Settings& settings) {
          << L"frame_structure_mode=" << settings.frame_structure_mode << L"\n"
          << L"gop=" << settings.gop << L"\n"
          << L"b_frames=" << settings.b_frames << L"\n"
+         << L"lookahead=" << settings.lookahead << L"\n"
+         << L"lookahead_level=" << settings.lookahead_level << L"\n"
          << L"cpu_threads=" << settings.cpu_threads << L"\n"
          << L"audio_format=" << settings.audio_format << L"\n"
          << L"audio_sample_rate=" << settings.audio_sample_rate << L"\n"
@@ -903,6 +947,10 @@ std::wstring encoding_arguments(const Settings& settings) {
     if (settings.frame_structure_mode == L"manual") {
         args << L" -g " << std::clamp(settings.gop, 1, 10000);
         args << L" -bf " << std::clamp(settings.b_frames, 0, 16);
+    }
+    if (settings.backend == L"nvenc" && settings.lookahead > 0) {
+        args << L" -rc-lookahead " << settings.lookahead
+             << L" -lookahead_level " << std::clamp(settings.lookahead_level, 1, 3);
     }
     return args.str();
 }
@@ -1065,6 +1113,9 @@ std::wstring default_nvenc_args(const Settings& settings) {
             << L" --metadata date_recorded=" << recording_date_metadata();
     if (settings.frame_structure_mode == L"manual")
         command << L" --gop-len " << settings.gop << L" --bframes " << settings.b_frames;
+    if (settings.lookahead > 0)
+        command << L" --lookahead " << settings.lookahead
+                << L" --lookahead-level " << std::clamp(settings.lookahead_level, 1, 3);
     if (settings.alpha_mode == L"rgba") command << L" --alpha";
     if (settings.fruc_mode == L"double") command << L" --vpp-fruc double";
     else if (settings.fruc_mode == L"custom") command << L" --vpp-fruc fps=" << settings.fruc_fps;
@@ -1386,13 +1437,14 @@ std::wstring command_test_signature(const Settings& settings) {
         bridge_signature = L"|" + nvenc_path.wstring() + L"|" + std::to_wstring(nvenc_stamp) +
                            L"|" + bridge_path.wstring() + L"|" + std::to_wstring(bridge_stamp);
     }
-    return L"v12-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + bridge_signature +
+    return L"v13-1920x1080|" + ffmpeg_path.wstring() + L"|" + std::to_wstring(stamp) + bridge_signature +
            L"|" + settings.backend + L"|" +
            settings.codec + L"|" + std::to_wstring(settings.bit_depth) + L"|" + settings.chroma + L"|" + settings.alpha_mode +
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments +
            L"|nvenc_args=" + nvenc_args +
            L"|vsr=" + std::to_wstring(settings.vsr_enabled ? 1 : 0) + L"|" + std::to_wstring(settings.vsr_scale) +
-            L"|" + std::to_wstring(settings.vsr_quality) + L"|fruc=" + settings.fruc_mode + L"|" + std::to_wstring(settings.fruc_fps);
+            L"|" + std::to_wstring(settings.vsr_quality) + L"|fruc=" + settings.fruc_mode + L"|" + std::to_wstring(settings.fruc_fps) +
+           L"|lookahead=" + std::to_wstring(settings.lookahead) + L"|" + std::to_wstring(settings.lookahead_level);
 }
 
 std::wstring capability_key(const Settings& settings) {
@@ -2045,6 +2097,11 @@ public:
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
         candidate.bitrate_kbps = std::clamp(edit_number(ID_BITRATE, 20000), 100, 1000000);
+        candidate.frame_structure_mode = combo_index(ID_FRAME_MODE) == 1 ? L"manual" : L"auto";
+        candidate.gop = std::clamp(edit_number(ID_GOP, 120), 1, 10000);
+        candidate.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
+        candidate.lookahead = lookahead_value(combo_index(ID_LOOKAHEAD));
+        candidate.lookahead_level = std::clamp(combo_index(ID_LOOKAHEAD_LEVEL) + 1, 1, 3);
         candidate.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         candidate.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
@@ -2178,6 +2235,12 @@ private:
             {ID_LABEL_FRUC_FPS, fruc_tip[1]}, {ID_FRUC_FPS, fruc_tip[1]},
         }};
         for (const auto& item : fruc_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
+        const auto lookahead_tip = lookahead_tooltips(ui_language(settings_.language));
+        const std::array<std::pair<int, const wchar_t*>, 4> lookahead_items{{
+            {ID_LABEL_LOOKAHEAD, lookahead_tip[0]}, {ID_LOOKAHEAD, lookahead_tip[0]},
+            {ID_LABEL_LOOKAHEAD_LEVEL, lookahead_tip[1]}, {ID_LOOKAHEAD_LEVEL, lookahead_tip[1]},
+        }};
+        for (const auto& item : lookahead_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         tooltips_initialized_ = true;
         update_compatibility_warning();
     }
@@ -2218,6 +2281,8 @@ private:
         add_combo(ID_PRESET, {L"P1", L"P2", L"P3", L"P4", L"P5", L"P6", L"P7"}, settings_.preset - 1);
         add_combo(ID_RATE, {L"CRF", L"QP", L"VBR"}, settings_.rate_control == L"crf" ? 0 : settings_.rate_control == L"vbr" ? 2 : 1);
         add_combo(ID_FRAME_MODE, {L"Automatic", L"Manual"}, settings_.frame_structure_mode == L"manual" ? 1 : 0);
+        add_combo(ID_LOOKAHEAD, {L"Off", L"8", L"16", L"32"}, lookahead_index(settings_.lookahead));
+        add_combo(ID_LOOKAHEAD_LEVEL, {L"1", L"2", L"3"}, std::clamp(settings_.lookahead_level - 1, 0, 2));
         add_combo(ID_VSR_ENABLED, {L"Off", L"On"}, settings_.vsr_enabled ? 1 : 0);
         add_combo(ID_VSR_QUALITY, {L"1", L"2", L"3", L"4"}, std::clamp(settings_.vsr_quality - 1, 0, 3));
         add_combo(ID_FRUC_ENABLED, {L"Off", L"Double", L"Custom"}, fruc_mode_index(settings_.fruc_mode));
@@ -2291,7 +2356,8 @@ private:
         const std::array<int, 2> encoding_more{ID_LABEL_QP, ID_LABEL_BITRATE};
         const std::array<int, 10> color{ID_ALPHA, ID_MASK_OUTPUT, ID_CHROMA, ID_COLORSPACE, ID_COLOR_RANGE,
                                          ID_LABEL_ALPHA, ID_LABEL_MASK_OUTPUT, ID_LABEL_CHROMA, ID_LABEL_COLORSPACE, ID_LABEL_COLOR_RANGE};
-        const std::array<int, 6> frame_structure{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES};
+        const std::array<int, 10> frame_structure{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LOOKAHEAD, ID_LOOKAHEAD_LEVEL,
+                                                   ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES, ID_LABEL_LOOKAHEAD, ID_LABEL_LOOKAHEAD_LEVEL};
         const std::array<int, 4> fruc{ID_FRUC_ENABLED, ID_FRUC_FPS, ID_LABEL_FRUC_ENABLED, ID_LABEL_FRUC_FPS};
         const std::array<int, 6> super_resolution{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
                                                   ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY};
@@ -2383,6 +2449,7 @@ private:
         if (combo_index(ID_VSR_ENABLED) == 1 &&
             (alpha != 0 || codec != 1 || backend != 2)) return true;
         if (combo_index(ID_FRUC_ENABLED) != 0 && backend != 2) return true;
+        if (combo_index(ID_LOOKAHEAD) != 0 && backend != 1 && backend != 2) return true;
         if (backend == 2 && alpha == 2) return true;
         const auto& capability = codec_capability_from_index(codec);
         if (capability.cpu_only && backend != 0) return true;
@@ -2490,6 +2557,8 @@ private:
         settings_.frame_structure_mode = combo_index(ID_FRAME_MODE) == 1 ? L"manual" : L"auto";
         settings_.gop = std::clamp(edit_number(ID_GOP, 120), 1, 10000);
         settings_.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
+        settings_.lookahead = lookahead_value(combo_index(ID_LOOKAHEAD));
+        settings_.lookahead_level = std::clamp(combo_index(ID_LOOKAHEAD_LEVEL) + 1, 1, 3);
         settings_.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         settings_.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         settings_.cpu_threads = cpu_thread_mode_key(combo_index(ID_CPU_THREADS));
@@ -2645,6 +2714,7 @@ private:
                     add_video_field(ID_LABEL_FRAME_MODE, ID_FRAME_MODE, margin_x, right, inner_y);
                     inner_y += inner_row_height;
                     add_video_pair(ID_LABEL_GOP, ID_GOP, ID_LABEL_BFRAMES, ID_BFRAMES, inner_y);
+                    add_video_pair(ID_LABEL_LOOKAHEAD, ID_LOOKAHEAD, ID_LABEL_LOOKAHEAD_LEVEL, ID_LOOKAHEAD_LEVEL, inner_y);
                 } else {
                     add_video_field(ID_LABEL_VSR_ENABLED, ID_VSR_ENABLED, margin_x, right, inner_y);
                     inner_y += inner_row_height;
@@ -2819,6 +2889,9 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_GOP), text.gop);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_BFRAMES), text.b_frames);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRAME_MODE), text.frame_structure_mode);
+        const auto lookahead = lookahead_labels(ui_language(settings_.language));
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_LOOKAHEAD), lookahead[0]);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_LOOKAHEAD_LEVEL), lookahead[1]);
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_HEADING),
                        uses_nvenc_bridge(settings_) ? nvenc_command_heading(ui_language(settings_.language))
                                                     : text.command_heading);

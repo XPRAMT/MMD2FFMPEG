@@ -180,7 +180,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 53) {
+        tooltip_count != 57) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -310,7 +310,8 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     TabCtrl_SetCurSel(video_tab, 2);
     const LRESULT frame_tab_result = SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
-    const int frame_ids[]{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES};
+    const int frame_ids[]{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LOOKAHEAD, ID_LOOKAHEAD_LEVEL,
+                          ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES, ID_LABEL_LOOKAHEAD, ID_LABEL_LOOKAHEAD_LEVEL};
     for (const int id : frame_ids) {
         const RECT rectangle = child_rect(page_window, id);
         if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(rectangle)) {
@@ -367,6 +368,8 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND frame_mode_combo = GetDlgItem(page_window, ID_FRAME_MODE);
     HWND gop_edit = GetDlgItem(page_window, ID_GOP);
     HWND bframes_edit = GetDlgItem(page_window, ID_BFRAMES);
+    HWND lookahead_combo = GetDlgItem(page_window, ID_LOOKAHEAD);
+    HWND lookahead_level_combo = GetDlgItem(page_window, ID_LOOKAHEAD_LEVEL);
     HWND cpu_threads_combo = GetDlgItem(page_window, ID_CPU_THREADS);
     HWND vsr_enabled_combo = GetDlgItem(page_window, ID_VSR_ENABLED);
     HWND fruc_mode_combo = GetDlgItem(page_window, ID_FRUC_ENABLED);
@@ -387,6 +390,20 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Optical-flow interpolation must expose Off, Double, and Custom modes.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 57;
     }
+    if (SendMessageW(lookahead_combo, CB_GETCOUNT, 0, 0) != 4 ||
+        combo_item_text(lookahead_combo, 0) != L"Off" ||
+        combo_item_text(lookahead_combo, 1) != L"8" ||
+        combo_item_text(lookahead_combo, 2) != L"16" ||
+        combo_item_text(lookahead_combo, 3) != L"32" ||
+        SendMessageW(lookahead_combo, CB_GETCURSEL, 0, 0) != 2 ||
+        SendMessageW(lookahead_level_combo, CB_GETCOUNT, 0, 0) != 3 ||
+        combo_item_text(lookahead_level_combo, 0) != L"1" ||
+        combo_item_text(lookahead_level_combo, 1) != L"2" ||
+        combo_item_text(lookahead_level_combo, 2) != L"3" ||
+        SendMessageW(lookahead_level_combo, CB_GETCURSEL, 0, 0) != 1) {
+        std::wcerr << L"Lookahead controls must expose Off/8/16/32 and levels 1/2/3 with default 16/2.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 63;
+    }
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));
     SendMessageW(codec_combo, CB_SETCURSEL, 1, 0);
@@ -398,6 +415,7 @@ int wmain(int argument_count, wchar_t** arguments) {
                  reinterpret_cast<LPARAM>(vsr_enabled_combo));
     if (!has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING)) ||
         window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"hevc_nvenc") == std::wstring::npos ||
+        window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"-rc-lookahead 16 -lookahead_level 2") == std::wstring::npos ||
         !has_visible_style(GetDlgItem(page_window, ID_COMMAND_PREFIX))) {
         std::wcerr << L"FFmpeg NVENC with VSR must remain an FFmpeg command and show an unavailable warning.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 48;
@@ -447,6 +465,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_prefix.find(L"mmd2ffmpeg_vsr_bridge.exe") != std::wstring::npos ||
         nvencc_prefix.find(L"--ffmpeg ") != std::wstring::npos ||
         nvencc_command.find(L"--vpp-resize ") == std::wstring::npos ||
+        nvencc_command.find(L"--lookahead 16 --lookahead-level 2") == std::wstring::npos ||
         nvencc_command.find(L"--metadata date_recorded=") == std::wstring::npos ||
         nvencc_command.find(L"--gop-len ") != std::wstring::npos ||
         nvencc_command.find(L"--colorrange ") == std::wstring::npos ||
@@ -462,6 +481,24 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_command_bounds.top - nvencc_prefix_bounds.bottom > 32) {
         std::wcerr << L"NVEncC must show a fixed compact prefix and only editable middle arguments.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 49;
+    }
+    SendMessageW(lookahead_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_LOOKAHEAD, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(lookahead_combo));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--lookahead ") != std::wstring::npos ||
+        window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--lookahead-level ") != std::wstring::npos) {
+        std::wcerr << L"Off Lookahead must omit NVEncC lookahead arguments.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 64;
+    }
+    SendMessageW(lookahead_combo, CB_SETCURSEL, 2, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_LOOKAHEAD, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(lookahead_combo));
+    SendMessageW(lookahead_level_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_LOOKAHEAD_LEVEL, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(lookahead_level_combo));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--lookahead 16 --lookahead-level 2") == std::wstring::npos) {
+        std::wcerr << L"NVEncC Lookahead 16 / level 2 must generate both arguments.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 65;
     }
     SendMessageW(frame_mode_combo, CB_SETCURSEL, 1, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRAME_MODE, CBN_SELCHANGE),
