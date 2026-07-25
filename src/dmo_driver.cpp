@@ -295,25 +295,25 @@ const std::array<const wchar_t*, 3> vsr_labels(UiLanguage language) {
     }
 }
 
-const std::array<const wchar_t*, 2> fruc_labels(UiLanguage language) {
+const wchar_t* fruc_label(UiLanguage language) {
     switch (language) {
-    case UiLanguage::TraditionalChinese: return {L"FRUC（光流補幀）"};
-    case UiLanguage::SimplifiedChinese: return {L"FRUC（光流补帧）"};
-    case UiLanguage::Japanese: return {L"FRUC（オプティカルフロー補間）"};
-    default: return {L"FRUC (Optical Flow)"};
+    case UiLanguage::TraditionalChinese: return L"FRUC（光流補幀）";
+    case UiLanguage::SimplifiedChinese: return L"FRUC（光流补帧）";
+    case UiLanguage::Japanese: return L"FRUC（オプティカルフロー補間）";
+    default: return L"FRUC (Optical Flow)";
     }
 }
 
-const std::array<const wchar_t*, 2> fruc_tooltips(UiLanguage language) {
+const wchar_t* fruc_tooltip(UiLanguage language) {
     switch (language) {
     case UiLanguage::TraditionalChinese:
-        return {L"NVIDIA Optical Flow 硬體加速補幀。Double = 將幀率加倍，NVEncC 會自動插值生成中間幀。"};
+        return L"NVIDIA Optical Flow 硬體加速補幀。Double = 將幀率加倍，NVEncC 會自動插值生成中間幀。";
     case UiLanguage::SimplifiedChinese:
-        return {L"NVIDIA Optical Flow 硬件加速补帧。Double = 将帧率加倍，NVEncC 会自动插值生成中间帧。"};
+        return L"NVIDIA Optical Flow 硬件加速补帧。Double = 将帧率加倍，NVEncC 会自动插值生成中间帧。";
     case UiLanguage::Japanese:
-        return {L"NVIDIA Optical Flow ハードウェア補間。Double = フレームレートを2倍にします。"};
+        return L"NVIDIA Optical Flow ハードウェア補間。Double = フレームレートを2倍にします。";
     default:
-        return {L"NVIDIA Optical Flow hardware frame interpolation. Double = doubles the frame rate."};
+        return L"NVIDIA Optical Flow hardware frame interpolation. Double = doubles the frame rate.";
     }
 }
 
@@ -2141,9 +2141,9 @@ private:
             {ID_LABEL_VSR_QUALITY, vsr_tip[2]}, {ID_VSR_QUALITY, vsr_tip[2]},
         }};
         for (const auto& item : vsr_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
-        const auto fruc_tip = fruc_tooltips(ui_language(settings_.language));
+        const auto fruc_tip_val = fruc_tooltip(ui_language(settings_.language));
         const std::array<std::pair<int, const wchar_t*>, 2> fruc_items{{
-            {ID_LABEL_FRUC_ENABLED, fruc_tip[0]}, {ID_FRUC_ENABLED, fruc_tip[0]},
+            {ID_LABEL_FRUC_ENABLED, fruc_tip_val}, {ID_FRUC_ENABLED, fruc_tip_val},
         }};
         for (const auto& item : fruc_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         tooltips_initialized_ = true;
@@ -2612,9 +2612,7 @@ private:
                 } else {
                     add_video_field(ID_LABEL_VSR_ENABLED, ID_VSR_ENABLED, margin_x, right, inner_y);
                     inner_y += inner_row_height;
-                    add_video_pair(ID_LABEL_VSR_SCALE, ID_VSR_SCALE, ID_LABEL_VSR_QUALITY, ID_VSR_QUALITY, inner_y);
-                    inner_y += inner_row_height;
-                    add_video_field(ID_LABEL_FRUC_ENABLED, ID_FRUC_ENABLED, margin_x, right, inner_y);
+                    add_video_pair(ID_LABEL_VSR_SCALE, ID_VSR_SCALE, ID_LABEL_FRUC_ENABLED, ID_FRUC_ENABLED, inner_y);
                 }
             }
             y += inner_height + inner_gap;
