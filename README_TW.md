@@ -140,8 +140,6 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 
 只有在 `NVEncC.exe` 位於 FFmpeg 同一資料夾或系統 `PATH` 時才可選擇 **NVEncC（NVIDIA）**。MMD2FFMPEG 會先測試所選指令才能儲存。NVEncC HEVC Alpha 限於 8-bit YUVA420；Windows FFmpeg／NVDEC 無法可靠呈現這個 Alpha 串流，建議使用 macOS 或 iOS Safari 驗證。NVIDIA Optical Flow 與 RTX VSR 是獨立功能，並非 NVIDIA App 的遊戲專用 Smooth Motion。
 
-較新的獨立 NVEncC 版本雖提供 RIFE-OV，但 **MMD2FFMPEG 0.3.0 尚未整合 RIFE 補幀**。
-
 ## 更新與解除安裝
 
 - **更新：** 關閉 MMD，重新執行建置命令，再執行一次 `install-user.bat`。既有的 `config.ini` 會保留。

@@ -140,8 +140,6 @@ The **Video** page is organized into **Encoding**, **Color**, **Frame structure*
 
 Choose **NVEncC (NVIDIA)** only when `NVEncC.exe` is available beside FFmpeg or on `PATH`. MMD2FFMPEG tests the selected command before it can be saved. NVEncC HEVC alpha is limited to 8-bit YUVA420; it is best verified in Safari on macOS or iOS because Windows FFmpeg/NVDEC decoding does not reliably expose that alpha stream. NVIDIA Optical Flow and RTX VSR are separate features; they are not the NVIDIA App's game-only Smooth Motion feature.
 
-RIFE-OV exists in newer standalone NVEncC releases, but **RIFE interpolation is not integrated into MMD2FFMPEG 0.3.0**.
-
 ## Updating and uninstalling
 
 - **Update:** Close MMD, run the build command, then run `install-user.bat` again. Existing `config.ini` is preserved.
