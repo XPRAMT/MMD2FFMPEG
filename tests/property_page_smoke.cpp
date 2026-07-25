@@ -342,7 +342,12 @@ int wmain(int argument_count, wchar_t** arguments) {
         }
     }
     const RECT vsr_scale_bounds = child_rect(page_window, ID_VSR_SCALE);
+    const RECT vsr_quality_bounds = child_rect(page_window, ID_VSR_QUALITY);
     const RECT fruc_bounds = child_rect(page_window, ID_FRUC_ENABLED);
+    if (vsr_quality_bounds.left >= vsr_scale_bounds.left) {
+        std::wcerr << L"VSR quality must be placed to the left of the scale factor.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 62;
+    }
     if (fruc_bounds.top - vsr_scale_bounds.bottom > 12) {
         std::wcerr << L"Optical-flow interpolation must be directly below the VSR controls without a blank row.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 61;
