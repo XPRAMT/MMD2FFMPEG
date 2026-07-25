@@ -1982,7 +1982,7 @@ public:
         candidate.alpha_mode = combo_index(ID_ALPHA) == 1 ? L"rgba" : combo_index(ID_ALPHA) == 2 ? L"mask" : L"none";
         candidate.mask_output = combo_index(ID_MASK_OUTPUT) == 1 ? L"separate" : L"stacked";
         candidate.color_space = combo_index(ID_COLORSPACE) == 0 ? L"bt601" : combo_index(ID_COLORSPACE) == 2 ? L"bt2020" : L"bt709";
-        candidate.color_range = combo_index(ID_COLOR_RANGE) == 1 ? L"pc" : L"tv";
+        candidate.color_range = combo_index(ID_COLOR_RANGE) == 0 ? L"pc" : L"tv";
         candidate.preset = combo_index(ID_BACKEND) == 4 ? (combo_index(ID_PRESET) == 0 ? 1 : combo_index(ID_PRESET) == 1 ? 4 : 7) : combo_index(ID_PRESET) + 1;
         candidate.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         candidate.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
@@ -2411,7 +2411,7 @@ private:
         settings_.alpha_mode = combo_index(ID_ALPHA) == 1 ? L"rgba" : combo_index(ID_ALPHA) == 2 ? L"mask" : L"none";
         settings_.mask_output = combo_index(ID_MASK_OUTPUT) == 1 ? L"separate" : L"stacked";
         settings_.color_space = combo_index(ID_COLORSPACE) == 0 ? L"bt601" : combo_index(ID_COLORSPACE) == 2 ? L"bt2020" : L"bt709";
-        settings_.color_range = combo_index(ID_COLOR_RANGE) == 1 ? L"pc" : L"tv";
+        settings_.color_range = combo_index(ID_COLOR_RANGE) == 0 ? L"pc" : L"tv";
         settings_.preset = combo_index(ID_BACKEND) == 4 ? (combo_index(ID_PRESET) == 0 ? 1 : combo_index(ID_PRESET) == 1 ? 4 : 7) : combo_index(ID_PRESET) + 1;
         settings_.rate_control = combo_index(ID_RATE) == 0 ? L"crf" : combo_index(ID_RATE) == 1 ? L"qp" : L"vbr";
         settings_.qp = std::clamp(edit_number(ID_QP, 20), 0, 51);
