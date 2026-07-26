@@ -1830,7 +1830,7 @@ private:
         settings_ = load_settings();
         if (video->AvgTimePerFrame > 0) settings_.fps = static_cast<int>((10000000LL + video->AvgTimePerFrame / 2) / video->AvgTimePerFrame);
         mmd_input_fps_ = settings_.fps;
-        sbs_paired_output_ = open_sbs_bridge() && InterlockedCompareExchange(&sbs_bridge_->sbs_enabled, 0, 0) != 0 &&
+        sbs_paired_output_ = open_sbs_bridge() && sbs_bridge_->sbs_enabled != 0 &&
             mmd_input_fps_ >= 2 && (mmd_input_fps_ % 2) == 0;
         if (sbs_paired_output_) settings_.fps = mmd_input_fps_ / 2;
         auto avi = current_output_avi();
@@ -2020,8 +2020,14 @@ private:
         sbs_bridge_ = static_cast<MmdSbsFrameBridgeState*>(MapViewOfFile(sbs_bridge_mapping_, FILE_MAP_READ, 0, 0,
                                                                            sizeof(MmdSbsFrameBridgeState)));
         if (sbs_bridge_ == nullptr) { CloseHandle(sbs_bridge_mapping_); sbs_bridge_mapping_ = nullptr; return false; }
-        return InterlockedCompareExchange(&sbs_bridge_->magic, 0, 0) == kMmdSbsFrameBridgeMagic &&
-               InterlockedCompareExchange(&sbs_bridge_->version, 0, 0) == kMmdSbsFrameBridgeVersion;
+        // The mapping is deliberately opened read-only.  InterlockedCompareExchange is
+        // a read-modify-write operation, even with an exchange value of zero, and would
+        // therefore fault on this view.  The injected publisher writes complete LONG
+        // values; ordinary volatile reads are sufficient for this advisory protocol.
+        if (sbs_bridge_->magic == kMmdSbsFrameBridgeMagic &&
+            sbs_bridge_->version == kMmdSbsFrameBridgeVersion) return true;
+        close_sbs_bridge();
+        return false;
     }
     void close_sbs_bridge() {
         if (sbs_bridge_ != nullptr) { UnmapViewOfFile(sbs_bridge_); sbs_bridge_ = nullptr; }
@@ -2029,8 +2035,8 @@ private:
     }
     bool consume_completed_sbs_frame() {
         if (sbs_bridge_ == nullptr) return true;
-        const LONG sequence = InterlockedCompareExchange(&sbs_bridge_->avi_sequence, 0, 0);
-        const LONG eye = InterlockedCompareExchange(&sbs_bridge_->avi_eye, 0, 0);
+        const LONG sequence = sbs_bridge_->avi_sequence;
+        const LONG eye = sbs_bridge_->avi_eye;
         if (sequence == 0 || sequence == last_sbs_sequence_) return false;
         last_sbs_sequence_ = sequence;
         return eye == 2;
