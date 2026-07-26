@@ -1572,6 +1572,17 @@ bool supported_output(const DMO_MEDIA_TYPE& type) {
            bitmap.biSizeImage >= compressed_buffer_size(bitmap.biWidth, bitmap.biHeight);
 }
 
+constexpr wchar_t kMmdSbsFrameBridgeName[] = L"Local\\MMDSBS.AviFrameBridge.v1";
+constexpr LONG kMmdSbsFrameBridgeMagic = 0x5342534d;
+constexpr LONG kMmdSbsFrameBridgeVersion = 1;
+struct MmdSbsFrameBridgeState final {
+    volatile LONG magic;
+    volatile LONG version;
+    volatile LONG sbs_enabled;
+    volatile LONG avi_eye;
+    volatile LONG avi_sequence;
+};
+
 class Encoder final : public IMediaObject, public ISpecifyPropertyPages, public IAMVfwCompressDialogs {
 public:
     class InnerUnknown final : public IUnknown {
@@ -1587,7 +1598,7 @@ public:
     };
 
     explicit Encoder(IUnknown* outer) : inner_unknown_(this), outer_(outer ? outer : &inner_unknown_) { ++g_objects; }
-    virtual ~Encoder() { stop_ffmpeg(); free_type(input_type_); free_type(output_type_); --g_objects; }
+    virtual ~Encoder() { stop_ffmpeg(); close_sbs_bridge(); free_type(input_type_); free_type(output_type_); --g_objects; }
 
     IUnknown* inner_unknown() { return &inner_unknown_; }
 
@@ -1752,8 +1763,11 @@ public:
         BYTE* bytes = nullptr; DWORD length = 0;
         HRESULT result = buffer->GetBufferAndLength(&bytes, &length);
         if (FAILED(result)) return result;
-        if (!send_frame(bytes, length)) return E_FAIL;
-        ++input_frame_count_;
+        ++received_frame_count_;
+        if (!sbs_paired_output_ || consume_completed_sbs_frame()) {
+            if (!send_frame(bytes, length)) return E_FAIL;
+            ++input_frame_count_;
+        } else ++discarded_sbs_frame_count_;
         pending_ = true; timestamp_ = timestamp; duration_ = duration;
         return S_OK;
     }
@@ -1815,6 +1829,10 @@ private:
         stride_ = ((width_ * bits_ + 31) / 32) * 4;
         settings_ = load_settings();
         if (video->AvgTimePerFrame > 0) settings_.fps = static_cast<int>((10000000LL + video->AvgTimePerFrame / 2) / video->AvgTimePerFrame);
+        mmd_input_fps_ = settings_.fps;
+        sbs_paired_output_ = open_sbs_bridge() && InterlockedCompareExchange(&sbs_bridge_->sbs_enabled, 0, 0) != 0 &&
+            mmd_input_fps_ >= 2 && (mmd_input_fps_ % 2) == 0;
+        if (sbs_paired_output_) settings_.fps = mmd_input_fps_ / 2;
         auto avi = current_output_avi();
         if (avi.empty()) return false;
         avi_output_ = avi;
@@ -1870,7 +1888,9 @@ private:
                << L"Started: " << format_local_time() << L"\r\n"
                << L"FFmpeg version: " << ffmpeg_version << L"\r\n"
                << L"Input: " << width_ << L"x" << height_ << L", RGB" << bits_ << L"\r\n"
-               << L"Declared FPS (MMD): " << settings_.fps << L"\r\n\r\n"
+               << L"Declared FPS (MMD): " << mmd_input_fps_ << L"\r\n"
+               << L"MMDSBS paired-frame drop: " << (sbs_paired_output_ ? L"enabled" : L"disabled") << L"\r\n"
+               << L"Encoder input FPS: " << settings_.fps << L"\r\n\r\n"
                << L"MMD2FFMPEG command:\r\n" << command << L"\r\n\r\nFFmpeg output:\r\n";
         write_log_line(log_file_, header.str());
         std::vector<wchar_t> mutable_command(command.begin(), command.end()); mutable_command.push_back(L'\0');
@@ -1897,6 +1917,8 @@ private:
         }
         process_ = process.hProcess; process_thread_ = process.hThread;
         input_frame_count_ = 0;
+        received_frame_count_ = 0;
+        discarded_sbs_frame_count_ = 0;
         encoding_started_at_ = std::chrono::steady_clock::now();
         started_ = true;
         return true;
@@ -1941,7 +1963,9 @@ private:
         std::wostringstream summary;
         summary << L"\r\n[MMD2FFMPEG] Output summary\r\n"
                 << L"Finished: " << format_local_time() << L"\r\n"
-                << L"Input frames: " << input_frame_count_ << L"\r\n"
+                 << L"Input frames: " << input_frame_count_ << L"\r\n"
+                 << L"MMD frames received: " << received_frame_count_ << L"\r\n"
+                 << L"MMDSBS frames discarded: " << discarded_sbs_frame_count_ << L"\r\n"
                 << L"Actual input FPS: " << std::fixed << std::setprecision(3) << actual_fps << L"\r\n"
                 << L"Elapsed: " << elapsed.count() << L" ms\r\n"
                 << L"FFmpeg exit code: " << exit_code << L"\r\n"
@@ -1989,6 +2013,28 @@ private:
         }
         return true;
     }
+    bool open_sbs_bridge() {
+        if (sbs_bridge_ != nullptr) return true;
+        sbs_bridge_mapping_ = OpenFileMappingW(FILE_MAP_READ, FALSE, kMmdSbsFrameBridgeName);
+        if (sbs_bridge_mapping_ == nullptr) return false;
+        sbs_bridge_ = static_cast<MmdSbsFrameBridgeState*>(MapViewOfFile(sbs_bridge_mapping_, FILE_MAP_READ, 0, 0,
+                                                                           sizeof(MmdSbsFrameBridgeState)));
+        if (sbs_bridge_ == nullptr) { CloseHandle(sbs_bridge_mapping_); sbs_bridge_mapping_ = nullptr; return false; }
+        return InterlockedCompareExchange(&sbs_bridge_->magic, 0, 0) == kMmdSbsFrameBridgeMagic &&
+               InterlockedCompareExchange(&sbs_bridge_->version, 0, 0) == kMmdSbsFrameBridgeVersion;
+    }
+    void close_sbs_bridge() {
+        if (sbs_bridge_ != nullptr) { UnmapViewOfFile(sbs_bridge_); sbs_bridge_ = nullptr; }
+        if (sbs_bridge_mapping_ != nullptr) { CloseHandle(sbs_bridge_mapping_); sbs_bridge_mapping_ = nullptr; }
+    }
+    bool consume_completed_sbs_frame() {
+        if (sbs_bridge_ == nullptr) return true;
+        const LONG sequence = InterlockedCompareExchange(&sbs_bridge_->avi_sequence, 0, 0);
+        const LONG eye = InterlockedCompareExchange(&sbs_bridge_->avi_eye, 0, 0);
+        if (sequence == 0 || sequence == last_sbs_sequence_) return false;
+        last_sbs_sequence_ = sequence;
+        return eye == 2;
+    }
     bool send_frame(const BYTE* source, DWORD length) {
         if (!source || length < static_cast<DWORD>(stride_ * height_)) return false;
         const DWORD row_bytes = static_cast<DWORD>(width_ * bits_ / 8);
@@ -2008,10 +2054,15 @@ private:
     DMO_MEDIA_TYPE input_type_{}; DMO_MEDIA_TYPE output_type_{};
     Settings settings_{};
     HANDLE process_ = nullptr, process_thread_ = nullptr, stdin_write_ = nullptr, job_ = nullptr, log_file_ = nullptr;
+    HANDLE sbs_bridge_mapping_ = nullptr;
+    MmdSbsFrameBridgeState* sbs_bridge_ = nullptr;
     std::filesystem::path final_output_, partial_output_, final_mask_output_, partial_mask_output_, avi_output_, log_path_;
     int width_ = 0, height_ = 0, bits_ = 0; LONG stride_ = 0;
     bool bottom_up_ = false, started_ = false, pending_ = false;
-    std::uint64_t input_frame_count_ = 0;
+    std::uint64_t input_frame_count_ = 0, received_frame_count_ = 0, discarded_sbs_frame_count_ = 0;
+    int mmd_input_fps_ = 0;
+    LONG last_sbs_sequence_ = 0;
+    bool sbs_paired_output_ = false;
     std::chrono::steady_clock::time_point encoding_started_at_{};
     REFERENCE_TIME timestamp_ = 0, duration_ = 0;
     std::vector<BYTE> flipped_;
