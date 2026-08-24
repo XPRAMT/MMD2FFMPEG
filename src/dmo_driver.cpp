@@ -1267,6 +1267,19 @@ std::wstring format_local_time() {
     return value.str();
 }
 
+void append_test_error_log(const std::wstring& error_message) {
+    const auto path = logs_directory() / L"test_error.log";
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) return;
+    const HANDLE file = CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                    nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+    std::wstring entry = L"[" + format_local_time() + L"]\r\n" + error_message + L"\r\n\r\n";
+    write_log_line(file, entry);
+    CloseHandle(file);
+}
+
 struct ProbeResult { bool success; std::wstring message; std::wstring signature; };
 
 bool test_encoder(const Settings& settings, std::wstring& error_message) {
@@ -2483,6 +2496,7 @@ private:
         probe_thread_ = std::thread([this, target, candidate]() {
             std::wstring message;
             const bool success = test_encoder(candidate, message);
+            if (!success) append_test_error_log(message);
             auto* result = new ProbeResult{success, success ? L"Available" : message, command_test_signature(candidate)};
             save_cached_probe(candidate, *result);
             if (alive_ && IsWindow(target)) PostMessageW(target, WM_APP + 42, 0, reinterpret_cast<LPARAM>(result));
