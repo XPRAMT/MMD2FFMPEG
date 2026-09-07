@@ -180,7 +180,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 57) {
+        tooltip_count != 58) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -216,7 +216,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     const HFONT page_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(page_window, ID_BACKEND), WM_GETFONT, 0, 0));
     const int same_font_ids[] = {ID_TAB, ID_AUDIO_FORMAT, ID_AUDIO_RATE, ID_AUDIO_INTRO, ID_AUDIO_HELP,
-                                 ID_LANGUAGE, ID_CPU_THREADS, ID_SETTINGS_INFO, ID_GITHUB_LINK};
+                                 ID_LANGUAGE, ID_CPU_THREADS, ID_SBS_FRAME_RATE_HALVING, ID_SETTINGS_INFO, ID_GITHUB_LINK};
     for (const int id : same_font_ids) {
         const HFONT control_font = reinterpret_cast<HFONT>(SendMessageW(GetDlgItem(page_window, id), WM_GETFONT, 0, 0));
         if (!page_font || control_font != page_font) {
@@ -371,6 +371,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND lookahead_combo = GetDlgItem(page_window, ID_LOOKAHEAD);
     HWND lookahead_level_combo = GetDlgItem(page_window, ID_LOOKAHEAD_LEVEL);
     HWND cpu_threads_combo = GetDlgItem(page_window, ID_CPU_THREADS);
+    HWND sbs_frame_rate_halving = GetDlgItem(page_window, ID_SBS_FRAME_RATE_HALVING);
     HWND vsr_enabled_combo = GetDlgItem(page_window, ID_VSR_ENABLED);
     HWND fruc_mode_combo = GetDlgItem(page_window, ID_FRUC_ENABLED);
     HWND fruc_fps_edit = GetDlgItem(page_window, ID_FRUC_FPS);
@@ -389,6 +390,10 @@ int wmain(int argument_count, wchar_t** arguments) {
         combo_item_text(fruc_mode_combo, 2) != L"Custom") {
         std::wcerr << L"Optical-flow interpolation must expose Off, Double, and Custom modes.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 57;
+    }
+    if (!sbs_frame_rate_halving || IsDlgButtonChecked(page_window, ID_SBS_FRAME_RATE_HALVING) != BST_CHECKED) {
+        std::wcerr << L"SBS frame-rate halving must be enabled by default.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 58;
     }
     if (SendMessageW(lookahead_combo, CB_GETCOUNT, 0, 0) != 4 ||
         combo_item_text(lookahead_combo, 0) != L"Off" ||
@@ -666,9 +671,11 @@ int wmain(int argument_count, wchar_t** arguments) {
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 13;
     }
     const RECT cpu_threads_label = child_rect(page_window, ID_LABEL_CPU_THREADS);
+    const RECT sbs_frame_rate_halving_rect = child_rect(page_window, ID_SBS_FRAME_RATE_HALVING);
     const RECT settings_info = child_rect(page_window, ID_SETTINGS_INFO);
     const RECT github_address = child_rect(page_window, ID_GITHUB_LINK);
-    if (settings_info.top - cpu_threads_label.bottom > 48 || github_address.top - settings_info.bottom > 48) {
+    if (sbs_frame_rate_halving_rect.top - cpu_threads_label.bottom > 48 ||
+        settings_info.top - sbs_frame_rate_halving_rect.bottom > 48 || github_address.top - settings_info.bottom > 48) {
         std::wcerr << L"Settings controls are not tightly stacked.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 14;
     }
@@ -691,6 +698,7 @@ int wmain(int argument_count, wchar_t** arguments) {
             has_visible_style(GetDlgItem(page_window, ID_AUDIO_FORMAT)) != expected.audio ||
             has_visible_style(GetDlgItem(page_window, ID_LANGUAGE)) != expected.settings ||
             has_visible_style(GetDlgItem(page_window, ID_CPU_THREADS)) != expected.settings ||
+            has_visible_style(GetDlgItem(page_window, ID_SBS_FRAME_RATE_HALVING)) != expected.settings ||
             has_visible_style(GetDlgItem(page_window, ID_SETTINGS_INFO)) != expected.settings) {
             std::wcerr << L"Tab visibility failed for page " << expected.page << L".\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 12;
@@ -699,7 +707,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         int page_id_count = 0;
         const int audio_ids[]{ID_AUDIO_INTRO, ID_LABEL_AUDIO_FORMAT, ID_AUDIO_FORMAT, ID_AUDIO_HELP,
                               ID_LABEL_AUDIO_RATE, ID_AUDIO_RATE};
-        const int settings_ids[]{ID_LABEL_LANGUAGE, ID_LANGUAGE, ID_LABEL_CPU_THREADS, ID_CPU_THREADS, ID_SETTINGS_INFO, ID_GITHUB_LINK};
+        const int settings_ids[]{ID_LABEL_LANGUAGE, ID_LANGUAGE, ID_LABEL_CPU_THREADS, ID_CPU_THREADS,
+                                 ID_SBS_FRAME_RATE_HALVING, ID_SETTINGS_INFO, ID_GITHUB_LINK};
         if (expected.audio) { page_ids = audio_ids; page_id_count = static_cast<int>(std::size(audio_ids)); }
         if (expected.settings) { page_ids = settings_ids; page_id_count = static_cast<int>(std::size(settings_ids)); }
         GetClientRect(page_window, &client);

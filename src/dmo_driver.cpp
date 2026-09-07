@@ -68,6 +68,7 @@ struct Settings {
     int lookahead = 16;
     int lookahead_level = 2;
     std::wstring cpu_threads = L"auto";
+    bool sbs_frame_rate_halving = true;
     std::wstring audio_format = L"flac";
     std::wstring audio_sample_rate = L"original";
     std::wstring audio_bit_depth = L"original";
@@ -172,6 +173,7 @@ struct UiStrings {
     const wchar_t* title;
     const wchar_t* language;
     const wchar_t* cpu_threads;
+    const wchar_t* sbs_frame_rate_halving;
     const wchar_t* encoder;
     const wchar_t* codec;
     const wchar_t* bit_depth;
@@ -226,6 +228,7 @@ struct UiOptions {
 struct UiTooltips {
     const wchar_t* language;
     const wchar_t* cpu_threads;
+    const wchar_t* sbs_frame_rate_halving;
     const wchar_t* backend;
     const wchar_t* codec;
     const wchar_t* bit_depth;
@@ -402,7 +405,7 @@ const std::array<const wchar_t*, 3> vsr_tooltips(UiLanguage language) {
 
 const UiStrings& ui_strings(UiLanguage language) {
     static constexpr UiStrings traditional{
-        L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼核心數", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
+        L"MMD2FFMPEG 編碼器設定", L"語言", L"編碼核心數", L"偵測到 SBS 模式時幀數減半", L"編碼器", L"編碼格式", L"位元深度", L"編碼預設",
         L"碼率控制", L"品質 / QP", L"位元率 (kbps)", L"Alpha", L"遮罩輸出", L"色度取樣", L"色彩空間", L"輸出範圍", L"GOP / I 幀間隔", L"B 幀間隔", L"幀結構", L"FFmpeg 指令（中間參數可編輯）",
         L"編碼器狀態", L"尚未測試", L"測試中…", L"測試通過",
         L"設定已變更，請重新測試", L"測試失敗 - ",
@@ -413,7 +416,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"\x26A0 找不到 ffmpeg，請前往 https://ffmpeg.org/download.html 安裝",
         L"\x26A0 找不到 NVEncC，請前往 https://github.com/rigaya/NVEnc/releases 下載"};
     static constexpr UiStrings simplified{
-        L"MMD2FFMPEG 编码器设置", L"语言", L"编码核心数", L"编码器", L"编码格式", L"位深度", L"编码预设",
+        L"MMD2FFMPEG 编码器设置", L"语言", L"编码核心数", L"检测到 SBS 模式时帧数减半", L"编码器", L"编码格式", L"位深度", L"编码预设",
         L"码率控制", L"质量 / QP", L"比特率 (kbps)", L"Alpha", L"遮罩输出", L"色度采样", L"色彩空间", L"输出范围", L"GOP / I 帧间隔", L"B 帧间隔", L"帧结构", L"FFmpeg 命令（中间参数可编辑）",
         L"编码器状态", L"尚未测试", L"测试中…", L"测试通过",
         L"设置已更改，请重新测试", L"测试失败 - ",
@@ -424,7 +427,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"\x26A0 找不到 ffmpeg，请前往 https://ffmpeg.org/download.html 安装",
         L"\x26A0 找不到 NVEncC，请前往 https://github.com/rigaya/NVEnc/releases 下载"};
     static constexpr UiStrings japanese{
-        L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコード CPU スレッド", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
+        L"MMD2FFMPEG エンコーダー設定", L"言語", L"エンコード CPU スレッド", L"SBS モード検出時にフレームレートを半減", L"エンコーダー", L"コーデック", L"ビット深度", L"プリセット",
         L"レート制御", L"品質 / QP", L"ビットレート (kbps)", L"アルファ", L"マスク出力", L"クロマサンプリング", L"色空間", L"出力レンジ", L"GOP / I フレーム間隔", L"B フレーム間隔", L"フレーム構造", L"FFmpeg コマンド（中央の引数は編集可能）",
         L"エンコーダー状態", L"未テスト", L"テスト中…", L"テスト合格",
         L"設定が変更されました。再テストしてください", L"テスト失敗 - ",
@@ -435,7 +438,7 @@ const UiStrings& ui_strings(UiLanguage language) {
         L"\x26A0 ffmpeg が見つかりません。https://ffmpeg.org/download.html からインストールしてください",
         L"\x26A0 NVEncC が見つかりません。https://github.com/rigaya/NVEnc/releases からダウンロードしてください"};
     static constexpr UiStrings english{
-        L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoding CPU threads", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
+        L"MMD2FFMPEG Encoder Settings", L"Language", L"Encoding CPU threads", L"Halve frame rate when SBS mode is detected", L"Encoder", L"Codec", L"Bit depth", L"Encoder preset",
         L"Rate control", L"Quality / QP", L"Bitrate (kbps)", L"Alpha", L"Mask output", L"Chroma sampling", L"Color space", L"Output range", L"GOP / I-frame interval", L"B-frame interval", L"Frame structure", L"FFmpeg command (middle arguments are editable)",
         L"Encoder status", L"Not tested", L"Testing...", L"Test passed",
         L"Settings changed; test again", L"Test failed - ",
@@ -511,6 +514,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
     static constexpr UiTooltips traditional{
         L"選擇設定介面的顯示語言；系統預設會跟隨 Windows。",
         L"選擇 CPU 軟體編碼使用的執行緒數。自動不傳遞 -threads；全部、全部 - 1、全部 - 2 會依 Windows 偵測的可用邏輯處理器數計算。硬體編碼不使用這個設定。",
+        L"啟用時，偵測到 MMDSBS 的左右眼配對輸出會只保留完整配對畫面，並將輸出幀率減半。關閉時所有 MMD 影格會直接送入編碼器。",
         L"選擇編碼器。NVENC 使用 FFmpeg 內建 NVIDIA 編碼器；NVEncC (NVIDIA) 使用獨立 NVEncC.exe，並提供 HEVC Alpha 與 RTX VSR。VP9 與 ProRes 僅能使用 CPU。",
         L"選擇影片編碼格式。可用的位元深度、Alpha 與碼率控制會依格式自動限制。",
         L"選擇 8-bit 或 10-bit 輸出。部分編碼格式或 Alpha 模式會固定此選項。",
@@ -536,6 +540,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
     static constexpr UiTooltips simplified{
         L"选择设置界面的显示语言；系统默认会跟随 Windows。",
         L"选择 CPU 软件编码使用的线程数。自动不传递 -threads；全部、全部 - 1、全部 - 2 会依 Windows 检测的可用逻辑处理器数计算。硬件编码不使用此设置。",
+        L"启用时，检测到 MMDSBS 的左右眼配对输出会只保留完整配对画面，并将输出帧率减半。关闭时所有 MMD 帧会直接送入编码器。",
         L"选择编码器。NVENC 使用 FFmpeg 内置 NVIDIA 编码器；NVEncC (NVIDIA) 使用独立 NVEncC.exe，并提供 HEVC Alpha 与 RTX VSR。VP9 和 ProRes 只能使用 CPU。",
         L"选择视频编码格式。可用的位深度、Alpha 和码率控制会依格式自动限制。",
         L"选择 8-bit 或 10-bit 输出。部分编码格式或 Alpha 模式会固定此选项。",
@@ -561,6 +566,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
     static constexpr UiTooltips japanese{
         L"設定画面の表示言語を選択します。システム既定は Windows の表示言語に従います。",
         L"CPU ソフトウェアエンコードで使用するスレッド数を選択します。自動は -threads を渡しません。すべて、すべて - 1、すべて - 2 は Windows が検出した論理プロセッサ数から計算します。ハードウェアエンコードでは使用しません。",
+        L"有効にすると、MMDSBS の左右目ペア出力を検出した場合に完成したペアだけを保持し、出力フレームレートを半分にします。無効にすると、すべての MMD フレームを直接エンコーダーへ送ります。",
         L"エンコーダーを選択します。NVENC は FFmpeg 内蔵の NVIDIA エンコーダー、NVEncC (NVIDIA) は独立した NVEncC.exe を使用し、HEVC Alpha と RTX VSR に対応します。VP9 と ProRes は CPU 専用です。",
         L"動画コーデックを選択します。利用可能なビット深度、アルファ、レート制御は形式に応じて制限されます。",
         L"8-bit または 10-bit 出力を選択します。コーデックまたはアルファモードにより固定される場合があります。",
@@ -586,6 +592,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
     static constexpr UiTooltips english{
         L"Choose the settings interface language. System default follows the Windows display language.",
         L"Choose the thread count for CPU software encoding. Automatic passes no -threads option; All, All - 1, and All - 2 are calculated from Windows-detected logical processors. Hardware encoding does not use this setting.",
+        L"When MMDSBS paired-eye output is detected, keep only completed pairs and halve the output frame rate. Turn this off to send every MMD frame to the encoder.",
         L"Choose the encoder. NVENC uses FFmpeg's built-in NVIDIA encoder; NVEncC (NVIDIA) uses standalone NVEncC.exe and provides HEVC alpha and RTX VSR. VP9 and ProRes are CPU-only.",
         L"Choose the video codec. Available bit depth, alpha, and rate control options are limited by the codec.",
         L"Choose 8-bit or 10-bit output. Some codecs or alpha modes lock this option.",
@@ -764,6 +771,7 @@ Settings load_settings() {
         else if (key == L"lookahead") { try { settings.lookahead = lookahead_value(lookahead_index(std::stoi(value))); } catch (...) {} }
         else if (key == L"lookahead_level") { try { settings.lookahead_level = std::clamp(std::stoi(value), 1, 3); } catch (...) {} }
         else if (key == L"cpu_threads" && (value == L"auto" || value == L"all" || value == L"all-minus-1" || value == L"all-minus-2")) settings.cpu_threads = value;
+        else if (key == L"sbs_frame_rate_halving") settings.sbs_frame_rate_halving = value != L"0";
         else if (key == L"audio_format" && (value == L"flac" || value == L"wav" || value == L"none")) settings.audio_format = value;
         else if (key == L"audio_sample_rate" && (value == L"original" || value == L"hires")) settings.audio_sample_rate = value;
         else if (key == L"audio_bit_depth" && (value == L"original" || value == L"24")) settings.audio_bit_depth = value;
@@ -826,6 +834,7 @@ void save_settings(const Settings& settings) {
          << L"lookahead=" << settings.lookahead << L"\n"
          << L"lookahead_level=" << settings.lookahead_level << L"\n"
          << L"cpu_threads=" << settings.cpu_threads << L"\n"
+         << L"sbs_frame_rate_halving=" << (settings.sbs_frame_rate_halving ? 1 : 0) << L"\n"
          << L"audio_format=" << settings.audio_format << L"\n"
          << L"audio_sample_rate=" << settings.audio_sample_rate << L"\n"
          << L"audio_bit_depth=" << settings.audio_bit_depth << L"\n"
@@ -1843,7 +1852,7 @@ private:
         settings_ = load_settings();
         if (video->AvgTimePerFrame > 0) settings_.fps = static_cast<int>((10000000LL + video->AvgTimePerFrame / 2) / video->AvgTimePerFrame);
         mmd_input_fps_ = settings_.fps;
-        sbs_paired_output_ = open_sbs_bridge() && sbs_bridge_->sbs_enabled != 0 &&
+        sbs_paired_output_ = settings_.sbs_frame_rate_halving && open_sbs_bridge() && sbs_bridge_->sbs_enabled != 0 &&
             mmd_input_fps_ >= 2 && (mmd_input_fps_ % 2) == 0;
         if (sbs_paired_output_) settings_.fps = mmd_input_fps_ / 2;
         auto avi = current_output_avi();
@@ -2172,6 +2181,7 @@ public:
         candidate.b_frames = std::clamp(edit_number(ID_BFRAMES, 3), 0, 16);
         candidate.lookahead = lookahead_value(combo_index(ID_LOOKAHEAD));
         candidate.lookahead_level = std::clamp(combo_index(ID_LOOKAHEAD_LEVEL) + 1, 1, 3);
+        candidate.sbs_frame_rate_halving = IsDlgButtonChecked(window_, ID_SBS_FRAME_RATE_HALVING) == BST_CHECKED;
         candidate.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         candidate.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
@@ -2268,9 +2278,10 @@ private:
             SetPropW(window_, L"MMD2FFMPEG.TooltipWindow", tooltip_);
         }
         const auto& tip = ui_tooltips(ui_language(settings_.language));
-        const std::array<std::pair<int, const wchar_t*>, 43> items{{
+        const std::array<std::pair<int, const wchar_t*>, 44> items{{
             {ID_LABEL_LANGUAGE, tip.language}, {ID_LANGUAGE, tip.language},
             {ID_LABEL_CPU_THREADS, tip.cpu_threads}, {ID_CPU_THREADS, tip.cpu_threads},
+            {ID_SBS_FRAME_RATE_HALVING, tip.sbs_frame_rate_halving},
             {ID_LABEL_BACKEND, tip.backend}, {ID_BACKEND, tip.backend},
             {ID_LABEL_CODEC, tip.codec}, {ID_CODEC, tip.codec},
             {ID_LABEL_DEPTH, tip.bit_depth}, {ID_DEPTH, tip.bit_depth},
@@ -2345,6 +2356,8 @@ private:
         const auto cpu_threads = cpu_thread_options(ui_language(settings_.language));
         add_combo(ID_CPU_THREADS, {cpu_threads[0].c_str(), cpu_threads[1].c_str(), cpu_threads[2].c_str(), cpu_threads[3].c_str()},
                   cpu_thread_mode_index(settings_.cpu_threads));
+        CheckDlgButton(window_, ID_SBS_FRAME_RATE_HALVING,
+                       settings_.sbs_frame_rate_halving ? BST_CHECKED : BST_UNCHECKED);
         add_combo(ID_BACKEND, {L"CPU", L"NVENC", L"NVEncC (NVIDIA)", L"QSV", L"AMF"}, backend_index(settings_.backend));
         add_combo(ID_CODEC, {L"AVC (H.264)", L"HEVC (H.265)", L"AV1", L"VP9", L"ProRes"}, codec_index(settings_.codec));
         add_combo(ID_DEPTH, {L"8-bit", L"10-bit"}, settings_.bit_depth == 10 ? 1 : 0);
@@ -2394,6 +2407,7 @@ private:
         ShowWindow(GetDlgItem(window_, ID_LANGUAGE), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_LABEL_CPU_THREADS), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(GetDlgItem(window_, ID_CPU_THREADS), page == 2 ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(window_, ID_SBS_FRAME_RATE_HALVING), page == 2 ? SW_SHOW : SW_HIDE);
         ShowWindow(settings_info_, page == 2 ? SW_SHOW : SW_HIDE);
         active_tab_ = page;
         ShowWindow(github_link_, page == 2 ? SW_SHOW : SW_HIDE);
@@ -2633,6 +2647,7 @@ private:
         settings_.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         settings_.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
         settings_.cpu_threads = cpu_thread_mode_key(combo_index(ID_CPU_THREADS));
+        settings_.sbs_frame_rate_halving = IsDlgButtonChecked(window_, ID_SBS_FRAME_RATE_HALVING) == BST_CHECKED;
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         settings_.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
@@ -2846,6 +2861,8 @@ private:
             const int label_width = maximum_text_width({ID_LABEL_LANGUAGE, ID_LABEL_CPU_THREADS}, dlu_x(82));
             add_form_row(ID_LABEL_LANGUAGE, ID_LANGUAGE, label_width, y);
             add_form_row(ID_LABEL_CPU_THREADS, ID_CPU_THREADS, label_width, y);
+            add_layout(ID_SBS_FRAME_RATE_HALVING, margin_x, y, full_width, button_height);
+            y += button_height + gap;
             const int info_height = text_height(ID_SETTINGS_INFO, full_width, dlu_y(12));
             add_layout(ID_SETTINGS_INFO, margin_x, y, full_width, info_height);
             y += info_height + gap;
@@ -2945,6 +2962,7 @@ private:
         rebuild_backend_options();
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_LANGUAGE), text.language);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_CPU_THREADS), text.cpu_threads);
+        SetWindowTextW(GetDlgItem(window_, ID_SBS_FRAME_RATE_HALVING), text.sbs_frame_rate_halving);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_BACKEND), text.encoder);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_CODEC), text.codec);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_DEPTH), text.bit_depth);
