@@ -57,11 +57,6 @@ video_args=-c:v libx265 -profile:v main10 -preset medium -crf 18
     [System.IO.File]::WriteAllText($config, $defaultConfig, [System.Text.UTF8Encoding]::new($true))
 }
 $configText = [System.IO.File]::ReadAllText($config)
-$legacyFfmpegLine = 'ffmpeg=C:\Program Files\Hybrid\64bit\ffmpeg.exe'
-if ($configText -match ('(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$')) {
-    $configText = [regex]::Replace($configText, '(?m)^' + [regex]::Escape($legacyFfmpegLine) + '\r?$', 'ffmpeg=ffmpeg.exe')
-    [System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
-}
 $configText = [regex]::Replace($configText, '(?m)^output=.*\r?\n?', '')
 $configText = [regex]::Replace($configText, '(?m)^follow_avi_path=.*\r?\n?', '')
 [System.IO.File]::WriteAllText($config, $configText, [System.Text.UTF8Encoding]::new($true))
