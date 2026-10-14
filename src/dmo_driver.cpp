@@ -147,6 +147,7 @@ const wchar_t* fruc_mode_key(int index) {
 }
 
 constexpr std::array<int, 19> kVsrQualityModes{0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 23};
+enum class UiLanguage { TraditionalChinese, SimplifiedChinese, Japanese, English };
 
 int vsr_quality_mode(int index) {
     return kVsrQualityModes[std::clamp(index, 0, static_cast<int>(kVsrQualityModes.size()) - 1)];
@@ -155,6 +156,35 @@ int vsr_quality_mode(int index) {
 int vsr_quality_index(int mode) {
     const auto it = std::find(kVsrQualityModes.begin(), kVsrQualityModes.end(), mode);
     return it == kVsrQualityModes.end() ? 2 : static_cast<int>(std::distance(kVsrQualityModes.begin(), it));
+}
+
+std::array<const wchar_t*, 19> vsr_quality_labels(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese:
+        return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
+                L"8(降噪)", L"9(降噪)", L"10(降噪)", L"11(降噪)",
+                L"12(去模糊)", L"13(去模糊)", L"14(去模糊)", L"15(去模糊)",
+                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
+                L"21(Low Latency)", L"23(Low Latency)"};
+    case UiLanguage::SimplifiedChinese:
+        return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
+                L"8(降噪)", L"9(降噪)", L"10(降噪)", L"11(降噪)",
+                L"12(去模糊)", L"13(去模糊)", L"14(去模糊)", L"15(去模糊)",
+                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
+                L"21(Low Latency)", L"23(Low Latency)"};
+    case UiLanguage::Japanese:
+        return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
+                L"8(ノイズ除去)", L"9(ノイズ除去)", L"10(ノイズ除去)", L"11(ノイズ除去)",
+                L"12(ぼかし除去)", L"13(ぼかし除去)", L"14(ぼかし除去)", L"15(ぼかし除去)",
+                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
+                L"21(Low Latency)", L"23(Low Latency)"};
+    default:
+        return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
+                L"8(Denoise)", L"9(Denoise)", L"10(Denoise)", L"11(Denoise)",
+                L"12(Deblur)", L"13(Deblur)", L"14(Deblur)", L"15(Deblur)",
+                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
+                L"21(Low Latency)", L"23(Low Latency)"};
+    }
 }
 
 bool vsr_quality_uses_native_resolution(int mode) {
@@ -204,8 +234,6 @@ const wchar_t* backend_key(int index) {
 void normalize_codec_settings(Settings& settings) {
     (void)settings;
 }
-
-enum class UiLanguage { TraditionalChinese, SimplifiedChinese, Japanese, English };
 
 struct UiStrings {
     const wchar_t* title;
@@ -443,22 +471,22 @@ const std::array<const wchar_t*, 4> vsr_tooltips(UiLanguage language) {
     case UiLanguage::TraditionalChinese:
         return {L"啟用 NVIDIA RTX Video Super Resolution。必須先選擇 NVEncC (NVIDIA) 編碼器；FFmpeg 將 MMD RGB 封裝為 RGBA/NUT，再由 NVEncC --avsw 執行 NGX VSR。",
                 L"設定輸出相對於 MMD 原始尺寸的放大倍率，可輸入 1.00 到 4.00；預設為 2.00。",
-                L"NVEncC QualityLevel 模式：0 為非 AI bicubic 基準；1–4 為一般品質；8–11 降噪；12–15 去模糊（這些模式只能維持輸入解析度，縮放不生效）；16–19 高位元率細節恢復；21/23 為串流中／高品質模式（需 Ampere 以上及 VFX SDK 1.3）。",
+                L"NVEncC QualityLevel：0 為非 AI Bicubic；1–4 為 VSR；8–11 降噪；12–15 去模糊（不改變解析度）；16–19 為高位元率細節恢復；21/23 在介面標示 Low Latency，官方模式名稱分別為 Streaming Medium/Ultra（需 Ampere 以上及 VFX SDK 1.3）。",
                 L"設定 NVIDIA VSR 強度 0.00–1.00，預設 1.00；需要 VFX SDK 1.3 以上。強度不等同品質模式。"};
     case UiLanguage::SimplifiedChinese:
         return {L"启用 NVIDIA RTX Video Super Resolution。必须先选择 NVEncC (NVIDIA) 编码器；FFmpeg 将 MMD RGB 封装为 RGBA/NUT，再由 NVEncC --avsw 执行 NGX VSR。",
                 L"设置输出相对于 MMD 原始尺寸的放大倍率，可输入 1.00 到 4.00；默认为 2.00。",
-                L"NVEncC QualityLevel 模式：0 为非 AI bicubic 基准；1–4 为一般质量；8–11 降噪；12–15 去模糊（这些模式只能保持输入分辨率，缩放不生效）；16–19 高码率细节恢复；21/23 为流媒体中／高质量模式（需要 Ampere 以上及 VFX SDK 1.3）。",
+                L"NVEncC QualityLevel：0 为非 AI Bicubic；1–4 为 VSR；8–11 降噪；12–15 去模糊（不改变分辨率）；16–19 为高码率细节恢复；21/23 在界面标示 Low Latency，官方模式名称分别为 Streaming Medium/Ultra（需要 Ampere 以上及 VFX SDK 1.3）。",
                 L"设置 NVIDIA VSR 强度 0.00–1.00，默认 1.00；需要 VFX SDK 1.3 以上。强度与质量模式不同。"};
     case UiLanguage::Japanese:
         return {L"NVIDIA RTX Video Super Resolution を有効にします。先に NVEncC (NVIDIA) エンコーダーを選択してください。FFmpeg が MMD RGB を RGBA/NUT に封入し、NVEncC --avsw が NGX VSR を実行します。",
                 L"MMD の元解像度に対する倍率を 1.00～4.00 で指定します。既定値は 2.00 です。",
-                L"NVEncC QualityLevel：0 は非 AI bicubic 基準、1～4 は通常品質、8～11 はノイズ除去、12～15 はぼかし除去（入力解像度を維持し、拡大率は適用されません）、16～19 は高ビットレート向け詳細復元、21/23 はストリーミング中／高品質です（Ampere 以降と VFX SDK 1.3 が必要）。",
+                L"NVEncC QualityLevel：0 は非 AI Bicubic、1～4 は VSR、8～11 はノイズ除去、12～15 はぼかし除去（解像度は変わりません）、16～19 は高ビットレート向け詳細復元、21/23 は UI で Low Latency と表示します（公式名は Streaming Medium/Ultra。Ampere 以降と VFX SDK 1.3 が必要）。",
                 L"NVIDIA VSR の強度を 0.00～1.00 で指定します。既定値は 1.00 で、VFX SDK 1.3 以降が必要です。品質モードとは別の設定です。"};
     default:
         return {L"Enable NVIDIA RTX Video Super Resolution. Select the NVEncC (NVIDIA) encoder first; FFmpeg packages MMD RGB as RGBA/NUT and NVEncC --avsw applies NGX VSR.",
                 L"Set the output scale relative to the original MMD size from 1.00 to 4.00. The default is 2.00.",
-                L"Select an NVEncC QualityLevel mode: 0 is a non-AI bicubic baseline; 1–4 are general quality; 8–11 denoise; 12–15 deblur (these modes require native input resolution, so scaling is not applied); 16–19 high-bitrate detail restoration; 21/23 are streaming medium/ultra (Ampere+ and VFX SDK 1.3 required).",
+                L"NVEncC QualityLevel: 0 is a non-AI bicubic baseline; 1–4 are VSR; 8–11 denoise; 12–15 deblur (no resizing); 16–19 high-bitrate detail restoration; 21/23 are labeled Low Latency in this UI (official mode names: Streaming Medium/Ultra; Ampere+ and VFX SDK 1.3 required).",
                 L"Set NVIDIA VSR strength from 0.00 to 1.00 (default 1.00). Requires VFX SDK 1.3 or later; this is separate from the quality mode."};
     }
 }
@@ -2362,6 +2390,13 @@ private:
         }
         ComboBox_SetCurSel(combo, selected);
     }
+    template <size_t N>
+    void add_combo(int id, const std::array<const wchar_t*, N>& values, int selected) {
+        HWND combo = GetDlgItem(window_, id);
+        for (size_t index = 0; index < values.size(); ++index)
+            SendMessageW(combo, CB_INSERTSTRING, static_cast<WPARAM>(index), reinterpret_cast<LPARAM>(values[index]));
+        ComboBox_SetCurSel(combo, std::clamp(selected, 0, static_cast<int>(values.size()) - 1));
+    }
     UINT tooltip_info_size() const {
         return SendMessageW(tooltip_, CCM_GETVERSION, 0, 0) < 6 ? TTTOOLINFOW_V2_SIZE : sizeof(TOOLINFOW);
     }
@@ -2496,7 +2531,7 @@ private:
         add_combo(ID_LOOKAHEAD, {L"Off", L"8", L"16", L"32"}, lookahead_index(settings_.lookahead));
         add_combo(ID_LOOKAHEAD_LEVEL, {L"1", L"2", L"3"}, std::clamp(settings_.lookahead_level - 1, 0, 2));
         add_combo(ID_VSR_ENABLED, {L"Off", L"On"}, settings_.vsr_enabled ? 1 : 0);
-        add_combo(ID_VSR_QUALITY, {L"0", L"1", L"2", L"3", L"4", L"8", L"9", L"10", L"11", L"12", L"13", L"14", L"15", L"16", L"17", L"18", L"19", L"21", L"23"},
+        add_combo(ID_VSR_QUALITY, vsr_quality_labels(ui_language(settings_.language)),
                   vsr_quality_index(settings_.vsr_quality));
         add_combo(ID_FRUC_ENABLED, {L"Off", L"Double", L"Custom"}, fruc_mode_index(settings_.fruc_mode));
         add_combo(ID_VFG_ENABLED, {L"Off", L"On"}, settings_.vfg_enabled ? 1 : 0);
@@ -2591,6 +2626,13 @@ private:
         for (const int id : frame_generation) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 3 ? SW_SHOW : SW_HIDE);
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
+        HWND combo = GetDlgItem(window_, id);
+        ComboBox_ResetContent(combo);
+        for (const auto* value : values) ComboBox_AddString(combo, value);
+        ComboBox_SetCurSel(combo, std::clamp(selected, 0, static_cast<int>(values.size()) - 1));
+    }
+    template <size_t N>
+    void reset_combo(int id, const std::array<const wchar_t*, N>& values, int selected) {
         HWND combo = GetDlgItem(window_, id);
         ComboBox_ResetContent(combo);
         for (const auto* value : values) ComboBox_AddString(combo, value);
@@ -3108,6 +3150,8 @@ private:
     void apply_language() {
         const auto& text = current_text();
         const auto& options = ui_options(ui_language(settings_.language));
+        const int vsr_quality = combo_index(ID_VSR_QUALITY);
+        reset_combo(ID_VSR_QUALITY, vsr_quality_labels(ui_language(settings_.language)), vsr_quality);
         const int backend = combo_index(ID_BACKEND);
         reset_combo(ID_BACKEND, {L"CPU", L"NVENC", L"NVEncC (NVIDIA)", L"QSV", L"AMF"}, backend);
         const int codec = combo_index(ID_CODEC);

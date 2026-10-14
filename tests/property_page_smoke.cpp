@@ -441,11 +441,6 @@ int wmain(int argument_count, wchar_t** arguments) {
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 57;
     }
     if (SendMessageW(vsr_quality_combo, CB_GETCOUNT, 0, 0) != 19 ||
-        combo_item_text(vsr_quality_combo, 0) != L"0" ||
-        combo_item_text(vsr_quality_combo, 5) != L"8" ||
-        combo_item_text(vsr_quality_combo, 16) != L"19" ||
-        combo_item_text(vsr_quality_combo, 17) != L"21" ||
-        combo_item_text(vsr_quality_combo, 18) != L"23" ||
         SendMessageW(vfg_enabled_combo, CB_GETCOUNT, 0, 0) != 2 ||
         SendMessageW(vfg_multiplier_combo, CB_GETCOUNT, 0, 0) != 7 ||
         SendMessageW(vfg_mode_combo, CB_GETCOUNT, 0, 0) != 3) {
@@ -876,6 +871,12 @@ int wmain(int argument_count, wchar_t** arguments) {
     const wchar_t* open_log_labels[]{L"開啟log", L"開啟log", L"打开日志", L"ログを開く", L"Open log"};
     const wchar_t* status_heading_labels[]{L"編碼器狀態", L"編碼器狀態", L"编码器状态", L"エンコーダー状態", L"Encoder status"};
     const wchar_t* not_tested_labels[]{L"尚未測試", L"尚未測試", L"尚未测试", L"未テスト", L"Not tested"};
+    const std::array<const wchar_t*, 19> expected_vsr_labels{
+        L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
+        L"8(降噪)", L"9(降噪)", L"10(降噪)", L"11(降噪)",
+        L"12(去模糊)", L"13(去模糊)", L"14(去模糊)", L"15(去模糊)",
+        L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
+        L"21(Low Latency)", L"23(Low Latency)"};
     if (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH))) {
         std::wcerr << L"The property page started an encoder test automatically.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 8;
@@ -901,6 +902,14 @@ int wmain(int argument_count, wchar_t** arguments) {
             window_text(status_control) != not_tested_labels[text_index]) {
             std::wcerr << L"Language switch failed for index " << language << L".\n";
             page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 9;
+        }
+        if (language == 1) {
+            for (size_t index = 0; index < expected_vsr_labels.size(); ++index) {
+                if (combo_item_text(vsr_quality_combo, static_cast<int>(index)) != expected_vsr_labels[index]) {
+                    std::wcerr << L"VSR QualityLevel display label mismatch at item " << index << L".\n";
+                    page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 85;
+                }
+            }
         }
         const RECT status_bounds = child_rect(page_window, ID_STATUS);
         if (constrained_host) SendMessageW(page_window, WM_VSCROLL, SB_BOTTOM, 0);
