@@ -1,0 +1,2 @@
+#pragma once
+#define MMD2FFMPEG_BUILD_DATE L"@MMD2FFMPEG_BUILD_DATE@"

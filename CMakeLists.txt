@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.25)
 project(MMD2FFMPEG LANGUAGES CXX)
 
+if(NOT MMD2FFMPEG_BUILD_DATE)
+    string(TIMESTAMP MMD2FFMPEG_BUILD_YEAR "%y")
+    string(TIMESTAMP MMD2FFMPEG_BUILD_MONTH "%m")
+    string(TIMESTAMP MMD2FFMPEG_BUILD_DAY "%d")
+    string(REGEX REPLACE "^0" "" MMD2FFMPEG_BUILD_MONTH "${MMD2FFMPEG_BUILD_MONTH}")
+    string(REGEX REPLACE "^0" "" MMD2FFMPEG_BUILD_DAY "${MMD2FFMPEG_BUILD_DAY}")
+    set(MMD2FFMPEG_BUILD_DATE "${MMD2FFMPEG_BUILD_YEAR}.${MMD2FFMPEG_BUILD_MONTH}.${MMD2FFMPEG_BUILD_DAY}")
+endif()
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(src/build_date.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/build_date.h" @ONLY)
+
 # Release assets are installed by end users without Visual Studio, so link the
 # Microsoft C/C++ runtime statically rather than requiring a separate redist.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -13,6 +24,7 @@ add_library(mmd2ffmpeg_dmo SHARED
 )
 target_compile_features(mmd2ffmpeg_dmo PRIVATE cxx_std_20)
 target_compile_definitions(mmd2ffmpeg_dmo PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_include_directories(mmd2ffmpeg_dmo PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_options(mmd2ffmpeg_dmo PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(mmd2ffmpeg_dmo PRIVATE ole32 oleaut32 uuid strmiids dmoguids user32 shell32 comctl32)
 set_target_properties(mmd2ffmpeg_dmo PROPERTIES OUTPUT_NAME "mmd2ffmpeg_dmo")
@@ -44,5 +56,6 @@ target_link_libraries(dmo_compare PRIVATE ole32 uuid strmiids dmoguids msdmo qua
 add_executable(property_page_smoke tests/property_page_smoke.cpp)
 target_compile_features(property_page_smoke PRIVATE cxx_std_20)
 target_compile_definitions(property_page_smoke PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_include_directories(property_page_smoke PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_options(property_page_smoke PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(property_page_smoke PRIVATE ole32 uuid)

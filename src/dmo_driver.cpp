@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "build_date.h"
 #include "resource.h"
 
 namespace {
@@ -149,26 +150,26 @@ std::array<const wchar_t*, 19> vsr_quality_labels(UiLanguage language) {
         return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
                 L"8(降噪)", L"9(降噪)", L"10(降噪)", L"11(降噪)",
                 L"12(去模糊)", L"13(去模糊)", L"14(去模糊)", L"15(去模糊)",
-                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
-                L"21(Low Latency)", L"23(Low Latency)"};
+                L"16(補細節)", L"17(補細節)", L"18(補細節)", L"19(補細節)",
+                L"21(串流)", L"23(串流)"};
     case UiLanguage::SimplifiedChinese:
         return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
                 L"8(降噪)", L"9(降噪)", L"10(降噪)", L"11(降噪)",
                 L"12(去模糊)", L"13(去模糊)", L"14(去模糊)", L"15(去模糊)",
-                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
-                L"21(Low Latency)", L"23(Low Latency)"};
+                L"16(补细节)", L"17(补细节)", L"18(补细节)", L"19(补细节)",
+                L"21(流媒体)", L"23(流媒体)"};
     case UiLanguage::Japanese:
         return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
                 L"8(ノイズ除去)", L"9(ノイズ除去)", L"10(ノイズ除去)", L"11(ノイズ除去)",
                 L"12(ぼかし除去)", L"13(ぼかし除去)", L"14(ぼかし除去)", L"15(ぼかし除去)",
-                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
-                L"21(Low Latency)", L"23(Low Latency)"};
+                L"16(ディテール補完)", L"17(ディテール補完)", L"18(ディテール補完)", L"19(ディテール補完)",
+                L"21(ストリーミング)", L"23(ストリーミング)"};
     default:
         return {L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
                 L"8(Denoise)", L"9(Denoise)", L"10(Denoise)", L"11(Denoise)",
                 L"12(Deblur)", L"13(Deblur)", L"14(Deblur)", L"15(Deblur)",
-                L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
-                L"21(Low Latency)", L"23(Low Latency)"};
+                L"16(Detail recovery)", L"17(Detail recovery)", L"18(Detail recovery)", L"19(Detail recovery)",
+                L"21(Streaming)", L"23(Streaming)"};
     }
 }
 
@@ -426,22 +427,22 @@ const std::array<const wchar_t*, 4> vsr_tooltips(UiLanguage language) {
     case UiLanguage::TraditionalChinese:
         return {L"啟用 NVIDIA RTX Video Super Resolution。必須先選擇 NVEncC (NVIDIA) 編碼器；FFmpeg 將 MMD RGB 封裝為 RGBA/NUT，再由 NVEncC --avsw 執行 NGX VSR。",
                 L"設定輸出相對於 MMD 原始尺寸的放大倍率，可輸入 1.00 到 4.00；預設為 2.00。",
-                L"NVEncC QualityLevel：0 為非 AI Bicubic；1–4 為 VSR；8–11 降噪；12–15 去模糊（不改變解析度）；16–19 為高位元率細節恢復；21/23 在介面標示 Low Latency，官方模式名稱分別為 Streaming Medium/Ultra（需 Ampere 以上及 VFX SDK 1.3）。",
+                L"NVEncC QualityLevel：0 為非 AI Bicubic；1–4 為 VSR；8–11 降噪；12–15 去模糊（不改變解析度）；16–19 補細節，不會放大；21/23 為串流模式（官方名稱 Streaming Medium/Ultra，需 Ampere 以上及 VFX SDK 1.3）。",
                 L"設定 NVIDIA VSR 強度 0.00–1.00，預設 1.00；需要 VFX SDK 1.3 以上。強度不等同品質模式。"};
     case UiLanguage::SimplifiedChinese:
         return {L"启用 NVIDIA RTX Video Super Resolution。必须先选择 NVEncC (NVIDIA) 编码器；FFmpeg 将 MMD RGB 封装为 RGBA/NUT，再由 NVEncC --avsw 执行 NGX VSR。",
                 L"设置输出相对于 MMD 原始尺寸的放大倍率，可输入 1.00 到 4.00；默认为 2.00。",
-                L"NVEncC QualityLevel：0 为非 AI Bicubic；1–4 为 VSR；8–11 降噪；12–15 去模糊（不改变分辨率）；16–19 为高码率细节恢复；21/23 在界面标示 Low Latency，官方模式名称分别为 Streaming Medium/Ultra（需要 Ampere 以上及 VFX SDK 1.3）。",
+                L"NVEncC QualityLevel：0 为非 AI Bicubic；1–4 为 VSR；8–11 降噪；12–15 去模糊（不改变分辨率）；16–19 补细节，不会放大；21/23 为流媒体模式（官方名称 Streaming Medium/Ultra，需要 Ampere 以上及 VFX SDK 1.3）。",
                 L"设置 NVIDIA VSR 强度 0.00–1.00，默认 1.00；需要 VFX SDK 1.3 以上。强度与质量模式不同。"};
     case UiLanguage::Japanese:
         return {L"NVIDIA RTX Video Super Resolution を有効にします。先に NVEncC (NVIDIA) エンコーダーを選択してください。FFmpeg が MMD RGB を RGBA/NUT に封入し、NVEncC --avsw が NGX VSR を実行します。",
                 L"MMD の元解像度に対する倍率を 1.00～4.00 で指定します。既定値は 2.00 です。",
-                L"NVEncC QualityLevel：0 は非 AI Bicubic、1～4 は VSR、8～11 はノイズ除去、12～15 はぼかし除去（解像度は変わりません）、16～19 は高ビットレート向け詳細復元、21/23 は UI で Low Latency と表示します（公式名は Streaming Medium/Ultra。Ampere 以降と VFX SDK 1.3 が必要）。",
+                L"NVEncC QualityLevel：0 は非 AI Bicubic、1～4 は VSR、8～11 はノイズ除去、12～15 はぼかし除去（拡大しません）、16～19 はディテール補完（拡大しません）、21/23 はストリーミングモード（公式名は Streaming Medium/Ultra。Ampere 以降と VFX SDK 1.3 が必要）です。",
                 L"NVIDIA VSR の強度を 0.00～1.00 で指定します。既定値は 1.00 で、VFX SDK 1.3 以降が必要です。品質モードとは別の設定です。"};
     default:
         return {L"Enable NVIDIA RTX Video Super Resolution. Select the NVEncC (NVIDIA) encoder first; FFmpeg packages MMD RGB as RGBA/NUT and NVEncC --avsw applies NGX VSR.",
                 L"Set the output scale relative to the original MMD size from 1.00 to 4.00. The default is 2.00.",
-                L"NVEncC QualityLevel: 0 is a non-AI bicubic baseline; 1–4 are VSR; 8–11 denoise; 12–15 deblur (no resizing); 16–19 high-bitrate detail restoration; 21/23 are labeled Low Latency in this UI (official mode names: Streaming Medium/Ultra; Ampere+ and VFX SDK 1.3 required).",
+                L"NVEncC QualityLevel: 0 is a non-AI bicubic baseline; 1–4 are VSR; 8–11 denoise; 12–15 deblur (no resizing); 16–19 restore detail without upscaling; 21/23 are streaming modes (official names: Streaming Medium/Ultra; Ampere+ and VFX SDK 1.3 required).",
                 L"Set NVIDIA VSR strength from 0.00 to 1.00 (default 1.00). Requires VFX SDK 1.3 or later; this is separate from the quality mode."};
     }
 }
@@ -3065,7 +3066,8 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VFG_ENABLED), vfg[0]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VFG_MULTIPLIER), vfg[1]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VFG_MODE), vfg[2]);
-        const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.3.2\r\n" + text.author + L": XPRAMT";
+        const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": " +
+                                  MMD2FFMPEG_BUILD_DATE + L"\r\n" + text.author + L": XPRAMT";
         SetWindowTextW(settings_info_, info.c_str());
     }
     void apply_language() {

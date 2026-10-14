@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 
+#include "build_date.h"
 #include "../src/resource.h"
 
 namespace {
@@ -733,6 +734,10 @@ int wmain(int argument_count, wchar_t** arguments) {
     const RECT sbs_frame_rate_halving_rect = child_rect(page_window, ID_SBS_FRAME_RATE_HALVING);
     const RECT settings_info = child_rect(page_window, ID_SETTINGS_INFO);
     const RECT github_address = child_rect(page_window, ID_GITHUB_LINK);
+    if (window_text(GetDlgItem(page_window, ID_SETTINGS_INFO)).find(MMD2FFMPEG_BUILD_DATE) == std::wstring::npos) {
+        std::wcerr << L"Settings info does not display the build date.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 86;
+    }
     if (sbs_frame_rate_halving_rect.top - cpu_threads_label.bottom > 48 ||
         settings_info.top - sbs_frame_rate_halving_rect.bottom > 48 || github_address.top - settings_info.bottom > 48) {
         std::wcerr << L"Settings controls are not tightly stacked.\n";
@@ -839,8 +844,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         L"0(Bicubic)", L"1(VSR)", L"2(VSR)", L"3(VSR)", L"4(VSR)",
         L"8(降噪)", L"9(降噪)", L"10(降噪)", L"11(降噪)",
         L"12(去模糊)", L"13(去模糊)", L"14(去模糊)", L"15(去模糊)",
-        L"16(VSR+)", L"17(VSR+)", L"18(VSR+)", L"19(VSR+)",
-        L"21(Low Latency)", L"23(Low Latency)"};
+        L"16(補細節)", L"17(補細節)", L"18(補細節)", L"19(補細節)",
+        L"21(串流)", L"23(串流)"};
     if (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH))) {
         std::wcerr << L"The property page started an encoder test automatically.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 8;
