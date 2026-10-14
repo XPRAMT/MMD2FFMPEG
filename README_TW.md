@@ -17,8 +17,11 @@ MMD2FFMPEG 是為 MikuMikuDance 9.32 x64 製作的 64-bit DirectX Media Object�
 - 可選擇 BT.601、BT.709、BT.2020 色彩標記，以及 PC（Full）／TV（Limited）輸出範圍；MMD 輸入影格為 Full-range RGB。
 - 支援 Alpha 輸出：VP9 與 ProRes 四通道輸出，以及 8-bit NVEncC HEVC Alpha。使用 FFmpeg 路徑時，黑白遮罩可堆疊在影片下方或另存為獨立 MKV。
 - 可設定自動或手動 GOP／I 幀間隔與 B 幀數量。
-- 支援透過 NVEncC 執行 RTX Video Super Resolution，可設定 1.00–4.00 放大倍率、NVIDIA QualityLevel 模式（0、1–4、8–19、21、23）及 0.00–1.00 VSR 強度。
+- NVIDIA 編碼器可設定 lookahead：關閉或 8／16／32 幀，並可選處理等級 1–3。
+- 可選擇偵測 MMDSBS 左右眼配對輸出，丟棄未完成配對，並將有效輸出幀率減半。
+- 支援透過 NVEncC 執行 RTX Video Super Resolution，可設定 1.00–4.00 放大倍率、NVIDIA QualityLevel 模式（0、1–4、8–19、21、23）及 0.00–1.00 VSR 強度。16–19 標示為補細節，不標示為 VSR 放大模式。
 - 支援透過 NVEncC 9.36 以上在 Windows Ada 或 Blackwell 顯卡上執行 NVIDIA Video Frame Generation（VFG），可設定 2–8 倍輸出與 Low／Medium／High AI 模型。
+- 設定頁以 `YY.M.D` 顯示建置日期版本，採用台北時間（例如 `26.10.15`）。
 - 跟隨 MMD 設定的影格率，預設標記輸出為 BT.709。
 - 編碼設定必須先通過手動「測試編碼」才能儲存或套用。
 - 支援系統預設、繁體中文、簡體中文、日本語、English 介面。
@@ -132,11 +135,11 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 | --- | --- |
 | 編碼 | 編碼器後端、編碼格式、位元深度、色度取樣、編碼預設、碼率控制、品質／QP、位元率。VP9 與 ProRes 使用 CPU 路徑。 |
 | 色彩 | Alpha 模式、堆疊或分離黑白遮罩、BT.601／709／2020 標記，以及 PC（Full）或 TV（Limited）YUV 輸出範圍。 |
-| 幀結構 | 自動模式不傳入 GOP／B 幀參數，由編碼器決定；手動模式傳入指定 GOP／I 幀間隔及 B 幀數量。 |
+| 幀結構 | 自動模式不傳入 GOP／B 幀參數，由編碼器決定；手動模式傳入指定 GOP／I 幀間隔及 B 幀數量。NVIDIA lookahead 可關閉或設定為 8／16／32 幀，處理等級 1–3。 |
 | RTX VSR | 必須選擇 **NVEncC（NVIDIA）**；透過 Bridge 將 MMD 影格送入 NVEncC，且不可與 Alpha 輸出同時使用。 |
 | NVIDIA VFG | 需要 **NVEncC 9.36 以上**與 Windows Ada 或 Blackwell 顯卡，可選 2–8 倍補幀倍率及 Low／Medium／High AI 模型。 |
 
-VSR 模式依 NVEncC 支援的 QualityLevel 設定：`0`、`1–4`、`8–19`、`21`、`23`。`0` 是非 AI 的雙三次插值基準；`8–11` 偏向降噪、`12–15` 偏向去模糊，這兩組只能維持輸入解析度；`16–19` 偏向高位元率細節還原，`21/23` 是串流模式。強度可設為 `0.00–1.00`。最高的串流模式需要 VFX SDK 1.3 以上與 Ampere 或更新顯卡。
+QualityLevel 下拉選單依 NVEncC 模式分組：`0` 為雙三次插值基準；`1–4` 為 VSR；`8–11` 為降噪；`12–15` 為去模糊；`16–19` 為補細節；`21/23` 為串流（官方名稱 Streaming Medium／Ultra）。實測 `16–19` 不會放大輸出，因此介面不將其標示為 VSR；`8–15` 則維持輸入解析度。VSR 強度可設為 `0.00–1.00`；串流模式需要 VFX SDK 1.3 以上與 Ampere 或更新顯卡。
 
 ### NVEncC 需求
 
