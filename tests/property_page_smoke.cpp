@@ -222,7 +222,7 @@ int wmain(int argument_count, wchar_t** arguments) {
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 66) {
+        tooltip_count != 62) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -375,10 +375,16 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     TabCtrl_SetCurSel(video_tab, 3);
     SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
+    const int removed_optical_flow_ids[]{1029, 1030, 1228, 1229};
+    for (const int id : removed_optical_flow_ids) {
+        if (GetDlgItem(page_window, id)) {
+            std::wcerr << L"Optical-flow interpolation control is still present: " << id << L"\n";
+            page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 89;
+        }
+    }
     const int super_resolution_ids[]{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY, ID_VSR_STRENGTH,
                                      ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY,
-                                     ID_LABEL_VSR_STRENGTH, ID_FRUC_ENABLED, ID_FRUC_FPS, ID_LABEL_FRUC_ENABLED,
-                                     ID_LABEL_FRUC_FPS, ID_VFG_ENABLED, ID_VFG_MULTIPLIER, ID_VFG_MODE,
+                                     ID_LABEL_VSR_STRENGTH, ID_VFG_ENABLED, ID_VFG_MULTIPLIER, ID_VFG_MODE,
                                      ID_LABEL_VFG_ENABLED, ID_LABEL_VFG_MULTIPLIER, ID_LABEL_VFG_MODE};
     for (const int id : super_resolution_ids) {
         if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(child_rect(page_window, id))) {
@@ -389,13 +395,13 @@ int wmain(int argument_count, wchar_t** arguments) {
     const RECT vsr_scale_bounds = child_rect(page_window, ID_VSR_SCALE);
     const RECT vsr_quality_bounds = child_rect(page_window, ID_VSR_QUALITY);
     const RECT vsr_strength_bounds = child_rect(page_window, ID_VSR_STRENGTH);
-    const RECT fruc_bounds = child_rect(page_window, ID_FRUC_ENABLED);
+    const RECT vfg_bounds = child_rect(page_window, ID_VFG_ENABLED);
     if (vsr_quality_bounds.left >= vsr_scale_bounds.left) {
         std::wcerr << L"VSR quality must be placed to the left of the scale factor.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 62;
     }
-    if (fruc_bounds.top - vsr_strength_bounds.bottom > 12) {
-        std::wcerr << L"Optical-flow interpolation must be directly below the VSR controls without a blank row.\n";
+    if (vfg_bounds.top - vsr_strength_bounds.bottom > 12) {
+        std::wcerr << L"VFG controls must be directly below the VSR controls without a blank row.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 61;
     }
     const RECT command_on_vsr = child_rect(page_window, ID_COMMAND);
@@ -422,8 +428,6 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND vfg_enabled_combo = GetDlgItem(page_window, ID_VFG_ENABLED);
     HWND vfg_multiplier_combo = GetDlgItem(page_window, ID_VFG_MULTIPLIER);
     HWND vfg_mode_combo = GetDlgItem(page_window, ID_VFG_MODE);
-    HWND fruc_mode_combo = GetDlgItem(page_window, ID_FRUC_ENABLED);
-    HWND fruc_fps_edit = GetDlgItem(page_window, ID_FRUC_FPS);
     if (SendMessageW(backend_combo, CB_GETCOUNT, 0, 0) != 5 ||
         combo_item_text(backend_combo, 1) != L"NVENC" ||
         combo_item_text(backend_combo, 2) != L"NVEncC (NVIDIA)") {
@@ -432,13 +436,6 @@ int wmain(int argument_count, wchar_t** arguments) {
                    << combo_item_text(backend_combo, 1) << L"\" item2=\""
                    << combo_item_text(backend_combo, 2) << L"\"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 47;
-    }
-    if (SendMessageW(fruc_mode_combo, CB_GETCOUNT, 0, 0) != 3 ||
-        combo_item_text(fruc_mode_combo, 0) != L"Off" ||
-        combo_item_text(fruc_mode_combo, 1) != L"Double" ||
-        combo_item_text(fruc_mode_combo, 2) != L"Custom") {
-        std::wcerr << L"Optical-flow interpolation must expose Off, Double, and Custom modes.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 57;
     }
     if (SendMessageW(vsr_quality_combo, CB_GETCOUNT, 0, 0) != 19 ||
         SendMessageW(vfg_enabled_combo, CB_GETCOUNT, 0, 0) != 2 ||
@@ -541,6 +538,7 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_command.find(L"--transfer ") == std::wstring::npos ||
         nvencc_command.find(L"vsr-quality=21") == std::wstring::npos ||
         nvencc_command.find(L"vsr-strength=0.50") == std::wstring::npos ||
+        nvencc_command.find(L"--vpp-fruc") != std::wstring::npos ||
         nvencc_command.find(L"NVEncC.exe") != std::wstring::npos ||
         nvencc_command.find(L"{output}") != std::wstring::npos ||
         nvencc_command.find(L"{width}") != std::wstring::npos ||
@@ -612,30 +610,6 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Disabled VSR must omit its flag, scale, and quality from the NVEncC command.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 54;
     }
-    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 1, 0);
-    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
-                 reinterpret_cast<LPARAM>(fruc_mode_combo));
-    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-fruc double") == std::wstring::npos) {
-        std::wcerr << L"Double interpolation must generate NVEncC --vpp-fruc double.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 58;
-    }
-    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 2, 0);
-    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
-                 reinterpret_cast<LPARAM>(fruc_mode_combo));
-    SetWindowTextW(fruc_fps_edit, L"90");
-    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_FPS, EN_CHANGE),
-                 reinterpret_cast<LPARAM>(fruc_fps_edit));
-    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-fruc fps=90") == std::wstring::npos) {
-        std::wcerr << L"Custom interpolation must generate NVEncC --vpp-fruc fps=<target>.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 59;
-    }
-    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 0, 0);
-    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
-                 reinterpret_cast<LPARAM>(fruc_mode_combo));
-    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-fruc ") != std::wstring::npos) {
-        std::wcerr << L"Off interpolation must omit --vpp-fruc.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 60;
-    }
     SendMessageW(vfg_enabled_combo, CB_SETCURSEL, 1, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VFG_ENABLED, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(vfg_enabled_combo));
@@ -650,16 +624,6 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"VFG selections must generate the NVEncC multiplier and model options.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 86;
     }
-    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 1, 0);
-    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
-                 reinterpret_cast<LPARAM>(fruc_mode_combo));
-    if (!has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING))) {
-        std::wcerr << L"VFG and optical-flow interpolation must be reported as an unsupported combination.\n";
-        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 88;
-    }
-    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 0, 0);
-    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
-                 reinterpret_cast<LPARAM>(fruc_mode_combo));
     SendMessageW(vfg_enabled_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VFG_ENABLED, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(vfg_enabled_combo));

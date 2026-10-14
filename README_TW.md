@@ -12,14 +12,13 @@ MMD2FFMPEG 是為 MikuMikuDance 9.32 x64 製作的 64-bit DirectX Media Object�
 - 影片編碼完成後，可讀取 MMD AVI 內含音訊，並以 FLAC、WAV/PCM 或無音訊模式合併進 MKV。
 - 提供選用的 Hi-Res 音訊模式：來源低於 48 kHz 時，以原始取樣率 2 倍及 24-bit 編碼。
 - 編碼開始時會自動寫入 MKV 的 `DATE_RECORDED` metadata 欄位，使用本機日期 `yyyy-M-d` 格式。
-- 透過 FFmpeg 支援 CPU 軟體編碼、NVIDIA NVENC、NVEncC（NVIDIA）、Intel Quick Sync、AMD AMF。NVEncC 是獨立的 NVIDIA 編碼路徑，可使用 RTX VSR 與光流補幀。
+- 透過 FFmpeg 支援 CPU 軟體編碼、NVIDIA NVENC、NVEncC（NVIDIA）、Intel Quick Sync、AMD AMF。NVEncC 是獨立的 NVIDIA 編碼路徑，可使用 RTX VSR 與 NVIDIA Video Frame Generation（VFG）。
 - 支援 AVC、HEVC、AV1、VP9、ProRes、4:2:0／4:2:2／4:4:4 色度取樣、可用的 8-bit／10-bit 輸出，以及 CRF/CQ、固定 QP、目標位元率模式。
 - 可選擇 BT.601、BT.709、BT.2020 色彩標記，以及 PC（Full）／TV（Limited）輸出範圍；MMD 輸入影格為 Full-range RGB。
 - 支援 Alpha 輸出：VP9 與 ProRes 四通道輸出，以及 8-bit NVEncC HEVC Alpha。使用 FFmpeg 路徑時，黑白遮罩可堆疊在影片下方或另存為獨立 MKV。
 - 可設定自動或手動 GOP／I 幀間隔與 B 幀數量。
 - 支援透過 NVEncC 執行 RTX Video Super Resolution，可設定 1.00–4.00 放大倍率、NVIDIA QualityLevel 模式（0、1–4、8–19、21、23）及 0.00–1.00 VSR 強度。
-- 支援透過 NVEncC 執行 NVIDIA Optical Flow 光流補幀：Off、Double 或自訂目標 FPS（1–240）。
-- 支援透過 NVEncC 9.36 以上在 Windows Ada 或 Blackwell 顯卡上執行 NVIDIA Video Frame Generation（VFG），可設定 2–8 倍輸出與 Low／Medium／High AI 模型；VFG 不可與光流補幀同時使用。
+- 支援透過 NVEncC 9.36 以上在 Windows Ada 或 Blackwell 顯卡上執行 NVIDIA Video Frame Generation（VFG），可設定 2–8 倍輸出與 Low／Medium／High AI 模型。
 - 跟隨 MMD 設定的影格率，預設標記輸出為 BT.709。
 - 編碼設定必須先通過手動「測試編碼」才能儲存或套用。
 - 支援系統預設、繁體中文、簡體中文、日本語、English 介面。
@@ -135,14 +134,13 @@ MMD2FFMPEG 會從 `PATH` 執行 `ffmpeg.exe`，不需也不應設定寫死的 FF
 | 色彩 | Alpha 模式、堆疊或分離黑白遮罩、BT.601／709／2020 標記，以及 PC（Full）或 TV（Limited）YUV 輸出範圍。 |
 | 幀結構 | 自動模式不傳入 GOP／B 幀參數，由編碼器決定；手動模式傳入指定 GOP／I 幀間隔及 B 幀數量。 |
 | RTX VSR | 必須選擇 **NVEncC（NVIDIA）**；透過 Bridge 將 MMD 影格送入 NVEncC，且不可與 Alpha 輸出同時使用。 |
-| NVIDIA VFG | 需要 **NVEncC 9.36 以上**與 Windows Ada 或 Blackwell 顯卡，可選 2–8 倍補幀倍率及 Low／Medium／High 模型；不可與光流補幀同時使用。 |
-| 光流補幀 | 必須選擇 **NVEncC（NVIDIA）**。**Double** 傳入 `--vpp-fruc double`；**Custom** 傳入 `--vpp-fruc fps=<target>`，目標 FPS 可設定 1–240。 |
+| NVIDIA VFG | 需要 **NVEncC 9.36 以上**與 Windows Ada 或 Blackwell 顯卡，可選 2–8 倍補幀倍率及 Low／Medium／High AI 模型。 |
 
 VSR 模式依 NVEncC 支援的 QualityLevel 設定：`0`、`1–4`、`8–19`、`21`、`23`。`0` 是非 AI 的雙三次插值基準；`8–11` 偏向降噪、`12–15` 偏向去模糊，這兩組只能維持輸入解析度；`16–19` 偏向高位元率細節還原，`21/23` 是串流模式。強度可設為 `0.00–1.00`。最高的串流模式需要 VFX SDK 1.3 以上與 Ampere 或更新顯卡。
 
 ### NVEncC 需求
 
-只有在 `NVEncC.exe` 位於 FFmpeg 同一資料夾或系統 `PATH` 時才可選擇 **NVEncC（NVIDIA）**。MMD2FFMPEG 會先測試所選指令才能儲存。NVEncC HEVC Alpha 限於 8-bit YUVA420；Windows FFmpeg／NVDEC 無法可靠呈現這個 Alpha 串流，建議使用 macOS 或 iOS Safari 驗證。NVIDIA Optical Flow 與 RTX VSR 是獨立功能，並非 NVIDIA App 的遊戲專用 Smooth Motion。
+只有在 `NVEncC.exe` 位於 FFmpeg 同一資料夾或系統 `PATH` 時才可選擇 **NVEncC（NVIDIA）**。MMD2FFMPEG 會先測試所選指令才能儲存。NVEncC HEVC Alpha 限於 8-bit YUVA420；Windows FFmpeg／NVDEC 無法可靠呈現這個 Alpha 串流，建議使用 macOS 或 iOS Safari 驗證。RTX VSR 與 VFG 是影片編碼功能，並非 NVIDIA App 的遊戲專用 Smooth Motion。
 
 ## 更新與解除安裝
 
