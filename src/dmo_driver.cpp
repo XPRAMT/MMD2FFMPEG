@@ -75,10 +75,14 @@ struct Settings {
     bool vsr_enabled = false;
     double vsr_scale = 2.0;
     int vsr_quality = 2;
+    double vsr_strength = 1.0;
     // Keep the interpolation mode explicit so Double cannot be mistaken for a
     // custom-FPS request.
     std::wstring fruc_mode = L"off";
     int fruc_fps = 60;
+    bool vfg_enabled = false;
+    int vfg_multiplier = 2;
+    std::wstring vfg_mode = L"medium";
     std::wstring language = L"system";
     std::wstring command_template;
 };
@@ -142,6 +146,36 @@ const wchar_t* fruc_mode_key(int index) {
     return keys[std::clamp(index, 0, static_cast<int>(keys.size()) - 1)];
 }
 
+constexpr std::array<int, 19> kVsrQualityModes{0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 23};
+
+int vsr_quality_mode(int index) {
+    return kVsrQualityModes[std::clamp(index, 0, static_cast<int>(kVsrQualityModes.size()) - 1)];
+}
+
+int vsr_quality_index(int mode) {
+    const auto it = std::find(kVsrQualityModes.begin(), kVsrQualityModes.end(), mode);
+    return it == kVsrQualityModes.end() ? 2 : static_cast<int>(std::distance(kVsrQualityModes.begin(), it));
+}
+
+bool vsr_quality_uses_native_resolution(int mode) {
+    return mode >= 8 && mode <= 15;
+}
+
+int vfg_multiplier_value(int index) {
+    return std::clamp(index, 0, 6) + 2;
+}
+
+int vfg_mode_index(std::wstring_view mode) {
+    if (mode == L"low") return 0;
+    if (mode == L"high") return 2;
+    return 1;
+}
+
+const wchar_t* vfg_mode_key(int index) {
+    static constexpr std::array<const wchar_t*, 3> keys{L"low", L"medium", L"high"};
+    return keys[std::clamp(index, 0, static_cast<int>(keys.size()) - 1)];
+}
+
 int lookahead_value(int index) {
     static constexpr std::array<int, 4> values{0, 8, 16, 32};
     return values[std::clamp(index, 0, static_cast<int>(values.size()) - 1)];
@@ -156,6 +190,10 @@ int lookahead_index(int value) {
 
 bool fruc_enabled(const Settings& settings) {
     return settings.fruc_mode != L"off";
+}
+
+bool vfg_enabled(const Settings& settings) {
+    return settings.vfg_enabled;
 }
 
 const wchar_t* backend_key(int index) {
@@ -330,6 +368,24 @@ const std::array<const wchar_t*, 3> vsr_labels(UiLanguage language) {
     }
 }
 
+const wchar_t* vsr_strength_label(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return L"VSR 強度";
+    case UiLanguage::SimplifiedChinese: return L"VSR 强度";
+    case UiLanguage::Japanese: return L"VSR 強度";
+    default: return L"VSR strength";
+    }
+}
+
+const std::array<const wchar_t*, 3> vfg_labels(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese: return {L"VFG", L"倍率", L"VFG 模型"};
+    case UiLanguage::SimplifiedChinese: return {L"VFG", L"倍率", L"VFG 模型"};
+    case UiLanguage::Japanese: return {L"VFG", L"倍率", L"VFG モード"};
+    default: return {L"VFG", L"Multiplier", L"VFG mode"};
+    }
+}
+
 const std::array<const wchar_t*, 2> fruc_labels(UiLanguage language) {
     switch (language) {
     case UiLanguage::TraditionalChinese: return {L"光流補幀", L"自訂目標 FPS"};
@@ -382,24 +438,49 @@ const std::array<const wchar_t*, 2> lookahead_tooltips(UiLanguage language) {
     }
 }
 
-const std::array<const wchar_t*, 3> vsr_tooltips(UiLanguage language) {
+const std::array<const wchar_t*, 4> vsr_tooltips(UiLanguage language) {
     switch (language) {
     case UiLanguage::TraditionalChinese:
         return {L"啟用 NVIDIA RTX Video Super Resolution。必須先選擇 NVEncC (NVIDIA) 編碼器；FFmpeg 將 MMD RGB 封裝為 RGBA/NUT，再由 NVEncC --avsw 執行 NGX VSR。",
                 L"設定輸出相對於 MMD 原始尺寸的放大倍率，可輸入 1.00 到 4.00；預設為 2.00。",
-                L"設定 NVEncC ngx-vsr 的處理等級 1 到 4。等級越高通常需要更多 GPU 運算。"};
+                L"NVEncC QualityLevel 模式：0 為非 AI bicubic 基準；1–4 為一般品質；8–11 降噪；12–15 去模糊（這些模式只能維持輸入解析度，縮放不生效）；16–19 高位元率細節恢復；21/23 為串流中／高品質模式（需 Ampere 以上及 VFX SDK 1.3）。",
+                L"設定 NVIDIA VSR 強度 0.00–1.00，預設 1.00；需要 VFX SDK 1.3 以上。強度不等同品質模式。"};
     case UiLanguage::SimplifiedChinese:
         return {L"启用 NVIDIA RTX Video Super Resolution。必须先选择 NVEncC (NVIDIA) 编码器；FFmpeg 将 MMD RGB 封装为 RGBA/NUT，再由 NVEncC --avsw 执行 NGX VSR。",
                 L"设置输出相对于 MMD 原始尺寸的放大倍率，可输入 1.00 到 4.00；默认为 2.00。",
-                L"设置 NVEncC ngx-vsr 的处理等级 1 到 4。等级越高通常需要更多 GPU 运算。"};
+                L"NVEncC QualityLevel 模式：0 为非 AI bicubic 基准；1–4 为一般质量；8–11 降噪；12–15 去模糊（这些模式只能保持输入分辨率，缩放不生效）；16–19 高码率细节恢复；21/23 为流媒体中／高质量模式（需要 Ampere 以上及 VFX SDK 1.3）。",
+                L"设置 NVIDIA VSR 强度 0.00–1.00，默认 1.00；需要 VFX SDK 1.3 以上。强度与质量模式不同。"};
     case UiLanguage::Japanese:
         return {L"NVIDIA RTX Video Super Resolution を有効にします。先に NVEncC (NVIDIA) エンコーダーを選択してください。FFmpeg が MMD RGB を RGBA/NUT に封入し、NVEncC --avsw が NGX VSR を実行します。",
                 L"MMD の元解像度に対する倍率を 1.00～4.00 で指定します。既定値は 2.00 です。",
-                L"NVEncC ngx-vsr の品質レベルを 1～4 で指定します。高いレベルほど通常は GPU 負荷が増えます。"};
+                L"NVEncC QualityLevel：0 は非 AI bicubic 基準、1～4 は通常品質、8～11 はノイズ除去、12～15 はぼかし除去（入力解像度を維持し、拡大率は適用されません）、16～19 は高ビットレート向け詳細復元、21/23 はストリーミング中／高品質です（Ampere 以降と VFX SDK 1.3 が必要）。",
+                L"NVIDIA VSR の強度を 0.00～1.00 で指定します。既定値は 1.00 で、VFX SDK 1.3 以降が必要です。品質モードとは別の設定です。"};
     default:
         return {L"Enable NVIDIA RTX Video Super Resolution. Select the NVEncC (NVIDIA) encoder first; FFmpeg packages MMD RGB as RGBA/NUT and NVEncC --avsw applies NGX VSR.",
                 L"Set the output scale relative to the original MMD size from 1.00 to 4.00. The default is 2.00.",
-                L"Set NVEncC ngx-vsr quality from 1 to 4. Higher levels usually require more GPU processing."};
+                L"Select an NVEncC QualityLevel mode: 0 is a non-AI bicubic baseline; 1–4 are general quality; 8–11 denoise; 12–15 deblur (these modes require native input resolution, so scaling is not applied); 16–19 high-bitrate detail restoration; 21/23 are streaming medium/ultra (Ampere+ and VFX SDK 1.3 required).",
+                L"Set NVIDIA VSR strength from 0.00 to 1.00 (default 1.00). Requires VFX SDK 1.3 or later; this is separate from the quality mode."};
+    }
+}
+
+const std::array<const wchar_t*, 3> vfg_tooltips(UiLanguage language) {
+    switch (language) {
+    case UiLanguage::TraditionalChinese:
+        return {L"啟用 NVIDIA Video Frame Generation (VFG) AI 補幀。需要 NVEncC 9.36 以上及 Ada 或 Blackwell 顯卡；此功能與光流補幀不能同時使用。",
+                L"每兩個原始影格之間生成 1–7 個中間影格，將輸出幀率乘以 2–8。預設 2 倍；對應 --vpp-nvvfx-framegen multiplier。",
+                L"選擇 VFG AI 模型等級：Low 最省運算、Medium 平衡（預設）、High 品質較高但更耗 GPU。NVEncC 參數為 mode=low/medium/high。"};
+    case UiLanguage::SimplifiedChinese:
+        return {L"启用 NVIDIA Video Frame Generation (VFG) AI 补帧。需要 NVEncC 9.36 以上及 Ada 或 Blackwell 显卡；不能与光流补帧同时使用。",
+                L"每两个原始帧之间生成 1–7 个中间帧，将输出帧率乘以 2–8。默认 2 倍；对应 --vpp-nvvfx-framegen multiplier。",
+                L"选择 VFG AI 模型等级：Low 运算量最低、Medium 平衡（默认）、High 质量较高但更耗 GPU。NVEncC 参数为 mode=low/medium/high。"};
+    case UiLanguage::Japanese:
+        return {L"NVIDIA Video Frame Generation (VFG) AI 補間を有効にします。NVEncC 9.36 以降と Ada または Blackwell GPU が必要です。光フロー補間とは同時に使えません。",
+                L"2～8 倍を指定し、入力フレーム間に 1～7 枚を生成します。既定値は 2 倍です。--vpp-nvvfx-framegen multiplier に対応します。",
+                L"VFG AI モデルを Low／Medium（既定）／High から選択します。High ほど品質と GPU 負荷が高くなります。NVEncC の mode= に対応します。"};
+    default:
+        return {L"Enable NVIDIA Video Frame Generation (VFG) AI interpolation. Requires NVEncC 9.36+ and an Ada or Blackwell GPU on Windows. It cannot be combined with optical-flow interpolation.",
+                L"Generate 1–7 intermediate frames between input frames for a 2–8x output frame rate. Defaults to 2x; maps to --vpp-nvvfx-framegen multiplier.",
+                L"Choose the VFG AI model: Low uses the least processing, Medium is the default balance, and High costs more GPU time. Maps to NVEncC mode=low/medium/high."};
     }
 }
 
@@ -515,7 +596,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"選擇設定介面的顯示語言；系統預設會跟隨 Windows。",
         L"選擇 CPU 軟體編碼使用的執行緒數。自動不傳遞 -threads；全部、全部 - 1、全部 - 2 會依 Windows 偵測的可用邏輯處理器數計算。硬體編碼不使用這個設定。",
         L"啟用時，偵測到 MMDSBS 的左右眼配對輸出會只保留完整配對畫面，並將輸出幀率減半。關閉時所有 MMD 影格會直接送入編碼器。",
-        L"選擇編碼器。NVENC 使用 FFmpeg 內建 NVIDIA 編碼器；NVEncC (NVIDIA) 使用獨立 NVEncC.exe，並提供 HEVC Alpha 與 RTX VSR。VP9 與 ProRes 僅能使用 CPU。",
+        L"選擇編碼器。NVENC 使用 FFmpeg 內建 NVIDIA 編碼器；NVEncC (NVIDIA) 使用獨立 NVEncC.exe，並提供 HEVC Alpha、RTX VSR、光流補幀與 NVIDIA VFG AI 幀生成。VP9 與 ProRes 僅能使用 CPU。",
         L"選擇影片編碼格式。可用的位元深度、Alpha 與碼率控制會依格式自動限制。",
         L"選擇 8-bit 或 10-bit 輸出。部分編碼格式或 Alpha 模式會固定此選項。",
         L"調整編碼速度與壓縮效率。較快通常檔案較大，較慢通常壓縮較佳。",
@@ -541,7 +622,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"选择设置界面的显示语言；系统默认会跟随 Windows。",
         L"选择 CPU 软件编码使用的线程数。自动不传递 -threads；全部、全部 - 1、全部 - 2 会依 Windows 检测的可用逻辑处理器数计算。硬件编码不使用此设置。",
         L"启用时，检测到 MMDSBS 的左右眼配对输出会只保留完整配对画面，并将输出帧率减半。关闭时所有 MMD 帧会直接送入编码器。",
-        L"选择编码器。NVENC 使用 FFmpeg 内置 NVIDIA 编码器；NVEncC (NVIDIA) 使用独立 NVEncC.exe，并提供 HEVC Alpha 与 RTX VSR。VP9 和 ProRes 只能使用 CPU。",
+        L"选择编码器。NVENC 使用 FFmpeg 内置 NVIDIA 编码器；NVEncC (NVIDIA) 使用独立 NVEncC.exe，并提供 HEVC Alpha、RTX VSR、光流补帧与 NVIDIA VFG AI 帧生成。VP9 和 ProRes 只能使用 CPU。",
         L"选择视频编码格式。可用的位深度、Alpha 和码率控制会依格式自动限制。",
         L"选择 8-bit 或 10-bit 输出。部分编码格式或 Alpha 模式会固定此选项。",
         L"调整编码速度与压缩效率。较快通常文件较大，较慢通常压缩较佳。",
@@ -567,7 +648,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"設定画面の表示言語を選択します。システム既定は Windows の表示言語に従います。",
         L"CPU ソフトウェアエンコードで使用するスレッド数を選択します。自動は -threads を渡しません。すべて、すべて - 1、すべて - 2 は Windows が検出した論理プロセッサ数から計算します。ハードウェアエンコードでは使用しません。",
         L"有効にすると、MMDSBS の左右目ペア出力を検出した場合に完成したペアだけを保持し、出力フレームレートを半分にします。無効にすると、すべての MMD フレームを直接エンコーダーへ送ります。",
-        L"エンコーダーを選択します。NVENC は FFmpeg 内蔵の NVIDIA エンコーダー、NVEncC (NVIDIA) は独立した NVEncC.exe を使用し、HEVC Alpha と RTX VSR に対応します。VP9 と ProRes は CPU 専用です。",
+        L"エンコーダーを選択します。NVENC は FFmpeg 内蔵の NVIDIA エンコーダー、NVEncC (NVIDIA) は独立した NVEncC.exe を使用し、HEVC Alpha、RTX VSR、光フロー補間、NVIDIA VFG AI フレーム生成に対応します。VP9 と ProRes は CPU 専用です。",
         L"動画コーデックを選択します。利用可能なビット深度、アルファ、レート制御は形式に応じて制限されます。",
         L"8-bit または 10-bit 出力を選択します。コーデックまたはアルファモードにより固定される場合があります。",
         L"エンコード速度と圧縮効率を調整します。高速ほど通常はファイルが大きく、低速ほど圧縮効率が高くなります。",
@@ -593,7 +674,7 @@ const UiTooltips& ui_tooltips(UiLanguage language) {
         L"Choose the settings interface language. System default follows the Windows display language.",
         L"Choose the thread count for CPU software encoding. Automatic passes no -threads option; All, All - 1, and All - 2 are calculated from Windows-detected logical processors. Hardware encoding does not use this setting.",
         L"When MMDSBS paired-eye output is detected, keep only completed pairs and halve the output frame rate. Turn this off to send every MMD frame to the encoder.",
-        L"Choose the encoder. NVENC uses FFmpeg's built-in NVIDIA encoder; NVEncC (NVIDIA) uses standalone NVEncC.exe and provides HEVC alpha and RTX VSR. VP9 and ProRes are CPU-only.",
+        L"Choose the encoder. NVENC uses FFmpeg's built-in NVIDIA encoder; NVEncC (NVIDIA) uses standalone NVEncC.exe and provides HEVC alpha, RTX VSR, optical-flow interpolation, and NVIDIA VFG AI frame generation. VP9 and ProRes are CPU-only.",
         L"Choose the video codec. Available bit depth, alpha, and rate control options are limited by the codec.",
         L"Choose 8-bit or 10-bit output. Some codecs or alpha modes lock this option.",
         L"Adjust encoding speed and compression efficiency. Faster presets usually create larger files; slower presets usually compress better.",
@@ -777,19 +858,31 @@ Settings load_settings() {
         else if (key == L"audio_bit_depth" && (value == L"original" || value == L"24")) settings.audio_bit_depth = value;
         else if (key == L"vsr_enabled") settings.vsr_enabled = value == L"1";
         else if (key == L"vsr_scale") { try { settings.vsr_scale = std::clamp(std::stod(value), 1.0, 4.0); } catch (...) {} }
-        else if (key == L"vsr_quality") { try { settings.vsr_quality = std::clamp(std::stoi(value), 1, 4); } catch (...) {} }
+        else if (key == L"vsr_quality") {
+            try {
+                const int mode = std::stoi(value);
+                if (std::find(kVsrQualityModes.begin(), kVsrQualityModes.end(), mode) != kVsrQualityModes.end())
+                    settings.vsr_quality = mode;
+            } catch (...) {}
+        }
+        else if (key == L"vsr_strength") { try { settings.vsr_strength = std::clamp(std::stod(value), 0.0, 1.0); } catch (...) {} }
         else if (key == L"fruc_mode" && (value == L"off" || value == L"double" || value == L"custom")) settings.fruc_mode = value;
         else if (key == L"fruc_fps") { try { settings.fruc_fps = std::clamp(std::stoi(value), 1, 240); } catch (...) {} }
+        else if (key == L"vfg_enabled") settings.vfg_enabled = value == L"1";
+        else if (key == L"vfg_multiplier") { try { settings.vfg_multiplier = std::clamp(std::stoi(value), 2, 8); } catch (...) {} }
+        else if (key == L"vfg_mode" && (value == L"low" || value == L"medium" || value == L"high")) settings.vfg_mode = value;
         else if (key == L"language" && (value == L"system" || value == L"zh-TW" || value == L"zh-CN" || value == L"ja" || value == L"en")) settings.language = value;
         else if (key == L"command_template") settings.command_template = value;
     }
     if (settings.backend == L"nvenc" &&
-        (settings.vsr_enabled || (settings.codec == L"hevc" && settings.alpha_mode == L"rgba")))
+        (settings.vsr_enabled || settings.vfg_enabled || fruc_enabled(settings) ||
+         (settings.codec == L"hevc" && settings.alpha_mode == L"rgba")))
         settings.backend = L"nvencc";
     if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(settings.nvenc_args);
     // The old boolean FRUC setting had no way to distinguish Double from a
     // target FPS.  Rebuild this generated option from fruc_mode instead.
     remove_command_option(settings.nvenc_args, L"--vpp-fruc");
+    remove_command_option(settings.nvenc_args, L"--vpp-nvvfx-framegen");
     normalize_codec_settings(settings);
     if (_wcsicmp(settings.ffmpeg.c_str(), L"C:\\Program Files\\Hybrid\\64bit\\ffmpeg.exe") == 0)
         settings.ffmpeg = L"ffmpeg.exe";
@@ -841,8 +934,12 @@ void save_settings(const Settings& settings) {
          << L"vsr_enabled=" << (settings.vsr_enabled ? 1 : 0) << L"\n"
          << L"vsr_scale=" << settings.vsr_scale << L"\n"
          << L"vsr_quality=" << settings.vsr_quality << L"\n"
+         << L"vsr_strength=" << settings.vsr_strength << L"\n"
          << L"fruc_mode=" << settings.fruc_mode << L"\n"
-         << L"fruc_fps=" << settings.fruc_fps << L"\n";
+         << L"fruc_fps=" << settings.fruc_fps << L"\n"
+         << L"vfg_enabled=" << (settings.vfg_enabled ? 1 : 0) << L"\n"
+         << L"vfg_multiplier=" << settings.vfg_multiplier << L"\n"
+         << L"vfg_mode=" << settings.vfg_mode << L"\n";
     file << L"language=" << settings.language << L"\n";
     std::wstring video_args = settings.video_args;
     std::replace_if(video_args.begin(), video_args.end(), [](wchar_t character) { return character == L'\r' || character == L'\n'; }, L' ');
@@ -1100,7 +1197,10 @@ std::wstring nvenc_display_prefix() {
 std::wstring default_nvenc_args(const Settings& settings) {
     std::wostringstream command;
     if (settings.vsr_enabled)
-        command << L"--vpp-resize algo=ngx-vsr,vsr-quality=" << settings.vsr_quality << L" ";
+        command << L"--vpp-resize algo=ngx-vsr,vsr-quality=" << settings.vsr_quality
+                << L",vsr-strength=" << std::fixed << std::setprecision(2) << settings.vsr_strength << L" ";
+    if (settings.vfg_enabled)
+        command << L"--vpp-nvvfx-framegen multiplier=" << settings.vfg_multiplier << L",mode=" << settings.vfg_mode << L" ";
     if (settings.alpha_mode == L"rgba")
         command << L"--output-depth 8 --output-csp yuva420";
     else
@@ -1142,14 +1242,22 @@ std::wstring materialize_vsr_command(const Settings& settings, int width, int he
         remove_command_option(arguments, L"--vpp-resize");
     }
     remove_command_option(arguments, L"--vpp-fruc");
+    remove_command_option(arguments, L"--vpp-nvvfx-framegen");
     if (settings.frame_structure_mode == L"auto") remove_automatic_frame_options(arguments);
     std::wstring nvenc_full_args;
     if (settings.vsr_enabled) {
-        const int out_w = std::max(1, static_cast<int>(width * settings.vsr_scale + 0.5));
-        const int out_h = std::max(1, static_cast<int>(height * settings.vsr_scale + 0.5));
+        const double scale = vsr_quality_uses_native_resolution(settings.vsr_quality) ? 1.0 : settings.vsr_scale;
+        const int out_w = std::max(1, static_cast<int>(width * scale + 0.5));
+        const int out_h = std::max(1, static_cast<int>(height * scale + 0.5));
+        std::wostringstream strength;
+        strength << std::fixed << std::setprecision(2) << settings.vsr_strength;
         nvenc_full_args = L"--output-res " + std::to_wstring(out_w) + L"x" + std::to_wstring(out_h) +
-                           L" --vpp-resize algo=ngx-vsr,vsr-quality=" + std::to_wstring(settings.vsr_quality) + L" ";
+                           L" --vpp-resize algo=ngx-vsr,vsr-quality=" + std::to_wstring(settings.vsr_quality) +
+                           L",vsr-strength=" + strength.str() + L" ";
     }
+    if (settings.vfg_enabled)
+        nvenc_full_args += L"--vpp-nvvfx-framegen multiplier=" + std::to_wstring(settings.vfg_multiplier) +
+                           L",mode=" + settings.vfg_mode + L" ";
     if (settings.fruc_mode == L"double") nvenc_full_args += L"--vpp-fruc double ";
     else if (settings.fruc_mode == L"custom") nvenc_full_args += L"--vpp-fruc fps=" + std::to_wstring(settings.fruc_fps) + L" ";
     nvenc_full_args += arguments;
@@ -1300,9 +1408,14 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
     std::filesystem::path executable = ffmpeg_path;
     std::filesystem::path probe_output;
     std::wstring command;
-    if ((settings.vsr_enabled || fruc_enabled(settings)) && settings.backend != L"nvencc") {
+    if (vfg_enabled(settings) && fruc_enabled(settings)) {
+        error_message = L"AI frame generation and optical-flow interpolation cannot be enabled together.";
+        return false;
+    }
+    if ((settings.vsr_enabled || fruc_enabled(settings) || vfg_enabled(settings)) && settings.backend != L"nvencc") {
         error_message = settings.vsr_enabled ? L"RTX VSR requires the NVEncC encoder."
-                                             : L"Optical-flow interpolation requires the NVEncC encoder.";
+                       : vfg_enabled(settings) ? L"NVIDIA VFG frame generation requires the NVEncC encoder."
+                                               : L"Optical-flow interpolation requires the NVEncC encoder.";
         return false;
     }
     if (uses_nvenc_bridge(settings)) {
@@ -1333,7 +1446,9 @@ bool test_encoder(const Settings& settings, std::wstring& error_message) {
             error_message = L"mmd2ffmpeg_vsr_bridge.exe is not installed.";
             return false;
         }
-        probe_output = local_data_dir() / L"vsr-probe.mkv";
+        probe_output = local_data_dir() /
+            (L"vsr-probe-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
+             std::to_wstring(GetTickCount64()) + L".mkv");
         std::filesystem::remove(probe_output, bridge_error);
         executable = bridge_path;
         command = materialize_vsr_command(settings, 320, 180, 32, ffmpeg_path, nvenc_path, bridge_path,
@@ -1465,7 +1580,9 @@ std::wstring command_test_signature(const Settings& settings) {
            L"|" + settings.mask_output + L"|" + settings.color_space + L"|" + settings.color_range + L"|" + arguments +
            L"|nvenc_args=" + nvenc_args +
            L"|vsr=" + std::to_wstring(settings.vsr_enabled ? 1 : 0) + L"|" + std::to_wstring(settings.vsr_scale) +
-            L"|" + std::to_wstring(settings.vsr_quality) + L"|fruc=" + settings.fruc_mode + L"|" + std::to_wstring(settings.fruc_fps) +
+            L"|" + std::to_wstring(settings.vsr_quality) + L"|" + std::to_wstring(settings.vsr_strength) +
+            L"|fruc=" + settings.fruc_mode + L"|" + std::to_wstring(settings.fruc_fps) +
+            L"|vfg=" + std::to_wstring(settings.vfg_enabled ? 1 : 0) + L"|" + std::to_wstring(settings.vfg_multiplier) + L"|" + settings.vfg_mode +
            L"|lookahead=" + std::to_wstring(settings.lookahead) + L"|" + std::to_wstring(settings.lookahead_level);
 }
 
@@ -2184,12 +2301,16 @@ public:
         candidate.sbs_frame_rate_halving = IsDlgButtonChecked(window_, ID_SBS_FRAME_RATE_HALVING) == BST_CHECKED;
         candidate.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         candidate.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
+        candidate.vfg_enabled = combo_index(ID_VFG_ENABLED) == 1;
+        candidate.vfg_multiplier = vfg_multiplier_value(combo_index(ID_VFG_MULTIPLIER));
+        candidate.vfg_mode = vfg_mode_key(combo_index(ID_VFG_MODE));
         candidate.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
         candidate.audio_sample_rate = combo_index(ID_AUDIO_RATE) == 1 ? L"hires" : L"original";
         candidate.audio_bit_depth = candidate.audio_sample_rate == L"hires" ? L"24" : L"original";
         candidate.vsr_enabled = combo_index(ID_VSR_ENABLED) == 1;
         candidate.vsr_scale = std::clamp(edit_double(ID_VSR_SCALE, 2.0), 1.0, 4.0);
-        candidate.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY) + 1, 1, 4);
+        candidate.vsr_quality = vsr_quality_mode(combo_index(ID_VSR_QUALITY));
+        candidate.vsr_strength = std::clamp(edit_double(ID_VSR_STRENGTH, 1.0), 0.0, 1.0);
         normalize_codec_settings(candidate);
         if (uses_nvenc_bridge(candidate)) {
             candidate.nvenc_args = edit_text(ID_COMMAND);
@@ -2304,12 +2425,20 @@ private:
         }};
         for (const auto& item : items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         const auto vsr_tip = vsr_tooltips(ui_language(settings_.language));
-        const std::array<std::pair<int, const wchar_t*>, 6> vsr_items{{
+        const std::array<std::pair<int, const wchar_t*>, 8> vsr_items{{
             {ID_LABEL_VSR_ENABLED, vsr_tip[0]}, {ID_VSR_ENABLED, vsr_tip[0]},
             {ID_LABEL_VSR_SCALE, vsr_tip[1]}, {ID_VSR_SCALE, vsr_tip[1]},
             {ID_LABEL_VSR_QUALITY, vsr_tip[2]}, {ID_VSR_QUALITY, vsr_tip[2]},
+            {ID_LABEL_VSR_STRENGTH, vsr_tip[3]}, {ID_VSR_STRENGTH, vsr_tip[3]},
         }};
         for (const auto& item : vsr_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
+        const auto vfg_tip = vfg_tooltips(ui_language(settings_.language));
+        const std::array<std::pair<int, const wchar_t*>, 6> vfg_items{{
+            {ID_LABEL_VFG_ENABLED, vfg_tip[0]}, {ID_VFG_ENABLED, vfg_tip[0]},
+            {ID_LABEL_VFG_MULTIPLIER, vfg_tip[1]}, {ID_VFG_MULTIPLIER, vfg_tip[1]},
+            {ID_LABEL_VFG_MODE, vfg_tip[2]}, {ID_VFG_MODE, vfg_tip[2]},
+        }};
+        for (const auto& item : vfg_items) update_tooltip(item.first, item.second, tooltips_initialized_ == false);
         const auto fruc_tip = fruc_tooltips(ui_language(settings_.language));
         const std::array<std::pair<int, const wchar_t*>, 4> fruc_items{{
             {ID_LABEL_FRUC_ENABLED, fruc_tip[0]}, {ID_FRUC_ENABLED, fruc_tip[0]},
@@ -2367,8 +2496,12 @@ private:
         add_combo(ID_LOOKAHEAD, {L"Off", L"8", L"16", L"32"}, lookahead_index(settings_.lookahead));
         add_combo(ID_LOOKAHEAD_LEVEL, {L"1", L"2", L"3"}, std::clamp(settings_.lookahead_level - 1, 0, 2));
         add_combo(ID_VSR_ENABLED, {L"Off", L"On"}, settings_.vsr_enabled ? 1 : 0);
-        add_combo(ID_VSR_QUALITY, {L"1", L"2", L"3", L"4"}, std::clamp(settings_.vsr_quality - 1, 0, 3));
+        add_combo(ID_VSR_QUALITY, {L"0", L"1", L"2", L"3", L"4", L"8", L"9", L"10", L"11", L"12", L"13", L"14", L"15", L"16", L"17", L"18", L"19", L"21", L"23"},
+                  vsr_quality_index(settings_.vsr_quality));
         add_combo(ID_FRUC_ENABLED, {L"Off", L"Double", L"Custom"}, fruc_mode_index(settings_.fruc_mode));
+        add_combo(ID_VFG_ENABLED, {L"Off", L"On"}, settings_.vfg_enabled ? 1 : 0);
+        add_combo(ID_VFG_MULTIPLIER, {L"2x", L"3x", L"4x", L"5x", L"6x", L"7x", L"8x"}, settings_.vfg_multiplier - 2);
+        add_combo(ID_VFG_MODE, {L"Low", L"Medium", L"High"}, vfg_mode_index(settings_.vfg_mode));
         SetWindowTextW(GetDlgItem(window_, ID_FRUC_FPS), std::to_wstring(settings_.fruc_fps).c_str());
         add_combo(ID_ALPHA, {L"None", L"4-channel", L"Black/white mask"}, settings_.alpha_mode == L"rgba" ? 1 : settings_.alpha_mode == L"mask" ? 2 : 0);
         add_combo(ID_MASK_OUTPUT, {L"Stack x2", L"Separate"}, settings_.mask_output == L"separate" ? 1 : 0);
@@ -2383,6 +2516,8 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_BFRAMES), std::to_wstring(settings_.b_frames).c_str());
         std::wostringstream scale_value; scale_value << std::fixed << std::setprecision(2) << settings_.vsr_scale;
         SetWindowTextW(GetDlgItem(window_, ID_VSR_SCALE), scale_value.str().c_str());
+        std::wostringstream strength_value; strength_value << std::fixed << std::setprecision(2) << settings_.vsr_strength;
+        SetWindowTextW(GetDlgItem(window_, ID_VSR_STRENGTH), strength_value.str().c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_PREFIX), command_prefix(settings_).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND), (settings_.video_args.empty() ? editable_arguments(settings_) : settings_.video_args).c_str());
         SetWindowTextW(GetDlgItem(window_, ID_COMMAND_SUFFIX), L"");
@@ -2443,14 +2578,17 @@ private:
         const std::array<int, 10> frame_structure{ID_FRAME_MODE, ID_GOP, ID_BFRAMES, ID_LOOKAHEAD, ID_LOOKAHEAD_LEVEL,
                                                    ID_LABEL_FRAME_MODE, ID_LABEL_GOP, ID_LABEL_BFRAMES, ID_LABEL_LOOKAHEAD, ID_LABEL_LOOKAHEAD_LEVEL};
         const std::array<int, 4> fruc{ID_FRUC_ENABLED, ID_FRUC_FPS, ID_LABEL_FRUC_ENABLED, ID_LABEL_FRUC_FPS};
-        const std::array<int, 6> super_resolution{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
-                                                  ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY};
+        const std::array<int, 8> super_resolution{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY, ID_VSR_STRENGTH,
+                                                  ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY, ID_LABEL_VSR_STRENGTH};
+        const std::array<int, 6> frame_generation{ID_VFG_ENABLED, ID_VFG_MULTIPLIER, ID_VFG_MODE,
+                                                  ID_LABEL_VFG_ENABLED, ID_LABEL_VFG_MULTIPLIER, ID_LABEL_VFG_MODE};
         for (const int id : encoding) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
         for (const int id : encoding_more) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 0 ? SW_SHOW : SW_HIDE);
         for (const int id : color) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 1 ? SW_SHOW : SW_HIDE);
         for (const int id : frame_structure) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 2 ? SW_SHOW : SW_HIDE);
         for (const int id : super_resolution) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 3 ? SW_SHOW : SW_HIDE);
         for (const int id : fruc) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 3 ? SW_SHOW : SW_HIDE);
+        for (const int id : frame_generation) ShowWindow(GetDlgItem(window_, id), video_visible && active_video_tab_ == 3 ? SW_SHOW : SW_HIDE);
     }
     void reset_combo(int id, std::initializer_list<const wchar_t*> values, int selected) {
         HWND combo = GetDlgItem(window_, id);
@@ -2533,7 +2671,8 @@ private:
         const int alpha = combo_index(ID_ALPHA);
         if (combo_index(ID_VSR_ENABLED) == 1 &&
             (alpha != 0 || codec != 1 || backend != 2)) return true;
-        if (combo_index(ID_FRUC_ENABLED) != 0 && backend != 2) return true;
+        if ((combo_index(ID_FRUC_ENABLED) != 0 || combo_index(ID_VFG_ENABLED) == 1) && backend != 2) return true;
+        if (combo_index(ID_FRUC_ENABLED) != 0 && combo_index(ID_VFG_ENABLED) == 1) return true;
         if (combo_index(ID_LOOKAHEAD) != 0 && backend != 1 && backend != 2) return true;
         if (backend == 2 && alpha == 2) return true;
         const auto& capability = codec_capability_from_index(codec);
@@ -2646,6 +2785,9 @@ private:
         settings_.lookahead_level = std::clamp(combo_index(ID_LOOKAHEAD_LEVEL) + 1, 1, 3);
         settings_.fruc_mode = fruc_mode_key(combo_index(ID_FRUC_ENABLED));
         settings_.fruc_fps = std::clamp(edit_number(ID_FRUC_FPS, 60), 1, 240);
+        settings_.vfg_enabled = combo_index(ID_VFG_ENABLED) == 1;
+        settings_.vfg_multiplier = vfg_multiplier_value(combo_index(ID_VFG_MULTIPLIER));
+        settings_.vfg_mode = vfg_mode_key(combo_index(ID_VFG_MODE));
         settings_.cpu_threads = cpu_thread_mode_key(combo_index(ID_CPU_THREADS));
         settings_.sbs_frame_rate_halving = IsDlgButtonChecked(window_, ID_SBS_FRAME_RATE_HALVING) == BST_CHECKED;
         settings_.audio_format = combo_index(ID_AUDIO_FORMAT) == 0 ? L"flac" : combo_index(ID_AUDIO_FORMAT) == 1 ? L"wav" : L"none";
@@ -2653,7 +2795,8 @@ private:
         settings_.audio_bit_depth = settings_.audio_sample_rate == L"hires" ? L"24" : L"original";
         settings_.vsr_enabled = combo_index(ID_VSR_ENABLED) == 1;
         settings_.vsr_scale = std::clamp(edit_double(ID_VSR_SCALE, 2.0), 1.0, 4.0);
-        settings_.vsr_quality = std::clamp(combo_index(ID_VSR_QUALITY) + 1, 1, 4);
+        settings_.vsr_quality = vsr_quality_mode(combo_index(ID_VSR_QUALITY));
+        settings_.vsr_strength = std::clamp(edit_double(ID_VSR_STRENGTH, 1.0), 0.0, 1.0);
         normalize_codec_settings(settings_);
     }
     void update_command_display() {
@@ -2777,7 +2920,7 @@ private:
                 const int field_left = left + label_width + field_gap;
                 add_layout(label, left, row_y + dlu_y(1), label_width, label_height);
                 const int control_height = control == ID_QP || control == ID_BITRATE || control == ID_GOP ||
-                                           control == ID_BFRAMES || control == ID_VSR_SCALE || control == ID_FRUC_FPS
+                                           control == ID_BFRAMES || control == ID_VSR_SCALE || control == ID_VSR_STRENGTH || control == ID_FRUC_FPS
                     ? edit_height : combo_height;
                 add_layout(control, field_left, row_y, std::max(1, column_right - field_left), control_height);
             };
@@ -2785,6 +2928,15 @@ private:
                 add_video_field(left_label, left_control, margin_x, middle - column_gap, row_y);
                 add_video_field(right_label, right_control, middle + column_gap, right, row_y);
                 row_y += inner_row_height;
+            };
+            const auto add_video_triple = [&](int first_label, int first_control, int second_label, int second_control,
+                                              int third_label, int third_control, int row_y) {
+                const int triple_gap = dlu_x(3);
+                const int column_width = (full_width - 2 * triple_gap) / 3;
+                add_video_field(first_label, first_control, margin_x, margin_x + column_width, row_y);
+                add_video_field(second_label, second_control, margin_x + column_width + triple_gap,
+                                margin_x + 2 * column_width + triple_gap, row_y);
+                add_video_field(third_label, third_control, margin_x + 2 * (column_width + triple_gap), right, row_y);
             };
             if (active_video_tab_ == 0) {
                 add_video_pair(ID_LABEL_BACKEND, ID_BACKEND, ID_LABEL_CODEC, ID_CODEC, inner_y);
@@ -2802,10 +2954,11 @@ private:
                     add_video_pair(ID_LABEL_GOP, ID_GOP, ID_LABEL_BFRAMES, ID_BFRAMES, inner_y);
                     add_video_pair(ID_LABEL_LOOKAHEAD, ID_LOOKAHEAD, ID_LABEL_LOOKAHEAD_LEVEL, ID_LOOKAHEAD_LEVEL, inner_y);
                 } else {
-                    add_video_field(ID_LABEL_VSR_ENABLED, ID_VSR_ENABLED, margin_x, right, inner_y);
-                    inner_y += inner_row_height;
-                    add_video_pair(ID_LABEL_VSR_QUALITY, ID_VSR_QUALITY, ID_LABEL_VSR_SCALE, ID_VSR_SCALE, inner_y);
+                    add_video_pair(ID_LABEL_VSR_ENABLED, ID_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_VSR_SCALE, inner_y);
+                    add_video_pair(ID_LABEL_VSR_QUALITY, ID_VSR_QUALITY, ID_LABEL_VSR_STRENGTH, ID_VSR_STRENGTH, inner_y);
                     add_video_pair(ID_LABEL_FRUC_ENABLED, ID_FRUC_ENABLED, ID_LABEL_FRUC_FPS, ID_FRUC_FPS, inner_y);
+                    add_video_triple(ID_LABEL_VFG_ENABLED, ID_VFG_ENABLED, ID_LABEL_VFG_MULTIPLIER, ID_VFG_MULTIPLIER,
+                                     ID_LABEL_VFG_MODE, ID_VFG_MODE, inner_y);
                 }
             }
             y += inner_height + inner_gap;
@@ -2941,9 +3094,14 @@ private:
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_ENABLED), labels[0]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_SCALE), labels[1]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_QUALITY), labels[2]);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_VSR_STRENGTH), vsr_strength_label(ui_language(settings_.language)));
         const auto fruc = fruc_labels(ui_language(settings_.language));
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRUC_ENABLED), fruc[0]);
         SetWindowTextW(GetDlgItem(window_, ID_LABEL_FRUC_FPS), fruc[1]);
+        const auto vfg = vfg_labels(ui_language(settings_.language));
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_VFG_ENABLED), vfg[0]);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_VFG_MULTIPLIER), vfg[1]);
+        SetWindowTextW(GetDlgItem(window_, ID_LABEL_VFG_MODE), vfg[2]);
         const std::wstring info = std::wstring(L"MMD2FFMPEG\r\n") + text.version + L": 0.3.2\r\n" + text.author + L": XPRAMT";
         SetWindowTextW(settings_info_, info.c_str());
     }

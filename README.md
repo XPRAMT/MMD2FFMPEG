@@ -17,8 +17,9 @@ MMD2FFMPEG is a 64-bit DirectX Media Object (DMO) encoder for MikuMikuDance 9.32
 - Provides BT.601, BT.709, and BT.2020 color tags plus PC (full) and TV (limited) output range selection. MMD source frames are full-range RGB.
 - Supports alpha output: VP9 and ProRes four-channel output, and NVEncC HEVC alpha at 8-bit. Black/white alpha masks can be stacked below the video or written as a separate MKV when using the FFmpeg path.
 - Provides automatic or manual GOP / I-frame interval and B-frame settings.
-- Supports RTX Video Super Resolution through NVEncC, with a 1.00–4.00 scale factor and VSR quality level 1–4.
+- Supports RTX Video Super Resolution through NVEncC, with a 1.00–4.00 scale factor, NVIDIA QualityLevel modes (0, 1–4, 8–19, 21, 23), and 0.00–1.00 VSR strength.
 - Supports NVIDIA Optical Flow frame interpolation through NVEncC: Off, Double, or Custom target FPS (1–240).
+- Supports NVIDIA Video Frame Generation (VFG) through NVEncC 9.36 or later on Windows Ada or Blackwell GPUs, with 2x–8x output and Low/Medium/High AI model modes. VFG cannot be combined with Optical Flow interpolation.
 - Uses the frame rate chosen by MMD and marks video as BT.709 by default.
 - Requires a successful manual encoder test before settings can be saved or applied.
 - Includes Traditional Chinese, Simplified Chinese, Japanese, English, and system-default UI languages.
@@ -134,7 +135,10 @@ The **Video** page is organized into **Encoding**, **Color**, **Frame structure*
 | Color | Alpha mode, stacked or separate black/white mask output, BT.601/709/2020 tags, and PC (full) or TV (limited) YUV output range. |
 | Frame structure | Automatic mode leaves GOP/B-frame decisions to the encoder. Manual mode sends the selected GOP/I-frame interval and B-frame count. |
 | RTX VSR | Requires **NVEncC (NVIDIA)**, uses the bridge to send MMD frames to NVEncC, and cannot be combined with alpha output. |
+| NVIDIA VFG | Requires **NVEncC 9.36+** and a Windows Ada or Blackwell GPU. Select a 2x–8x frame multiplier and Low/Medium/High model. Cannot be combined with optical flow. |
 | Optical flow | Requires **NVEncC (NVIDIA)**. **Double** sends `--vpp-fruc double`; **Custom** sends `--vpp-fruc fps=<target>` for 1–240 FPS. |
+
+VSR modes follow NVEncC's supported QualityLevel values: `0`, `1–4`, `8–19`, `21`, and `23`. Mode `0` is a bicubic non-AI baseline; `8–11` target denoising and `12–15` deblurring, both at the original input resolution; `16–19` target high-bitrate detail restoration; and `21/23` are streaming modes. Strength is configurable from `0.00` to `1.00`. The highest streaming modes require VFX SDK 1.3+ and an Ampere-or-newer GPU.
 
 ### NVEncC requirements
 

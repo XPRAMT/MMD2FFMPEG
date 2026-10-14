@@ -125,12 +125,14 @@ int wmain(int argument_count, wchar_t** arguments) {
             int preset;
             int quality;
             const wchar_t* scale;
+            const wchar_t* strength;
         };
-        const std::array<VsrCase, 4> matrix{{
-            {L"minimum", 0, 0, 0, 0, L"2.00"},
-            {L"current", 1, 0, 6, 1, L"2.00"},
-            {L"fractional-422", 1, 1, 5, 2, L"1.50"},
-            {L"maximum", 1, 2, 6, 3, L"4.00"},
+        const std::array<VsrCase, 5> matrix{{
+            {L"quality-1", 0, 0, 0, 1, L"2.00", L"1.00"},
+            {L"denoise-8", 0, 0, 0, 5, L"2.00", L"0.75"},
+            {L"detail-16", 0, 0, 0, 13, L"2.00", L"1.00"},
+            {L"streaming-21", 0, 0, 0, 17, L"2.00", L"0.50"},
+            {L"streaming-ultra-23", 0, 0, 0, 18, L"2.00", L"1.00"},
         }};
         const int case_count = mode == L"vsr_matrix" ? static_cast<int>(matrix.size()) : 1;
         bool all_passed = true;
@@ -143,6 +145,9 @@ int wmain(int argument_count, wchar_t** arguments) {
             SetWindowTextW(GetDlgItem(page_window, ID_VSR_SCALE), test_case.scale);
             SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_SCALE, EN_CHANGE),
                          reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_VSR_SCALE)));
+            SetWindowTextW(GetDlgItem(page_window, ID_VSR_STRENGTH), test_case.strength);
+            SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_STRENGTH, EN_CHANGE),
+                         reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_VSR_STRENGTH)));
 
             const ULONGLONG started = GetTickCount64();
             SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_REFRESH, BN_CLICKED),
@@ -165,8 +170,11 @@ int wmain(int argument_count, wchar_t** arguments) {
                                 status.find(L"測試通過") != std::wstring::npos ||
                                 status.find(L"测试通过") != std::wstring::npos ||
                                 status.find(L"テスト合格") != std::wstring::npos;
+            std::wstring printable_status = status;
+            std::replace(printable_status.begin(), printable_status.end(), L'\r', L' ');
+            std::replace(printable_status.begin(), printable_status.end(), L'\n', L' ');
             std::wcout << L"VSR case=" << test_case.name << L" elapsed=" << elapsed
-                       << L" ms completed=" << completed << L" passed=" << passed << L"\n";
+                       << L" ms completed=" << completed << L" passed=" << passed << L" status=" << printable_status << std::endl;
             all_passed = all_passed && completed && passed;
         }
         page->Deactivate();
@@ -175,12 +183,46 @@ int wmain(int argument_count, wchar_t** arguments) {
         CoUninitialize();
         return all_passed ? 0 : 45;
     }
+    if (mode == L"vfg_probe") {
+        const auto select_combo = [&](int id, int index) {
+            const HWND control = GetDlgItem(page_window, id);
+            SendMessageW(control, CB_SETCURSEL, index, 0);
+            SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(id, CBN_SELCHANGE), reinterpret_cast<LPARAM>(control));
+        };
+        select_combo(ID_BACKEND, 2);
+        select_combo(ID_CODEC, 1);
+        select_combo(ID_ALPHA, 0);
+        select_combo(ID_VFG_ENABLED, 1);
+        select_combo(ID_VFG_MULTIPLIER, 0);
+        select_combo(ID_VFG_MODE, 1);
+        const ULONGLONG started = GetTickCount64();
+        SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_REFRESH, BN_CLICKED),
+                     reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_REFRESH)));
+        MSG message{};
+        while (!IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH)) && GetTickCount64() - started < 40000) {
+            if (MsgWaitForMultipleObjects(0, nullptr, FALSE, 100, QS_ALLINPUT) == WAIT_OBJECT_0) {
+                while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+                    TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
+            }
+        }
+        const std::wstring status = window_text(GetDlgItem(page_window, ID_STATUS));
+        const bool completed = IsWindowEnabled(GetDlgItem(page_window, ID_REFRESH)) != FALSE;
+        const bool passed = status.find(L"test passed") != std::wstring::npos ||
+                            status.find(L"測試通過") != std::wstring::npos ||
+                            status.find(L"测试通过") != std::wstring::npos ||
+                            status.find(L"テスト合格") != std::wstring::npos;
+        std::wcout << L"VFG elapsed=" << (GetTickCount64() - started) << L" ms completed=" << completed
+                   << L" passed=" << passed << L" status=" << status << L"\n";
+        DestroyWindow(parent); page->Release(); CoUninitialize(); return completed && passed ? 0 : 83;
+    }
     const HWND tooltip = reinterpret_cast<HWND>(GetPropW(page_window, L"MMD2FFMPEG.TooltipWindow"));
     std::array<wchar_t, 32> tooltip_class{};
     GetClassNameW(tooltip, tooltip_class.data(), static_cast<int>(tooltip_class.size()));
     const LRESULT tooltip_count = tooltip ? SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : -1;
     if (!tooltip || wcscmp(tooltip_class.data(), TOOLTIPS_CLASSW) != 0 ||
-        tooltip_count != 58) {
+        tooltip_count != 66) {
         std::wcerr << L"Every configurable option must expose a native tooltip. handle=" << tooltip
                    << L" class=" << tooltip_class.data() << L" count=" << tooltip_count << L"\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 30;
@@ -333,9 +375,11 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     TabCtrl_SetCurSel(video_tab, 3);
     SendMessageW(page_window, WM_NOTIFY, ID_VIDEO_TAB, reinterpret_cast<LPARAM>(&video_tab_change));
-    const int super_resolution_ids[]{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY,
+    const int super_resolution_ids[]{ID_VSR_ENABLED, ID_VSR_SCALE, ID_VSR_QUALITY, ID_VSR_STRENGTH,
                                      ID_LABEL_VSR_ENABLED, ID_LABEL_VSR_SCALE, ID_LABEL_VSR_QUALITY,
-                                     ID_FRUC_ENABLED, ID_FRUC_FPS, ID_LABEL_FRUC_ENABLED, ID_LABEL_FRUC_FPS};
+                                     ID_LABEL_VSR_STRENGTH, ID_FRUC_ENABLED, ID_FRUC_FPS, ID_LABEL_FRUC_ENABLED,
+                                     ID_LABEL_FRUC_FPS, ID_VFG_ENABLED, ID_VFG_MULTIPLIER, ID_VFG_MODE,
+                                     ID_LABEL_VFG_ENABLED, ID_LABEL_VFG_MULTIPLIER, ID_LABEL_VFG_MODE};
     for (const int id : super_resolution_ids) {
         if (!has_visible_style(GetDlgItem(page_window, id)) || !valid_rect(child_rect(page_window, id))) {
             std::wcerr << L"Super-resolution/interpolation sub-tab control is unavailable: " << id << L"\n";
@@ -344,12 +388,13 @@ int wmain(int argument_count, wchar_t** arguments) {
     }
     const RECT vsr_scale_bounds = child_rect(page_window, ID_VSR_SCALE);
     const RECT vsr_quality_bounds = child_rect(page_window, ID_VSR_QUALITY);
+    const RECT vsr_strength_bounds = child_rect(page_window, ID_VSR_STRENGTH);
     const RECT fruc_bounds = child_rect(page_window, ID_FRUC_ENABLED);
     if (vsr_quality_bounds.left >= vsr_scale_bounds.left) {
         std::wcerr << L"VSR quality must be placed to the left of the scale factor.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 62;
     }
-    if (fruc_bounds.top - vsr_scale_bounds.bottom > 12) {
+    if (fruc_bounds.top - vsr_strength_bounds.bottom > 12) {
         std::wcerr << L"Optical-flow interpolation must be directly below the VSR controls without a blank row.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 61;
     }
@@ -373,6 +418,10 @@ int wmain(int argument_count, wchar_t** arguments) {
     HWND cpu_threads_combo = GetDlgItem(page_window, ID_CPU_THREADS);
     HWND sbs_frame_rate_halving = GetDlgItem(page_window, ID_SBS_FRAME_RATE_HALVING);
     HWND vsr_enabled_combo = GetDlgItem(page_window, ID_VSR_ENABLED);
+    HWND vsr_quality_combo = GetDlgItem(page_window, ID_VSR_QUALITY);
+    HWND vfg_enabled_combo = GetDlgItem(page_window, ID_VFG_ENABLED);
+    HWND vfg_multiplier_combo = GetDlgItem(page_window, ID_VFG_MULTIPLIER);
+    HWND vfg_mode_combo = GetDlgItem(page_window, ID_VFG_MODE);
     HWND fruc_mode_combo = GetDlgItem(page_window, ID_FRUC_ENABLED);
     HWND fruc_fps_edit = GetDlgItem(page_window, ID_FRUC_FPS);
     if (SendMessageW(backend_combo, CB_GETCOUNT, 0, 0) != 5 ||
@@ -391,8 +440,20 @@ int wmain(int argument_count, wchar_t** arguments) {
         std::wcerr << L"Optical-flow interpolation must expose Off, Double, and Custom modes.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 57;
     }
-    if (!sbs_frame_rate_halving || IsDlgButtonChecked(page_window, ID_SBS_FRAME_RATE_HALVING) != BST_CHECKED) {
-        std::wcerr << L"SBS frame-rate halving must be enabled by default.\n";
+    if (SendMessageW(vsr_quality_combo, CB_GETCOUNT, 0, 0) != 19 ||
+        combo_item_text(vsr_quality_combo, 0) != L"0" ||
+        combo_item_text(vsr_quality_combo, 5) != L"8" ||
+        combo_item_text(vsr_quality_combo, 16) != L"19" ||
+        combo_item_text(vsr_quality_combo, 17) != L"21" ||
+        combo_item_text(vsr_quality_combo, 18) != L"23" ||
+        SendMessageW(vfg_enabled_combo, CB_GETCOUNT, 0, 0) != 2 ||
+        SendMessageW(vfg_multiplier_combo, CB_GETCOUNT, 0, 0) != 7 ||
+        SendMessageW(vfg_mode_combo, CB_GETCOUNT, 0, 0) != 3) {
+        std::wcerr << L"VSR must expose the installed NVEncC QualityLevel modes; VFG must expose On/Off, 2x-8x, and Low/Medium/High.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 84;
+    }
+    if (!sbs_frame_rate_halving) {
+        std::wcerr << L"SBS frame-rate halving setting control is missing.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 58;
     }
     if (SendMessageW(lookahead_combo, CB_GETCOUNT, 0, 0) != 4 ||
@@ -418,6 +479,12 @@ int wmain(int argument_count, wchar_t** arguments) {
     SendMessageW(vsr_enabled_combo, CB_SETCURSEL, 1, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_ENABLED, CBN_SELCHANGE),
                  reinterpret_cast<LPARAM>(vsr_enabled_combo));
+    SendMessageW(vsr_quality_combo, CB_SETCURSEL, 17, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_QUALITY, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(vsr_quality_combo));
+    SetWindowTextW(GetDlgItem(page_window, ID_VSR_STRENGTH), L"0.50");
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VSR_STRENGTH, EN_CHANGE),
+                 reinterpret_cast<LPARAM>(GetDlgItem(page_window, ID_VSR_STRENGTH)));
     if (!has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING)) ||
         window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"hevc_nvenc") == std::wstring::npos ||
         window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"-rc-lookahead 16 -lookahead_level 2") == std::wstring::npos ||
@@ -477,6 +544,8 @@ int wmain(int argument_count, wchar_t** arguments) {
         nvencc_command.find(L"--colormatrix ") == std::wstring::npos ||
         nvencc_command.find(L"--colorprim ") == std::wstring::npos ||
         nvencc_command.find(L"--transfer ") == std::wstring::npos ||
+        nvencc_command.find(L"vsr-quality=21") == std::wstring::npos ||
+        nvencc_command.find(L"vsr-strength=0.50") == std::wstring::npos ||
         nvencc_command.find(L"NVEncC.exe") != std::wstring::npos ||
         nvencc_command.find(L"{output}") != std::wstring::npos ||
         nvencc_command.find(L"{width}") != std::wstring::npos ||
@@ -571,6 +640,37 @@ int wmain(int argument_count, wchar_t** arguments) {
     if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-fruc ") != std::wstring::npos) {
         std::wcerr << L"Off interpolation must omit --vpp-fruc.\n";
         page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 60;
+    }
+    SendMessageW(vfg_enabled_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VFG_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(vfg_enabled_combo));
+    SendMessageW(vfg_multiplier_combo, CB_SETCURSEL, 3, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VFG_MULTIPLIER, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(vfg_multiplier_combo));
+    SendMessageW(vfg_mode_combo, CB_SETCURSEL, 2, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VFG_MODE, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(vfg_mode_combo));
+    const std::wstring vfg_command = window_text(GetDlgItem(page_window, ID_COMMAND));
+    if (vfg_command.find(L"--vpp-nvvfx-framegen multiplier=5,mode=high") == std::wstring::npos) {
+        std::wcerr << L"VFG selections must generate the NVEncC multiplier and model options.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 86;
+    }
+    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 1, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(fruc_mode_combo));
+    if (!has_visible_style(GetDlgItem(page_window, ID_COMPAT_WARNING))) {
+        std::wcerr << L"VFG and optical-flow interpolation must be reported as an unsupported combination.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 88;
+    }
+    SendMessageW(fruc_mode_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_FRUC_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(fruc_mode_combo));
+    SendMessageW(vfg_enabled_combo, CB_SETCURSEL, 0, 0);
+    SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_VFG_ENABLED, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(vfg_enabled_combo));
+    if (window_text(GetDlgItem(page_window, ID_COMMAND)).find(L"--vpp-nvvfx-framegen") != std::wstring::npos) {
+        std::wcerr << L"Disabled VFG must omit --vpp-nvvfx-framegen.\n";
+        page->Deactivate(); DestroyWindow(parent); page->Release(); CoUninitialize(); return 87;
     }
     SendMessageW(alpha_combo, CB_SETCURSEL, 0, 0);
     SendMessageW(page_window, WM_COMMAND, MAKEWPARAM(ID_ALPHA, CBN_SELCHANGE), reinterpret_cast<LPARAM>(alpha_combo));

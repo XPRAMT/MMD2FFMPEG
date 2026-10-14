@@ -94,9 +94,11 @@ int wmain(int argc, wchar_t** argv) {
     SetHandleInformation(nut_write, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 
     std::wstring ffmpeg_command = quote(ffmpeg.wstring()) + L" -hide_banner -loglevel warning -y ";
+    // VFG needs consecutive frame pairs to synthesize intermediate images;
+    // four frames keep the probe short while exercising the temporal filter.
     if (probe)
         ffmpeg_command += L"-f lavfi -i color=c=black@0.5:s=" + std::to_wstring(width) + L"x" +
-                          std::to_wstring(height) + L":r=" + std::to_wstring(fps) + L",format=rgba -frames:v 1 ";
+                          std::to_wstring(height) + L":r=" + std::to_wstring(fps) + L",format=rgba -frames:v 4 ";
     else
         ffmpeg_command += L"-f rawvideo -pixel_format " + argument(args, L"--input-format", L"bgra") +
                           L" -video_size " + std::to_wstring(width) + L"x" + std::to_wstring(height) +
